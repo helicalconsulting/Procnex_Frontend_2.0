@@ -14,6 +14,7 @@ export interface VendorOrderMock {
   shippingAddress: string;
   paymentTerms: string;
   trackingId?: string;
+  vendorFulfillmentAllowed?: 'DISPATCH_AND_INVOICE' | 'DISPATCH_ONLY' | 'INVOICE_ONLY';
 }
 
 export interface VendorInvoiceMock {

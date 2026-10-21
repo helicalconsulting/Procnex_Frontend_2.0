@@ -15,6 +15,7 @@ export interface GRNItemPayload {
 export interface CreateGRNPayload {
   poId: string;
   entryMode?: 'AUTO_FILL' | 'MANUAL';
+  dispatchNoteId?: string;
   dispatchNoteNumber?: string;
   vendorInvoiceNumber?: string;
   vendorId?: string;
@@ -44,6 +45,7 @@ export interface GoodsReceivedNote {
   receivedById: string;
   receivedDate: string;
   entryMode?: 'AUTO_FILL' | 'MANUAL';
+  dispatchNoteId?: string;
   dispatchNoteNumber?: string;
   vendorInvoiceNumber?: string;
   vendorId?: string;
@@ -52,6 +54,14 @@ export interface GoodsReceivedNote {
   status: string;
   createdAt: string;
   items: GRNItem[];
+  dispatchNote?: {
+    id: string;
+    dispatchNoteNumber: string;
+    carrierName?: string;
+    vehicleNumber?: string;
+    trackingNumber?: string;
+    status: string;
+  };
   purchaseOrder?: {
     id: string;
     poNumber: string;

@@ -56,6 +56,9 @@ const VendorPaymentsPage = lazy(
 const VendorCreateInvoicePage = lazy(
   () => import("./pages/vendor/VendorCreateInvoicePage"),
 );
+const VendorCreateDispatchNotePage = lazy(
+  () => import("./pages/vendor/VendorCreateDispatchNotePage"),
+);
 const VendorProfilePage = lazy(
   () => import("./pages/vendor/VendorProfilePage"),
 );
@@ -103,6 +106,9 @@ const PurchaseRequisitionPage = lazy(() => import("./pages/purchase-requisitions
 const PurchaseRequisitionsListPage = lazy(() => import("./pages/purchase-requisitions/PurchaseRequisitionsListPage"));
 const PurchaseOrdersPage = lazy(() => import("./pages/purchase-orders/PurchaseOrdersPage"));
 const CreatePurchaseOrderPage = lazy(() => import("./pages/purchase-orders/CreatePurchaseOrderPage"));
+const BudgetListPage = lazy(() => import("./pages/budget/BudgetListPage"));
+const BudgetCreatePage = lazy(() => import("./pages/budget/BudgetCreatePage"));
+const BudgetDetailPage = lazy(() => import("./pages/budget/BudgetDetailPage"));
 
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 
@@ -187,6 +193,7 @@ export default function App() {
                         <Route path="/v/:companyCode/invoices" element={page(VendorInvoicesPage)} />
                         <Route path="/v/:companyCode/payments" element={page(VendorPaymentsPage)} />
                         <Route path="/v/:companyCode/create-invoice" element={page(VendorCreateInvoicePage)} />
+                        <Route path="/v/:companyCode/create-dispatch-note" element={page(VendorCreateDispatchNotePage)} />
                         <Route path="/v/:companyCode/profile" element={page(VendorProfilePage)} />
                         <Route path="/v/:companyCode/signature" element={page(VendorSignaturePage)} />
                         <Route path="/v/:companyCode/contracts" element={page(VendorContractsPage)} />
@@ -201,6 +208,7 @@ export default function App() {
                         <Route path="/vendor/invoices" element={page(VendorInvoicesPage)} />
                         <Route path="/vendor/payments" element={page(VendorPaymentsPage)} />
                         <Route path="/vendor/create-invoice" element={page(VendorCreateInvoicePage)} />
+                        <Route path="/vendor/create-dispatch-note" element={page(VendorCreateDispatchNotePage)} />
                         <Route path="/vendor/profile" element={page(VendorProfilePage)} />
                         <Route path="/vendor/signature" element={page(VendorSignaturePage)} />
                         <Route path="/vendor/contracts" element={page(VendorContractsPage)} />
@@ -230,6 +238,9 @@ export default function App() {
                             element={page(ApprovalLevelsPage)}
                           />
                           <Route path="/approvals" element={page(ApprovalsPage)} />
+                          <Route path="/budget" element={page(BudgetListPage)} />
+                          <Route path="/budget/create" element={page(BudgetCreatePage)} />
+                          <Route path="/budget/:id" element={page(BudgetDetailPage)} />
                           <Route
                             path="/accounts-payable"
                             element={page(AccountsPayablePage)}

@@ -94,10 +94,12 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'Custom Form Builder': <FormInput size={19} />,
   Forms: <ClipboardList size={19} />,
   'Form Responses': <BarChart3 size={19} />,
+  'Budget Management': <Wallet size={19} />,
 };
 
 const FR_NAV_MAP: Record<string, string> = {
   Dashboard: 'Tableau de bord',
+  'Budget Management': 'Gestion du budget',
   'Vendor Dashboard': 'Tableau de bord',
   'RFQ Management': 'Demandes de prix (RFQ)',
   'My RFQs': 'Mes demandes (RFQ)',
@@ -208,7 +210,7 @@ export default function Sidebar({
       title: 'Procurement',
       items: [
         ...menuItems
-          .filter((item) => ['rfq', 'purchase-requisitions', 'company-grn', 'contracts', 'create-purchase-invoice', 'create-payment-voucher', 'vendor-rfqs', 'vendor-quotations', 'forms'].includes(item.id))
+          .filter((item) => ['rfq', 'purchase-requisitions', 'budget-management', 'company-grn', 'contracts', 'create-purchase-invoice', 'create-payment-voucher', 'vendor-rfqs', 'vendor-quotations', 'forms'].includes(item.id))
           .map((item) => ({
             label: item.label,
             icon: ICON_MAP[item.label] || <FileText size={19} />,

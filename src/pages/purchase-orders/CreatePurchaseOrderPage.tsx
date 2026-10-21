@@ -4,13 +4,16 @@ import {
   ShoppingCart, ArrowLeft, Plus, Trash2, Download, Save, Send,
   Building2, FileText, Calendar, IndianRupee, Tag, UserCheck, ShieldCheck,
   CheckCircle2, AlertCircle, Clock, Search, X, Pencil, Eye, RotateCcw,
-  ArrowLeftRight, Globe
+  ArrowLeftRight, Globe, Wallet
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { contractService } from '../../services/contractService';
 import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
 import { approvalService } from '../../services/approvalService';
+import { budgetApi, type SpendValidationResponse } from '../../api/budgetApi';
+import { BudgetIndicatorBadge } from '../../components/budget/BudgetIndicatorBadge';
+import { BudgetExceededModal } from '../../components/budget/BudgetExceededModal';
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
 import '../../components/vendor/vendor-rfq-workspace.css';
 import { apiRequest } from '../../api/client';
@@ -304,6 +307,7 @@ export default function CreatePurchaseOrderPage() {
   const [otherCharges, setOtherCharges] = useState(0);
   const [internalNotes, setInternalNotes] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [vendorFulfillmentAllowed, setVendorFulfillmentAllowed] = useState<'DISPATCH_AND_INVOICE' | 'DISPATCH_ONLY' | 'INVOICE_ONLY'>('DISPATCH_AND_INVOICE');
 
   // Actions state
   const [submittingAction, setSubmittingAction] = useState<'draft' | 'submit' | null>(null);
@@ -312,7 +316,31 @@ export default function CreatePurchaseOrderPage() {
   const submittingRef = React.useRef(false); // Hard guard against concurrent submits
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // ── Budget Management & Spend Gatekeeper Integration ──
+  const [budgetLines, setBudgetLines] = useState<Array<any>>([]);
+  const [selectedBudgetLineId, setSelectedBudgetLineId] = useState<string>('');
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  const [budgetValidation, setBudgetValidation] = useState<SpendValidationResponse | null>(null);
+  const [showBudgetExceededModal, setShowBudgetExceededModal] = useState(false);
+
+  useEffect(() => {
+    setBudgetLoading(true);
+    budgetApi.getActiveLines()
+      .then((res) => {
+        if (res?.lines && Array.isArray(res.lines)) {
+          setBudgetLines(res.lines);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setBudgetLoading(false));
+  }, []);
+
+  const selectedBudgetLine = useMemo(() => {
+    return budgetLines.find((l) => l.id === selectedBudgetLineId);
+  }, [budgetLines, selectedBudgetLineId]);
+
   // ── Fetch Payment Terms & Custom Payment Plans ──
+
   useEffect(() => {
     companySettingsService.listPaymentTerms()
       .then((terms) => {
@@ -526,6 +554,21 @@ export default function CreatePurchaseOrderPage() {
           existing = await purchaseRequisitionService.getByRfqId(editId);
         }
         if (existing) {
+          const loadedPoNum = existing.poNumber || (existing as any).po_number;
+          if (loadedPoNum) {
+            setPoNumber(loadedPoNum);
+          } else if (typeof editId === 'string' && editId.startsWith('PO-')) {
+            setPoNumber(editId);
+          }
+          if (existing.poDate) {
+            setPoDate(String(existing.poDate).slice(0, 10));
+          }
+          if ((existing as any).revisionNo !== undefined && (existing as any).revisionNo !== null) {
+            setRevisionNo(String((existing as any).revisionNo));
+          }
+          if ((existing as any).budgetLineId) {
+            setSelectedBudgetLineId((existing as any).budgetLineId);
+          }
           if (existing.companyName) setCompanyName(existing.companyName);
           if (existing.companyAddress) setCompanyAddress(existing.companyAddress);
           if (existing.companyWebsite) setCompanyWebsite(existing.companyWebsite);
@@ -581,7 +624,36 @@ export default function CreatePurchaseOrderPage() {
           if (existing.otherCharges !== undefined) setOtherCharges(existing.otherCharges);
           if (existing.internalNotes) setInternalNotes(existing.internalNotes);
           if (existing.specialInstructions) setSpecialInstructions(existing.specialInstructions);
-          if (existing.rfqId) setRfqNo(existing.rfqId);
+
+          const isInternalDummyRfq = Boolean(
+            !existing.rfqId ||
+            (existing as any).isStandalone ||
+            existing.rfqId.startsWith('rfq-direct') ||
+            existing.rfqId.startsWith('direct') ||
+            existing.rfqId.includes('direct') ||
+            /^[0-9a-fA-F]{24}$/.test(existing.rfqId)
+          );
+          const userRfq = (existing as any).sourceReferences?.rfqNo || (existing as any).rfqNo;
+          if (userRfq) {
+            setRfqNo(userRfq);
+          } else if (!isInternalDummyRfq) {
+            setRfqNo(existing.rfqId);
+          } else {
+            setRfqNo('');
+          }
+
+          if ((existing as any).sourceReferences) {
+            const sr = (existing as any).sourceReferences;
+            if (sr.prNo) setPrNo(sr.prNo);
+            if (sr.contractNo) setContractNo(sr.contractNo);
+            if (sr.rfqNo && !sr.rfqNo.includes('direct') && !/^[0-9a-fA-F]{24}$/.test(sr.rfqNo)) setRfqNo(sr.rfqNo);
+            if (sr.tenderNo) setTenderNo(sr.tenderNo);
+            if (sr.supplierQuotationNo) setSupplierQuotationNo(sr.supplierQuotationNo);
+            if (sr.quotationDate) setQuotationDate(sr.quotationDate);
+            if (sr.blanketOrderNo) setBlanketOrderNo(sr.blanketOrderNo);
+            if (sr.frameworkAgreement) setFrameworkAgreement(sr.frameworkAgreement);
+          }
+
           if (existing.items && existing.items.length > 0) {
             setItems(existing.items.map((item: any, idx: number) => {
               const itemName = item.itemName || item.name || '';
@@ -599,6 +671,48 @@ export default function CreatePurchaseOrderPage() {
               };
             }));
           }
+        }
+
+        if (existing && !existing.poNumber) {
+          try {
+            const posRes = await purchaseOrderService.list();
+            const foundPo = (posRes.orders || []).find((p: any) => p.rfqId === existing.rfqId || p.id === editId || p.id === existing.id);
+            if (foundPo?.poNumber) {
+              setPoNumber(foundPo.poNumber);
+            }
+          } catch {}
+        } else if (!existing) {
+          try {
+            const posRes = await purchaseOrderService.list();
+            const foundPo = (posRes.orders || []).find((p: any) => p.id === editId || p.poNumber === editId);
+            if (foundPo) {
+              if (foundPo.poNumber) setPoNumber(foundPo.poNumber);
+              if (foundPo.createdAt) setPoDate(String(foundPo.createdAt).slice(0, 10));
+              if (foundPo.status) {
+                const s = String(foundPo.status).toUpperCase();
+                if (s === 'APPROVED') setStatus('Approved');
+                else if (s === 'PENDING_APPROVAL') setStatus('Pending Approval');
+                else if (s === 'RETURNED') setStatus('Returned');
+                else if (s === 'REJECTED') setStatus('Rejected');
+                else setStatus('Draft');
+              }
+              if (foundPo.vendor) {
+                setSelectedVendorId(foundPo.vendor.id || foundPo.vendorId);
+                setSupplierName(foundPo.vendor.name || '');
+                setContactEmail(foundPo.vendor.email || '');
+              }
+              if (foundPo.rfqId) {
+                const isDummy = (
+                  foundPo.rfqId.startsWith('rfq-direct') ||
+                  foundPo.rfqId.startsWith('direct') ||
+                  foundPo.rfqId.includes('direct') ||
+                  /^[0-9a-fA-F]{24}$/.test(foundPo.rfqId)
+                );
+                if (!isDummy) setRfqNo(foundPo.rfqId);
+                else setRfqNo('');
+              }
+            }
+          } catch {}
         }
       } catch (err) {
         console.error('Failed to load existing PO:', err);
@@ -761,6 +875,25 @@ export default function CreatePurchaseOrderPage() {
       return;
     }
 
+    // ── Live Budget Availability Gatekeeper ──
+    if (selectedBudgetLineId && targetStatus === 'Pending Approval') {
+      try {
+        const val = await budgetApi.checkAvailability({
+          budgetLineId: selectedBudgetLineId,
+          amount: grandTotal,
+          currency,
+          documentType: 'PO',
+        });
+        if (!val.allowed) {
+          setBudgetValidation(val);
+          setShowBudgetExceededModal(true);
+          return;
+        }
+      } catch (err: any) {
+        console.warn('Budget availability pre-check error:', err);
+      }
+    }
+
     submittingRef.current = true;
     setSubmittingAction(targetStatus === 'Draft' ? 'draft' : 'submit');
     setOverlayMode(targetStatus === 'Draft' ? 'draft' : 'approval');
@@ -777,6 +910,7 @@ export default function CreatePurchaseOrderPage() {
         poNumber: poNumber,
         poDate: poDate,
         totalAmount: grandTotal,
+        budgetLineId: selectedBudgetLineId || undefined,
         notes: internalNotes,
         paymentTerms,
         paymentPlanId: selectedPaymentPlanId || undefined,
@@ -798,6 +932,7 @@ export default function CreatePurchaseOrderPage() {
         grandTotal,
         internalNotes,
         specialInstructions,
+        vendorFulfillmentAllowed,
         items: items.map((i) => ({
           itemCode: i.itemCode,
           itemName: i.itemName,
@@ -838,6 +973,7 @@ export default function CreatePurchaseOrderPage() {
         poNumber: finalPoNumber,
         status: statusPayload,
         isStandalone: true,
+        vendorFulfillmentAllowed,
         companyName: companyName || brandingCompanyName || 'Organization',
         companyAddress: compAddressFinal,
         companyPhone: companyPhone || brandingPhone || '',
@@ -887,6 +1023,19 @@ export default function CreatePurchaseOrderPage() {
         subtotal: subtotal,
         taxTotal: taxTotal,
         discountTotal: 0,
+        grandTotal: grandTotal,
+        totalAmount: grandTotal,
+        budgetLineId: selectedBudgetLineId || undefined,
+        sourceReferences: {
+          prNo,
+          contractNo,
+          rfqNo,
+          tenderNo,
+          supplierQuotationNo,
+          quotationDate,
+          blanketOrderNo,
+          frameworkAgreement,
+        },
       };
       await purchaseRequisitionService.save(prPayload).catch(() => {});
 
@@ -1001,7 +1150,11 @@ export default function CreatePurchaseOrderPage() {
           </button>
           <div className="cpo-header__title-wrap">
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <h1>{editId ? `Purchase Order #${poNumber}` : 'Create Direct Purchase Order'}</h1>
+              <h1>
+                {editId
+                  ? `Purchase Order ${poNumber ? (poNumber.startsWith('PO') ? poNumber : `#${poNumber}`) : (editId.startsWith('PO-') ? editId : '')}`
+                  : 'Create Direct Purchase Order'}
+              </h1>
               {status === 'Approved' && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'rgba(16, 126, 62, 0.15)', color: '#107e3e', border: '1px solid rgba(16, 126, 62, 0.3)', borderRadius: 16, fontSize: 13, fontWeight: 700, marginLeft: 10 }}>
                   <CheckCircle2 size={13} /> Approved
@@ -1043,10 +1196,10 @@ export default function CreatePurchaseOrderPage() {
               <span className="cpo-field__sub">Auto-generated from sequence settings</span>
               <input
                 type="text"
-                value={poNumberLoading ? '' : poNumber}
+                value={poNumberLoading ? '' : (poNumber || (editId && editId.startsWith('PO-') ? editId : ''))}
                 onChange={(e) => setPoNumber(e.target.value)}
-                placeholder={poNumberLoading ? 'Generating...' : ''}
-                disabled={poNumberLoading}
+                placeholder={poNumberLoading ? 'Loading PO...' : 'PO-00000'}
+                disabled={isReadOnly || poNumberLoading}
                 style={poNumberLoading ? { opacity: 0.5 } : undefined}
               />
             </div>
@@ -1066,7 +1219,59 @@ export default function CreatePurchaseOrderPage() {
               <input type="date" value={poDate ? String(poDate).slice(0, 10) : ''} onChange={(e) => setPoDate(e.target.value)} />
             </div>
           </div>
+
+          <div className="cpo-grid cpo-grid--1" style={{ marginTop: 14 }}>
+            <div className="cpo-field">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                  <Wallet size={14} className="text-primary" /> BUDGET ALLOCATION LINE & COST CENTER
+                </label>
+                {selectedBudgetLine && (
+                  <BudgetIndicatorBadge
+                    lineCode={selectedBudgetLine.lineCode}
+                    availableAmount={selectedBudgetLine.availableAmount}
+                    currency={selectedBudgetLine.budgetCurrency || currency}
+                    requestedAmount={grandTotal}
+                  />
+                )}
+              </div>
+              <span className="cpo-field__sub">Link this Purchase Order to an active organizational budget line for real-time spend tracking and gatekeeping</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  value={selectedBudgetLineId}
+                  onChange={(e) => setSelectedBudgetLineId(e.target.value)}
+                  className="cpo-select"
+                  style={{ flex: 1 }}
+                >
+                  <option value="">-- No Budget Line Assigned (Unallocated) --</option>
+                  {budgetLines.map((line) => (
+                    <option key={line.id} value={line.id}>
+                      [{line.budgetCode || 'BUDGET'}] {line.lineCode}: {line.lineName} — Available: {Number(line.availableAmount || 0).toLocaleString()} {line.budgetCurrency || 'KES'}
+                      {line.costCenterName ? ` (${line.costCenterName})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {budgetLines.length === 0 && !budgetLoading && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/procurement/budgets/create')}
+                    className="cpo-btn cpo-btn--secondary"
+                    style={{ whiteSpace: 'nowrap', fontSize: 12, padding: '7px 12px' }}
+                    title="No active budgets exist yet. Click to configure organizational budgets."
+                  >
+                    + Create Budget
+                  </button>
+                )}
+              </div>
+              {budgetLines.length === 0 && !budgetLoading && (
+                <p style={{ fontSize: 12, color: 'var(--muted-foreground, #64748b)', marginTop: 4 }}>
+                  💡 No active budgets currently configured. You can create a budget in <strong>Procurement → Budget Management</strong> to enable automated spend limits.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
+
 
         {/* ── Section 02: Source References ── */}
         <div className="cpo-section">
@@ -1946,6 +2151,18 @@ export default function CreatePurchaseOrderPage() {
                 <label>SHIPPING TERMS</label>
                 <input type="text" value={shippingTerms} onChange={(e) => setShippingTerms(e.target.value)} placeholder="e.g. FOB Destination" />
               </div>
+              <div className="cpo-field">
+                <label>VENDOR FULFILLMENT PERMISSION</label>
+                <select
+                  value={vendorFulfillmentAllowed}
+                  onChange={(e) => setVendorFulfillmentAllowed(e.target.value as any)}
+                  className="cpo-select"
+                >
+                  <option value="DISPATCH_AND_INVOICE">🚚 Dispatch Note + 🧾 Invoice (Standard)</option>
+                  <option value="DISPATCH_ONLY">🚚 Dispatch Note Only (Invoice created internally after GRN)</option>
+                  <option value="INVOICE_ONLY">🧾 Vendor Invoice Only (Direct Invoicing)</option>
+                </select>
+              </div>
             </div>
 
             <div className="cpo-field" style={{ marginTop: 12 }}>
@@ -1976,6 +2193,25 @@ export default function CreatePurchaseOrderPage() {
                 className="pr-totals__currency-selector"
               />
             </div>
+
+            {selectedBudgetLine && (
+              <div style={{ margin: '10px 0 12px 0', padding: '10px 12px', background: 'var(--muted, rgba(241, 245, 249, 0.5))', borderRadius: 10, border: '1px solid var(--border, #e2e8f0)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--foreground, #0f172a)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Wallet size={13} className="text-primary" /> Budget Balance
+                  </span>
+                  <BudgetIndicatorBadge
+                    lineCode={selectedBudgetLine.lineCode}
+                    availableAmount={selectedBudgetLine.availableAmount}
+                    currency={selectedBudgetLine.budgetCurrency || currency}
+                    requestedAmount={grandTotal}
+                  />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted-foreground, #64748b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selectedBudgetLine.lineCode}: {selectedBudgetLine.lineName}
+                </div>
+              </div>
+            )}
 
             <div className="cpo-totals">
               <div className="cpo-totals__row">
@@ -2020,6 +2256,20 @@ export default function CreatePurchaseOrderPage() {
         amount={grandTotal}
         currency={currency}
         mode={overlayMode}
+      />
+      <BudgetExceededModal
+        isOpen={showBudgetExceededModal}
+        onClose={() => setShowBudgetExceededModal(false)}
+        validationData={budgetValidation}
+        onSubmitExceptionRequest={async (justification) => {
+          setShowBudgetExceededModal(false);
+          setInternalNotes((prev) => `${prev ? `${prev}\n\n` : ''}[BUDGET EXCEPTION OVERRIDE]: ${justification}`);
+          setTimeout(() => handleSubmit('Pending Approval'), 100);
+        }}
+        onRequestVirement={() => {
+          setShowBudgetExceededModal(false);
+          navigate(`/procurement/budgets/${budgetValidation?.budgetId || ''}`);
+        }}
       />
     </div>
   );

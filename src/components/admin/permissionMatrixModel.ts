@@ -4,7 +4,7 @@ export const PERMISSION_FIELDS: PermissionField[] = ['canView', 'canCreate', 'ca
 export const PERMISSION_LABELS: Record<PermissionField, string> = { canView: 'View', canCreate: 'Create', canApprove: 'Approve' };
 export const PERMISSION_GROUPS = [
   { name: 'Overview', modules: ['Dashboard'] },
-  { name: 'Procurement', modules: ['RFQ Management', 'PO Creation', 'Contracts', 'Create Purchase Invoice', 'Create Payment Voucher'] },
+  { name: 'Procurement', modules: ['RFQ Management', 'PO Creation', 'Budget Management', 'Contracts', 'Create Purchase Invoice', 'Create Payment Voucher'] },
   { name: 'Approvals', modules: ['Quotation Approval', 'Purchase Order Approval', 'Purchase Invoice Approval', 'Payment Voucher Approval'] },
   { name: 'Governance', modules: ['Vendors', 'New Onboarding', 'Onboarding Queue', 'Signature', 'Reports', 'Audit Trail'] },
   { name: 'Administration', modules: ['User Management', 'Roles & Permissions', 'Approval Levels', 'Company Settings', 'Custom Form Builder', 'Form Responses'] },

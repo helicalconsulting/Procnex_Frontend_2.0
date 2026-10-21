@@ -217,6 +217,7 @@ export interface PurchaseOrder {
   totalAmount: number;
   status: string;
   createdAt: string;
+  vendorFulfillmentAllowed?: 'DISPATCH_AND_INVOICE' | 'DISPATCH_ONLY' | 'INVOICE_ONLY';
   rfq?: RFQ;
   vendor?: Vendor;
   items?: PurchaseOrderItem[];

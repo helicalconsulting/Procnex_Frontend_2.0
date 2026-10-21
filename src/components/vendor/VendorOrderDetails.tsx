@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Package, Plus, Receipt, Search } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Package, Plus, Receipt, Search, Truck } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
 import { MessageStrip } from '@/components/shared/MessageStrip';
@@ -60,6 +60,14 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
       actions={<>
         <RecordStatusBadge kind="order" status={order.status} />
         <Button size="sm" variant="outline" onClick={download} disabled={downloading}><Download className="size-3.5" />{downloading ? 'Downloading…' : 'Download PO'}</Button>
+        {!state.cancelled && (
+          <Link
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            to={getVendorPath(`/vendor/create-dispatch-note?poId=${encodeURIComponent(order.id || order.poNumber)}`)}
+          >
+            <Truck className="size-3.5" />Create Dispatch Note
+          </Link>
+        )}
         {!state.cancelled && <Link className={buttonVariants({ size: 'sm' })} to={getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(order.id || order.poNumber)}`)}><Plus className="size-3.5" />Create Invoice</Link>}
         {(state.received || state.value === 'INVOICED') && <Link className={buttonVariants({ variant: 'outline', size: 'sm' })} to={getVendorPath('/vendor/invoices')}><Receipt className="size-3.5" />View Invoices</Link>}
       </>} />

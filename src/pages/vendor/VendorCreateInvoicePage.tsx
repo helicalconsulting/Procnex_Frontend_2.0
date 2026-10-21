@@ -14,7 +14,8 @@ import {
   Paperclip,
   X,
   Save,
-  Printer
+  Printer,
+  Truck
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
@@ -117,6 +118,8 @@ export default function VendorCreateInvoicePage() {
       (po) => String(po.id) === String(selectedPoId) || String(po.poNumber) === String(selectedPoId)
     );
   }, [poList, selectedPoId]);
+
+  const isDispatchOnly = selectedPO?.vendorFulfillmentAllowed === 'DISPATCH_ONLY';
 
   const finalLogoUrl = selectedPO?.companyLogoUrl || logoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
 
@@ -443,6 +446,10 @@ export default function VendorCreateInvoicePage() {
       setErrorMsg('Please select a Purchase Order.');
       return false;
     }
+    if (isDispatchOnly) {
+      setErrorMsg('This Purchase Order is configured for Dispatch Note Only. Direct invoicing is restricted. Please create a Dispatch Note instead.');
+      return false;
+    }
     return true;
   };
 
@@ -599,7 +606,7 @@ export default function VendorCreateInvoicePage() {
             variant="outline"
             size="sm"
             onClick={() => handleSubmitInvoice(true)}
-            disabled={savingDraft || submitting}
+            disabled={savingDraft || submitting || isDispatchOnly}
             className="gap-1.5"
           >
             <Save className="size-4" /> {savingDraft ? 'Saving…' : 'Save Draft'}
@@ -607,7 +614,7 @@ export default function VendorCreateInvoicePage() {
           <Button
             size="sm"
             onClick={() => handleSubmitInvoice(false)}
-            disabled={savingDraft || submitting}
+            disabled={savingDraft || submitting || isDispatchOnly}
             className="gap-1.5 shadow-xs"
           >
             <Send className="size-4" /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
@@ -617,6 +624,30 @@ export default function VendorCreateInvoicePage() {
 
       {/* Form Body */}
       <div className="space-y-6">
+        {/* Dispatch Only Warning Banner */}
+        {isDispatchOnly && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 shrink-0">
+                <Truck className="size-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Dispatch Note Required for this Order</p>
+                <p className="text-xs text-amber-700/90 dark:text-amber-300/80 mt-0.5">
+                  The buyer has configured {displayPoNumber} for <strong>Dispatch Note Only</strong> fulfillment. Direct invoicing is restricted.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 gap-1.5"
+              onClick={() => navigate(`/vendor/create-dispatch-note?poId=${selectedPoId}`)}
+            >
+              <Truck className="size-4" /> Create Dispatch Note Now
+            </Button>
+          </div>
+        )}
+
         {/* Section 01: Order & Invoice Details */}
         <Card className="overflow-hidden border border-border/80 shadow-xs p-5">
           <div className="flex items-center gap-3 pb-3 border-b border-border/60 mb-5">
@@ -629,7 +660,18 @@ export default function VendorCreateInvoicePage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="form-field">
-              <label htmlFor="invoice-po" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SELECT PURCHASE ORDER *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="invoice-po" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SELECT PURCHASE ORDER *</label>
+                {selectedPO?.vendorFulfillmentAllowed && (
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    selectedPO.vendorFulfillmentAllowed === 'DISPATCH_ONLY'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                  }`}>
+                    {selectedPO.vendorFulfillmentAllowed === 'DISPATCH_ONLY' ? 'Dispatch Only' : 'Invoice Permitted'}
+                  </span>
+                )}
+              </div>
               <Select id="invoice-po"
                 className="h-10 font-medium"
                 value={selectedPoId}
@@ -891,7 +933,7 @@ export default function VendorCreateInvoicePage() {
               <Button
                 size="lg"
                 onClick={() => handleSubmitInvoice(false)}
-                disabled={savingDraft || submitting}
+                disabled={savingDraft || submitting || isDispatchOnly}
                 className="w-full gap-2 shadow-xs"
               >
                 <Send className="size-4" /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}

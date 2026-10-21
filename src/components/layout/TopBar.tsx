@@ -63,7 +63,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/vendor/quotations': 'My Quotations',
   '/vendor/orders': 'Purchase Orders',
   '/vendor/invoices': 'Invoices',
+  '/vendor/dispatch-notes': 'Dispatch Notes',
   '/vendor/create-invoice': 'Create Vendor Invoice',
+  '/vendor/create-dispatch-note': 'Create Dispatch Note',
   '/vendor/contracts': 'Contracts',
   '/vendor/agreements': 'Agreements',
   '/vendor/profile': 'Profile',
@@ -105,7 +107,9 @@ const SECTION_MAP: Record<string, string> = {
   '/vendor/quotations': 'Vendor Portal',
   '/vendor/orders': 'Vendor Portal',
   '/vendor/invoices': 'Vendor Portal',
+  '/vendor/dispatch-notes': 'Vendor Portal',
   '/vendor/create-invoice': 'Vendor Portal',
+  '/vendor/create-dispatch-note': 'Vendor Portal',
   '/vendor/contracts': 'Vendor Portal',
   '/vendor/agreements': 'Vendor Portal',
   '/vendor/profile': 'Vendor Portal',
@@ -224,7 +228,8 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
   return (
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-border/80 bg-card/95 px-2 transition-[left] duration-200 ease-out supports-[backdrop-filter:blur(1px)]:bg-card/85 supports-[backdrop-filter:blur(1px)]:backdrop-blur-xl sm:px-4 lg:right-0 lg:px-5',
+        'fixed inset-x-0 top-0 flex h-16 items-center justify-between border-b border-border/80 bg-card/95 px-2 transition-[left] duration-200 ease-out supports-[backdrop-filter:blur(1px)]:bg-card/85 supports-[backdrop-filter:blur(1px)]:backdrop-blur-xl sm:px-4 lg:right-0 lg:px-5',
+        mobileOpen ? 'z-30' : (dropdownOpen || isCalendarOpen ? 'z-[60]' : 'z-30 lg:z-40'),
         isSidebarExpanded ? 'lg:left-[280px]' : 'lg:left-20'
       )}
     >

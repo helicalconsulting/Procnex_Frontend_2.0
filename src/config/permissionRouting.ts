@@ -39,7 +39,8 @@ export const ROUTE_PERMISSION_RULES: Array<{ prefix: string; rule: RoutePermissi
   { prefix: '/procurement/goods-receipt', rule: { module: 'PO Creation', action: 'canView' } },
   { prefix: '/procurement/create-company-grn', rule: { module: 'PO Creation', action: 'canView' } },
   { prefix: '/procurement/grns', rule: { module: 'PO Creation', action: 'canView' } },
-  { prefix: '/procurement/create-grn', rule: { module: 'PO Creation', action: 'canView' } },
+  { prefix: '/budget/create', rule: { module: 'Budget Management', action: 'canCreate' } },
+  { prefix: '/budget', rule: { module: 'Budget Management', action: 'canView' } },
   { prefix: '/contracts', rule: { module: 'Contracts', action: 'canView' } },
 ];
 
@@ -50,6 +51,7 @@ export const MENU_ITEM_PERMISSIONS: Record<string, RoutePermissionRule> = {
   'rfq-list': { module: 'RFQ Management', action: 'canView' },
   'rfq-create': { module: 'RFQ Management', action: 'canCreate' },
   'purchase-requisitions': { module: 'PO Creation', action: 'canView' },
+  'budget-management': { module: 'Budget Management', action: 'canView' },
   'company-grn': { module: 'PO Creation', action: 'canView' },
   'grn-management': { module: 'PO Creation', action: 'canView' },
   contracts: { module: 'Contracts', action: 'canView' },

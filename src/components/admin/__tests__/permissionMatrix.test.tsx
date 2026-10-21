@@ -21,7 +21,7 @@ describe('permission dependencies and bulk scopes', () => {
   });
   it('Grant all grants exactly the supported actions, including backend-supported contract approval', () => {
     const all = setPermissionScope(empty(), modules, true);
-    expect(permissionSelection(all)).toEqual({ granted: 42, total: 42, all: true, mixed: false });
+    expect(permissionSelection(all)).toEqual({ granted: 45, total: 45, all: true, mixed: false });
     for (const permission of all) for (const field of PERMISSION_FIELDS) expect(permission[field]).toBe(moduleSupports(permission.module, field));
     expect(row(all, 'Contracts').canApprove).toBe(true);
     expect(permissionSelection(setPermissionScope(all, modules, false)).granted).toBe(0);
@@ -86,8 +86,8 @@ describe('permission dependencies and bulk scopes', () => {
 describe('shared permission matrix semantics', () => {
   it('read mode exposes checkboxes but no editing or bulk controls', () => {
     const html = renderToStaticMarkup(<PermissionMatrix permissions={rolePermissionRows([], true)} editable={false} />);
-    expect((html.match(/type="checkbox"/g) ?? [])).toHaveLength(42);
-    expect((html.match(/disabled=""/g) ?? [])).toHaveLength(42);
+    expect((html.match(/type="checkbox"/g) ?? [])).toHaveLength(45);
+    expect((html.match(/disabled=""/g) ?? [])).toHaveLength(45);
     expect(html).not.toContain('Grant all');
     expect(html).toContain('Approve not available for Dashboard');
     expect(html).toContain('Approve permission for Contracts');
@@ -95,7 +95,7 @@ describe('shared permission matrix semantics', () => {
   it('edit mode provides the same checkbox controls and mixed column headers', () => {
     const permissions = setPermission(empty(), 'RFQ Management', 'canCreate', true);
     const html = renderToStaticMarkup(<PermissionMatrix permissions={permissions} editable />);
-    expect((html.match(/type="checkbox"/g) ?? [])).toHaveLength(45);
+    expect((html.match(/type="checkbox"/g) ?? [])).toHaveLength(48);
     expect(html).toContain('aria-checked="mixed"');
     expect(html).toContain('Grant all Procurement permissions');
     expect(html).toContain('Revoke all');

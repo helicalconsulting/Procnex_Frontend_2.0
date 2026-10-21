@@ -19,6 +19,7 @@ import {
   Receipt,
   Sparkles,
   TrendingUp,
+  Truck,
   X,
   Zap,
 } from 'lucide-react';
@@ -462,6 +463,7 @@ export default function VendorDashboard() {
     if (id === 'quicknav') {
       const actions = [
         { label: 'Submit quotation', description: 'Respond to open RFQs', icon: FileText, path: getVendorPath('/vendor/rfqs'), accent: 'var(--vendor-primary, #0a6ed1)' },
+        { label: 'Create dispatch note', description: 'Record delivery challan / shipment', icon: Truck, path: getVendorPath('/vendor/create-dispatch-note'), accent: '#0284c7' },
         { label: 'Create invoice', description: 'Submit invoice against order', icon: Plus, path: getVendorPath('/vendor/create-invoice'), accent: '#10b981' },
         { label: 'Track orders', description: 'View fulfillment status', icon: Package, path: getVendorPath('/vendor/orders'), accent: '#8b5cf6' },
         { label: 'Manage invoices', description: 'Track payment and review status', icon: Receipt, path: getVendorPath('/vendor/invoices'), accent: '#059669' },
@@ -566,7 +568,7 @@ export default function VendorDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative z-50">
+          <div className={cn('relative', isCalendarOpen ? 'z-20' : 'z-auto')}>
             <Button
               variant="outline"
               data-calendar-trigger="true"

@@ -8,6 +8,7 @@ import { sseClient } from '../../services/sseClient';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { invoiceService } from '../../services/invoiceService';
+import { dispatchNoteService, type DispatchNote } from '../../services/dispatchNoteService';
 import {
   PackageCheck,
   Search,
@@ -17,6 +18,9 @@ import {
   ShoppingCart,
   CheckCircle2,
   Plus,
+  Clock,
+  FileText,
+  Receipt,
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
@@ -122,6 +126,46 @@ export default function CompanyGRNListPage() {
     { cacheTtlMs: 0 }
   );
 
+  // Load Dispatch Notes from dispatchNoteService
+  const { data: dnData, forceRefresh: forceRefreshDNs } = useServiceData(
+    () => dispatchNoteService.list({ limit: 1000 }),
+    { dispatchNotes: [], total: 0 },
+    [],
+    { cacheTtlMs: 0 }
+  );
+  const dispatchNotes = dnData.dispatchNotes || [];
+
+  // Load Invoices from invoiceService
+  const { data: invoicesList, forceRefresh: forceRefreshInvoices } = useServiceData(
+    () => invoiceService.list(),
+    [],
+    [],
+    { cacheTtlMs: 0 }
+  );
+
+  // Map of PO ID/Number to Inbound Dispatch / Invoice
+  const inboundShipmentMap = useMemo(() => {
+    const map = new Map<string, { type: 'DISPATCH' | 'INVOICE'; refNumber: string }>();
+
+    (dispatchNotes || []).forEach((dn) => {
+      const pId = String(dn.poId || '').toLowerCase().trim();
+      const pNum = String(dn.poNumber || '').toLowerCase().trim();
+      const val = { type: 'DISPATCH' as const, refNumber: dn.dispatchNoteNumber };
+      if (pId) map.set(pId, val);
+      if (pNum) map.set(pNum, val);
+    });
+
+    (invoicesList || []).forEach((inv) => {
+      const pId = String(inv.poId || '').toLowerCase().trim();
+      const pNum = String(inv.poNumber || '').toLowerCase().trim();
+      const val = { type: 'INVOICE' as const, refNumber: inv.invoiceNumber };
+      if (pId && !map.has(pId)) map.set(pId, val);
+      if (pNum && !map.has(pNum)) map.set(pNum, val);
+    });
+
+    return map;
+  }, [dispatchNotes, invoicesList]);
+
   // Auto-switch tab and invalidate queries when arriving with recorded tab state
   useEffect(() => {
     const tab = searchParams.get('tab') || location.state?.tab;
@@ -146,6 +190,8 @@ export default function CompanyGRNListPage() {
         forceRefreshGrns();
         forceRefreshPOs();
         forceRefreshReqs();
+        forceRefreshDNs();
+        forceRefreshInvoices();
       }, 300);
     };
 
@@ -154,6 +200,8 @@ export default function CompanyGRNListPage() {
 
     window.addEventListener('heliflow:grn-updated', handleRefresh);
     window.addEventListener('heliflow:po-updated', handleRefresh);
+    window.addEventListener('heliflow:dispatch-note-created', handleRefresh);
+    window.addEventListener('heliflow:invoice-created', handleRefresh);
     window.addEventListener('storage', handleRefresh);
 
     return () => {
@@ -162,9 +210,11 @@ export default function CompanyGRNListPage() {
       unsubPo();
       window.removeEventListener('heliflow:grn-updated', handleRefresh);
       window.removeEventListener('heliflow:po-updated', handleRefresh);
+      window.removeEventListener('heliflow:dispatch-note-created', handleRefresh);
+      window.removeEventListener('heliflow:invoice-created', handleRefresh);
       window.removeEventListener('storage', handleRefresh);
     };
-  }, [forceRefreshGrns, forceRefreshPOs, forceRefreshReqs]);
+  }, [forceRefreshGrns, forceRefreshPOs, forceRefreshReqs, forceRefreshDNs, forceRefreshInvoices]);
 
   const poLoading = poLoading1 || poLoading2;
 
@@ -225,13 +275,6 @@ export default function CompanyGRNListPage() {
 
     return combined;
   }, [poData, reqList]);
-
-  // Load Invoices to check if GRN / PO is already invoiced
-  const { data: invoicesList } = useServiceData(
-    () => invoiceService.list(),
-    [],
-    []
-  );
 
   const invoicedPoNumbers = useMemo(() => {
     const set = new Set<string>();
@@ -619,6 +662,7 @@ export default function CompanyGRNListPage() {
                     <th className="px-5 py-3.5">Supplier / Vendor</th>
                     <th className="px-5 py-3.5 font-right">Total Value</th>
                     <th className="px-5 py-3.5">Order Date</th>
+                    <th className="px-5 py-3.5">Inbound Dispatch Status</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -635,6 +679,8 @@ export default function CompanyGRNListPage() {
                     const poIdStr = String(po?.id || '').toLowerCase();
                     const poNumStr = String(po?.poNumber || '').toLowerCase();
                     const hasGrn = (poIdStr && posWithGrn.has(poIdStr)) || (poNumStr && posWithGrn.has(poNumStr));
+                    const inbound = inboundShipmentMap.get(poIdStr) || inboundShipmentMap.get(poNumStr);
+                    const hasInbound = Boolean(inbound || (po as any).dispatchNoteNumber || (po as any).vendorDispatchNoteNumber);
 
                     return (
                       <tr key={String(po.id)} className="transition-colors hover:bg-muted/30">
@@ -649,6 +695,18 @@ export default function CompanyGRNListPage() {
                         </td>
                         <td className="px-5 py-4 font-semibold tabular-nums text-foreground">{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
                         <td className="px-5 py-4 text-xs text-muted-foreground">{formatDate(po.createdAt)}</td>
+                        <td className="px-5 py-4">
+                          {hasInbound ? (
+                            <Badge variant="outline" className="gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold text-xs">
+                              <Truck className="size-3 text-emerald-500" />
+                              {inbound?.type === 'INVOICE' ? `Invoice: ${inbound.refNumber}` : `Dispatch: ${inbound?.refNumber || 'Dispatched'}`}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium text-xs">
+                              <Clock className="size-3 text-amber-500" /> Awaiting Vendor Dispatch
+                            </Badge>
+                          )}
+                        </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {hasGrn ? (
@@ -660,13 +718,22 @@ export default function CompanyGRNListPage() {
                               >
                                 <CheckCircle2 className="size-3.5 text-emerald-500" /> GRN Created
                               </Button>
-                            ) : (
+                            ) : hasInbound ? (
                               <Button
                                 type="button"
                                 disabled={!canCreateGRN}
                                 onClick={() => navigate(`/procurement/create-company-grn?poId=${po.id || po.poNumber}`, { state: { po } })}
                               >
                                 <Plus className="size-4" /> Create GRN
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="opacity-60 cursor-not-allowed text-xs"
+                                onClick={() => alert(`Cannot create GRN yet: The vendor has not submitted a Dispatch Note or Invoice for PO #${po.poNumber}.`)}
+                              >
+                                <Clock className="size-3.5" /> Awaiting Dispatch
                               </Button>
                             )}
                           </div>
@@ -747,6 +814,14 @@ export default function CompanyGRNListPage() {
                             >
                               <Eye className="size-3.5" /> View Details
                             </Button>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="gap-1.5 font-semibold text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+                              onClick={() => navigate(`/procurement/create-purchase-invoice?poId=${grn.poId || grn.purchaseOrder?.id || grn.purchaseOrder?.poNumber}&grnId=${grn.id || grn.grnNumber}`)}
+                            >
+                              <Receipt className="size-3.5" /> Create Invoice
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -809,7 +884,17 @@ export default function CompanyGRNListPage() {
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+              <Button
+                type="button"
+                className="gap-1.5 font-bold"
+                onClick={() => {
+                  const poRef = selectedGrn.poId || selectedGrn.purchaseOrder?.id || selectedGrn.purchaseOrder?.poNumber;
+                  navigate(`/procurement/create-purchase-invoice?poId=${poRef}&grnId=${selectedGrn.id || selectedGrn.grnNumber}`);
+                }}
+              >
+                <Receipt className="size-4" /> Create Purchase Invoice
+              </Button>
               <Button variant="secondary" onClick={() => setSelectedGrn(null)}>
                 Close
               </Button>
@@ -826,6 +911,7 @@ const COMPANY_GRN_ORDERS_COLUMNS: LandingColumn[] = [
   { key: 'supplier', label: 'Supplier / Vendor', defaultVisible: true },
   { key: 'value', label: 'Total value', defaultVisible: true },
   { key: 'date', label: 'Order date', defaultVisible: true },
+  { key: 'dispatch', label: 'Inbound Dispatch Status', defaultVisible: true },
   { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
 ];
 

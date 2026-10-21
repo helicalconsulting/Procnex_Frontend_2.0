@@ -47,6 +47,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     UserManagement: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
     Signature: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
     'Digital Signatures': { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
+    Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
   },
@@ -67,6 +68,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     UserManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
   },
   'Purchase Manager': {
     RFQ: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
@@ -85,6 +87,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     UserManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
   },
   'purchase_manager': {
     RFQ: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
@@ -103,6 +106,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     UserManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
   },
   [RoleName.FINANCE_MANAGER]: {
     RFQ: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
@@ -114,6 +118,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     UserManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
   },
   [RoleName.FINANCE_APPROVER]: {
     RFQ: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
@@ -125,6 +130,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     UserManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Budget: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
   },
   [RoleName.VENDOR]: {
     RFQ: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
@@ -172,6 +178,12 @@ export const NAVIGATION_MENU: MenuItem[] = [
     label: 'PO Creation',
     path: '/procurement/purchase-requisitions',
     roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
+  },
+  {
+    id: 'budget-management',
+    label: 'Budget Management',
+    path: '/budget',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
   },
   {
     id: 'company-grn',

@@ -6,6 +6,7 @@ import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { grnService, type GRNItemPayload } from '../../services/grnService';
 import { invoiceService } from '../../services/invoiceService';
+import { dispatchNoteService, type DispatchNote } from '../../services/dispatchNoteService';
 import { companySettingsService, type Warehouse } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
 import {
@@ -24,6 +25,9 @@ import {
   Plus,
   Trash2,
   Building2,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
@@ -188,6 +192,14 @@ export default function CreateGRNPage() {
     []
   );
 
+  // Load dispatch notes list for inbound receiving
+  const { data: dnData } = useServiceData(
+    () => dispatchNoteService.list({ limit: 1000 }),
+    { dispatchNotes: [], total: 0 },
+    []
+  );
+  const dispatchNotes = dnData.dispatchNotes || [];
+
   // Load existing GRNs to detect and prevent duplicate GRN creation
   const { data: existingGrnData } = useServiceData(
     () => grnService.list({ limit: 1000 }),
@@ -217,6 +229,10 @@ export default function CreateGRNPage() {
   // Form State
   const [grnNumber, setGrnNumber] = useState<string>(() => `GRN-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [selectedPoId, setSelectedPoId] = useState<string>(() => safeStr(poIdParam));
+  const [selectedInboundDocId, setSelectedInboundDocId] = useState<string>(() => {
+    if (invoiceIdParam) return `inv_${invoiceIdParam}`;
+    return '';
+  });
   const [vendorDispatchNoteNumber, setVendorDispatchNoteNumber] = useState<string>('');
   const [selectedVendorInvoiceId, setSelectedVendorInvoiceId] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -344,112 +360,181 @@ export default function CreateGRNPage() {
     }
   }, [poIdParam, selectedPO, poLoading]);
 
-  // Display options for Vendor Invoice / Dispatch Note select dropdown (includes PO dispatch note)
-  const displayInvoiceOptions = useMemo(() => {
-    const list = [...(invoicesList || [])];
-    if (!selectedPO) return list;
+  // Display options combining Dispatch Notes and Vendor Invoices for inbound receiving
+  const displayInboundDocOptions = useMemo(() => {
+    const list: Array<{
+      id: string;
+      docType: 'DISPATCH' | 'INVOICE';
+      docNumber: string;
+      label: string;
+      poId: string;
+      poNumber: string;
+      vendorName: string;
+      rawDoc: any;
+    }> = [];
 
+    // 1. Dispatch Notes
+    (dispatchNotes || []).forEach((dn) => {
+      const vName = dn.vendor?.name || (dn as any).vendorName || 'Supplier';
+      const itemsCount = dn.items?.length || 0;
+      const countLabel = itemsCount > 0 ? ` (${itemsCount} items)` : '';
+      list.push({
+        id: `dn_${dn.id}`,
+        docType: 'DISPATCH',
+        docNumber: dn.dispatchNoteNumber,
+        label: `🚚 [Dispatch Note] ${dn.dispatchNoteNumber} — ${vName}${countLabel}`,
+        poId: dn.poId || '',
+        poNumber: dn.poNumber || '',
+        vendorName: vName,
+        rawDoc: dn,
+      });
+    });
+
+    // 2. Vendor Invoices
+    (invoicesList || []).forEach((inv) => {
+      const vName = inv.vendorName || (inv as any).vendor?.name || 'Supplier';
+      const amtStr = inv.amount ? ` (${formatAmount(inv.amount, currency)})` : '';
+      list.push({
+        id: `inv_${inv.id}`,
+        docType: 'INVOICE',
+        docNumber: inv.invoiceNumber,
+        label: `🧾 [Vendor Invoice] ${inv.invoiceNumber} — ${vName}${amtStr}`,
+        poId: inv.poId || '',
+        poNumber: inv.poNumber || '',
+        vendorName: vName,
+        rawDoc: inv,
+      });
+    });
+
+    // If selectedPO is chosen, filter docs matching that PO
+    if (selectedPO) {
+      const targetPoId = safeStr(selectedPO.id).toLowerCase().trim();
+      const targetPoNum = safeStr(selectedPO.poNumber).toLowerCase().trim();
+
+      const filtered = list.filter((item) => {
+        const itemPoId = safeStr(item.poId).toLowerCase().trim();
+        const itemPoNum = safeStr(item.poNumber).toLowerCase().trim();
+        return (
+          (targetPoId && (itemPoId === targetPoId || itemPoNum === targetPoId)) ||
+          (targetPoNum && (itemPoId === targetPoNum || itemPoNum === targetPoNum))
+        );
+      });
+
+      return filtered;
+    }
+
+    return list;
+  }, [dispatchNotes, invoicesList, selectedPO, currency, formatAmount]);
+
+  // Check if inbound dispatch or invoice is submitted for selected PO
+  const hasInboundDispatch = useMemo(() => {
+    if (!selectedPO) return true;
     const targetPoId = safeStr(selectedPO.id).toLowerCase().trim();
     const targetPoNum = safeStr(selectedPO.poNumber).toLowerCase().trim();
 
-    const exists = list.some((inv) => {
-      const invPoId = safeStr(inv.poId).toLowerCase().trim();
-      const invPoNum = safeStr(inv.poNumber).toLowerCase().trim();
-      const invId = safeStr(inv.id).toLowerCase().trim();
-      const invNum = safeStr(inv.invoiceNumber).toLowerCase().trim();
-      return (
-        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId || invId === targetPoId)) ||
-        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum || invNum === targetPoNum))
-      );
+    const hasDn = (dispatchNotes || []).some((dn) => {
+      const pId = safeStr(dn.poId).toLowerCase().trim();
+      const pNum = safeStr(dn.poNumber).toLowerCase().trim();
+      return (targetPoId && (pId === targetPoId || pNum === targetPoId)) ||
+             (targetPoNum && (pId === targetPoNum || pNum === targetPoNum));
     });
+    if (hasDn) return true;
 
-    if (!exists && (selectedPO.poNumber || selectedPO.id)) {
-      const dnNum = safeStr(
-        selectedPO.dispatchNoteNumber ||
-        selectedPO.vendorDispatchNoteNumber ||
-        selectedPO.vendorInvoiceNumber ||
-        (selectedPO.poNumber ? (selectedPO.poNumber.startsWith('PO-') ? selectedPO.poNumber.replace(/^PO-/, 'DN-') : `DN-${selectedPO.poNumber}`) : `DN-${selectedPO.id}`)
-      );
+    const hasInv = (invoicesList || []).some((inv) => {
+      const pId = safeStr(inv.poId).toLowerCase().trim();
+      const pNum = safeStr(inv.poNumber).toLowerCase().trim();
+      return (targetPoId && (pId === targetPoId || pNum === targetPoId)) ||
+             (targetPoNum && (pId === targetPoNum || pNum === targetPoNum));
+    });
+    if (hasInv) return true;
 
-      list.unshift({
-        id: dnNum,
-        invoiceNumber: dnNum,
-        vendorName: selectedPO?.vendor?.name || (selectedPO as any)?.vendorName || 'Supplier',
-        poNumber: selectedPO?.poNumber || '',
-        poId: selectedPO?.id || '',
-        amount: Number(selectedPO?.totalAmount || (selectedPO as any)?.amount || 0),
-        status: 'DISPATCHED',
-        dueDate: new Date().toISOString().slice(0, 10),
-        submittedAt: new Date().toISOString().slice(0, 10),
-      });
+    if (selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber) {
+      return true;
     }
-    return list;
-  }, [invoicesList, selectedPO]);
+    return false;
+  }, [selectedPO, dispatchNotes, invoicesList]);
 
-  // Selected Vendor Invoice details for Auto-fill
+  // Selected Dispatch Note & Invoice derived objects
+  const selectedDispatchNote = useMemo(() => {
+    if (!selectedInboundDocId) return null;
+    if (selectedInboundDocId.startsWith('dn_')) {
+      const rawId = selectedInboundDocId.replace('dn_', '');
+      return dispatchNotes.find((dn) => String(dn.id) === String(rawId) || String(dn.dispatchNoteNumber) === String(rawId)) || null;
+    }
+    return null;
+  }, [selectedInboundDocId, dispatchNotes]);
+
   const selectedInvoice = useMemo(() => {
-    if (!selectedVendorInvoiceId || !displayInvoiceOptions) return null;
-    return displayInvoiceOptions.find(
-      (inv) => String(inv.id) === String(selectedVendorInvoiceId) || String(inv.invoiceNumber) === String(selectedVendorInvoiceId)
-    ) || null;
-  }, [displayInvoiceOptions, selectedVendorInvoiceId]);
+    if (!selectedInboundDocId) return null;
+    if (selectedInboundDocId.startsWith('inv_')) {
+      const rawId = selectedInboundDocId.replace('inv_', '');
+      return (invoicesList || []).find((inv) => String(inv.id) === String(rawId) || String(inv.invoiceNumber) === String(rawId)) || null;
+    }
+    return null;
+  }, [selectedInboundDocId, invoicesList]);
 
-  // Handle Auto-fill selection from Vendor Invoice / Dispatch Note
-  useEffect(() => {
-    if (entryMode === 'AUTO_FILL' && selectedInvoice && !poIdParam) {
-      if (selectedInvoice.poId || selectedInvoice.poNumber) {
-        const matchedPo = rawPoList.find(
-          (p) =>
-            (selectedInvoice.poId && (String(p.id) === String(selectedInvoice.poId) || String(p.poNumber) === String(selectedInvoice.poId))) ||
-            (selectedInvoice.poNumber && (String(p.id) === String(selectedInvoice.poNumber) || String(p.poNumber) === String(selectedInvoice.poNumber)))
-        );
-        if (matchedPo) {
-          setSelectedPoId(String(matchedPo.id));
-        }
-      }
-      if (selectedInvoice.invoiceNumber) {
-        setVendorDispatchNoteNumber(selectedInvoice.invoiceNumber);
+  // Handle selecting an inbound document from dropdown
+  const handleInboundDocSelect = (docId: string) => {
+    setSelectedInboundDocId(docId);
+    if (!docId) {
+      setSelectedVendorInvoiceId('');
+      return;
+    }
+
+    const foundOpt = displayInboundDocOptions.find((opt) => opt.id === docId);
+    if (!foundOpt) return;
+
+    setVendorDispatchNoteNumber(foundOpt.docNumber);
+    if (foundOpt.docType === 'INVOICE') {
+      setSelectedVendorInvoiceId(foundOpt.rawDoc?.id || foundOpt.docNumber);
+    } else {
+      setSelectedVendorInvoiceId('');
+    }
+
+    // Auto-select PO if not yet selected
+    if (foundOpt.poId || foundOpt.poNumber) {
+      const matchedPo = rawPoList.find((p) => {
+        const pId = safeStr(p.id).toLowerCase().trim();
+        const pNum = safeStr(p.poNumber).toLowerCase().trim();
+        const optPoId = safeStr(foundOpt.poId).toLowerCase().trim();
+        const optPoNum = safeStr(foundOpt.poNumber).toLowerCase().trim();
+        return (optPoId && (pId === optPoId || pNum === optPoId)) ||
+               (optPoNum && (pId === optPoNum || pNum === optPoNum));
+      });
+      if (matchedPo) {
+        setSelectedPoId(String(matchedPo.id || matchedPo.poNumber));
       }
     }
-  }, [entryMode, selectedInvoice, rawPoList, poIdParam]);
 
-  // Auto-select matching Vendor Invoice / Dispatch Note when PO selection or invoice list changes
+    // Auto-populate carrier info in notes if Dispatch Note
+    if (foundOpt.docType === 'DISPATCH') {
+      const dn = foundOpt.rawDoc;
+      const details: string[] = [];
+      if (dn.transporterName || dn.carrierName) details.push(`Carrier: ${dn.transporterName || dn.carrierName}`);
+      if (dn.vehicleNumber) details.push(`Vehicle: ${dn.vehicleNumber}`);
+      if (dn.trackingNumber) details.push(`Tracking/LR: ${dn.trackingNumber}`);
+      if (details.length > 0) {
+        const detailStr = details.join(' | ');
+        setNotes((prev) => (prev && !prev.includes(detailStr) ? `${prev} (${detailStr})` : detailStr));
+      }
+    }
+  };
+
+  // Auto-sync matching inbound document when PO is selected
   useEffect(() => {
     if (!selectedPO) return;
-
-    const targetPoId = safeStr(selectedPO.id).toLowerCase().trim();
-    const targetPoNum = safeStr(selectedPO.poNumber).toLowerCase().trim();
-
-    const match = displayInvoiceOptions.find((inv) => {
-      const invPoId = safeStr(inv.poId).toLowerCase().trim();
-      const invPoNum = safeStr(inv.poNumber).toLowerCase().trim();
-      const invId = safeStr(inv.id).toLowerCase().trim();
-      const invNum = safeStr(inv.invoiceNumber).toLowerCase().trim();
-      if (!invPoId && !invPoNum && !invId && !invNum) return false;
-      return (
-        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId || invId === targetPoId)) ||
-        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum || invNum === targetPoNum))
-      );
-    });
-
-    if (match) {
-      setSelectedVendorInvoiceId(String(match.id));
-      setVendorDispatchNoteNumber(match.invoiceNumber);
-    } else {
-      const fallbackDn = safeStr(
-        selectedPO.dispatchNoteNumber ||
-        selectedPO.vendorDispatchNoteNumber ||
-        selectedPO.vendorInvoiceNumber ||
-        (selectedPO.poNumber ? (selectedPO.poNumber.startsWith('PO-') ? selectedPO.poNumber.replace(/^PO-/, 'DN-') : `DN-${selectedPO.poNumber}`) : '')
-      );
-      if (fallbackDn) {
-        setSelectedVendorInvoiceId(fallbackDn);
-        setVendorDispatchNoteNumber(fallbackDn);
-      }
+    if (selectedInboundDocId) {
+      const current = displayInboundDocOptions.find((opt) => opt.id === selectedInboundDocId);
+      if (current) return;
     }
-  }, [selectedPO, displayInvoiceOptions]);
+    if (displayInboundDocOptions.length > 0) {
+      const firstDn = displayInboundDocOptions.find((d) => d.docType === 'DISPATCH');
+      const pick = firstDn || displayInboundDocOptions[0];
+      handleInboundDocSelect(pick.id);
+    }
+  }, [selectedPO, displayInboundDocOptions]);
 
-  // Update line items and header details when PO selection changes (Only in AUTO_FILL mode)
+  // Update line items and header details when PO or Inbound Document changes (Only in AUTO_FILL mode)
   useEffect(() => {
     if (!selectedPO) {
       if (entryMode === 'AUTO_FILL') {
@@ -459,67 +544,93 @@ export default function CreateGRNPage() {
     }
 
     if (entryMode === 'AUTO_FILL') {
-      const rawItems: any[] =
-        (selectedPO.items && selectedPO.items.length > 0 && selectedPO.items) ||
-        (selectedPO.lineItems && selectedPO.lineItems.length > 0 && selectedPO.lineItems) ||
-        (selectedPO.products && selectedPO.products.length > 0 && selectedPO.products) ||
-        (selectedPO.materials && selectedPO.materials.length > 0 && selectedPO.materials) ||
-        (selectedPO.rfq?.selectedQuotation?.items && selectedPO.rfq.selectedQuotation.items.length > 0 && selectedPO.rfq.selectedQuotation.items) ||
-        (selectedPO.rfq?.items && selectedPO.rfq.items.length > 0 && selectedPO.rfq.items) ||
-        (selectedPO.requisition?.items && selectedPO.requisition.items.length > 0 && selectedPO.requisition.items) ||
-        [];
-
-      if (rawItems.length > 0) {
+      // 1. Prioritize line items from Dispatch Note if selected
+      if (selectedDispatchNote && selectedDispatchNote.items && selectedDispatchNote.items.length > 0) {
         setLineItems(
-          rawItems.map((item: any, idx: number) => {
-            const name = safeStr(
-              item.itemName ||
-              item.name ||
-              item.description ||
-              item.itemDescription ||
-              item.title ||
-              (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
-              selectedPO.title ||
-              selectedPO.poNumber ||
-              'Purchase Order Material/Services'
-            );
-            const qty = Number(item.quantity || item.orderedQty || item.qty || 1);
-            const price = Number(item.unitPrice || item.price || item.rate || 0);
+          selectedDispatchNote.items.map((item: any, idx: number) => {
+            const name = safeStr(item.itemName || item.name || item.description || `Dispatched Item ${idx + 1}`);
+            const ordQty = Number(item.orderedQty || item.quantity || 1);
+            const dispQty = Number(item.dispatchedQty || ordQty);
+            const price = Number(item.unitPrice || 0);
 
             return {
-              id: `item_${idx}_${Date.now()}`,
-              itemName: name || 'Purchase Order Material/Services',
-              orderedQty: qty,
-              receivedQty: qty,
-              acceptedQty: qty,
+              id: `dn_item_${idx}_${Date.now()}`,
+              itemName: name,
+              orderedQty: ordQty,
+              receivedQty: dispQty,
+              acceptedQty: dispQty,
               rejectedQty: 0,
               unitPrice: price,
-              unit: safeStr(item.unit || item.uom || 'Units'),
-              remarks: 'Inspected - Goods in good condition',
+              unit: safeStr(item.unit || 'Units'),
+              remarks: 'Inspected - Dispatched items verified',
             };
           })
         );
       } else {
-        const fallbackTitle = safeStr(
-          (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
-          selectedPO.title ||
-          selectedPO.poNumber ||
-          'Purchase Order Material/Services'
-        );
+        const rawItems: any[] =
+          (selectedInvoice?.items && selectedInvoice.items.length > 0 && selectedInvoice.items) ||
+          (selectedInvoice?.lineItems && selectedInvoice.lineItems.length > 0 && selectedInvoice.lineItems) ||
+          (selectedPO.items && selectedPO.items.length > 0 && selectedPO.items) ||
+          (selectedPO.lineItems && selectedPO.lineItems.length > 0 && selectedPO.lineItems) ||
+          (selectedPO.products && selectedPO.products.length > 0 && selectedPO.products) ||
+          (selectedPO.materials && selectedPO.materials.length > 0 && selectedPO.materials) ||
+          (selectedPO.rfq?.selectedQuotation?.items && selectedPO.rfq.selectedQuotation.items.length > 0 && selectedPO.rfq.selectedQuotation.items) ||
+          (selectedPO.rfq?.items && selectedPO.rfq.items.length > 0 && selectedPO.rfq.items) ||
+          (selectedPO.requisition?.items && selectedPO.requisition.items.length > 0 && selectedPO.requisition.items) ||
+          [];
 
-        setLineItems([
-          {
-            id: `item_0_${Date.now()}`,
-            itemName: fallbackTitle || 'Purchase Order Material/Services',
-            orderedQty: 1,
-            receivedQty: 1,
-            acceptedQty: 1,
-            rejectedQty: 0,
-            unitPrice: Number(selectedPO.totalAmount || selectedPO.grandTotal || 0),
-            unit: 'Units',
-            remarks: 'Inspected - Verified',
-          },
-        ]);
+        if (rawItems.length > 0) {
+          setLineItems(
+            rawItems.map((item: any, idx: number) => {
+              const name = safeStr(
+                item.itemName ||
+                item.name ||
+                item.description ||
+                item.itemDescription ||
+                item.title ||
+                (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
+                selectedPO.title ||
+                selectedPO.poNumber ||
+                'Purchase Order Material/Services'
+              );
+              const qty = Number(item.quantity || item.orderedQty || item.qty || 1);
+              const price = Number(item.unitPrice || item.price || item.rate || 0);
+
+              return {
+                id: `item_${idx}_${Date.now()}`,
+                itemName: name || 'Purchase Order Material/Services',
+                orderedQty: qty,
+                receivedQty: qty,
+                acceptedQty: qty,
+                rejectedQty: 0,
+                unitPrice: price,
+                unit: safeStr(item.unit || item.uom || 'Units'),
+                remarks: 'Inspected - Goods in good condition',
+              };
+            })
+          );
+        } else {
+          const fallbackTitle = safeStr(
+            (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
+            selectedPO.title ||
+            selectedPO.poNumber ||
+            'Purchase Order Material/Services'
+          );
+
+          setLineItems([
+            {
+              id: `item_0_${Date.now()}`,
+              itemName: fallbackTitle || 'Purchase Order Material/Services',
+              orderedQty: 1,
+              receivedQty: 1,
+              acceptedQty: 1,
+              rejectedQty: 0,
+              unitPrice: Number(selectedPO.totalAmount || selectedPO.grandTotal || 0),
+              unit: 'Units',
+              remarks: 'Inspected - Verified',
+            },
+          ]);
+        }
       }
     }
 
@@ -543,7 +654,7 @@ export default function CreateGRNPage() {
     if (selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber) {
       setVendorDispatchNoteNumber(selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber || '');
     }
-  }, [selectedPO, warehouses, entryMode]);
+  }, [selectedPO, selectedDispatchNote, selectedInvoice, warehouses, entryMode]);
 
   // Pre-select PO ONLY if poId is in URL query params or router state
   useEffect(() => {
@@ -643,6 +754,10 @@ export default function CreateGRNPage() {
       setErrorMsg(`A Goods Receipt Note has already been recorded for Purchase Order #${selectedPO?.poNumber || selectedPoId}. Duplicate GRN is not allowed.`);
       return false;
     }
+    if (selectedPO && !hasInboundDispatch) {
+      setErrorMsg(`Vendor Dispatch or Invoice Required: The vendor has not yet submitted a Dispatch Note (Delivery Challan) or Vendor Invoice for Purchase Order #${selectedPO?.poNumber || selectedPoId}. GRN cannot be created until the vendor dispatches materials.`);
+      return false;
+    }
     if (!selectedPoId && entryMode === 'MANUAL' && lineItems.length === 0) {
       setErrorMsg('Please select a Purchase Order or enter line items.');
       return false;
@@ -676,11 +791,12 @@ export default function CreateGRNPage() {
       await grnService.create({
         poId: selectedPO?.poNumber || selectedPO?.id || selectedPoId || 'MANUAL-PO',
         entryMode,
+        dispatchNoteId: selectedDispatchNote?.id || undefined,
         dispatchNoteNumber: vendorDispatchNoteNumber || grnNumber,
         vendorInvoiceNumber: selectedInvoice?.invoiceNumber || vendorDispatchNoteNumber,
         invoiceId: selectedInvoice?.id,
-        vendorId: selectedPO?.vendorId || selectedPO?.vendor?.id || selectedInvoice?.vendorId,
-        vendorName: selectedPO?.vendor?.name || selectedInvoice?.vendorName || 'Supplier',
+        vendorId: selectedPO?.vendorId || selectedPO?.vendor?.id || selectedInvoice?.vendorId || selectedDispatchNote?.vendorId,
+        vendorName: selectedPO?.vendor?.name || selectedInvoice?.vendorName || selectedDispatchNote?.vendor?.name || 'Supplier',
         receivedDate,
         notes: `${notes} (Location: ${warehouseLocation})`,
         items: payloadItems,
@@ -692,24 +808,23 @@ export default function CreateGRNPage() {
       await queryClient.invalidateQueries({ queryKey: ['svc'] });
       queryClient.refetchQueries({ queryKey: ['svc'] });
 
-
-
       showSuccess({
         title: 'Goods Receipt Note Created!',
         badge: 'GRN POSTED',
-        message: `Goods Receipt Note ${grnNumber} has been verified and posted directly. Available for 3-way matching.`,
+        message: `Goods Receipt Note ${grnNumber} has been verified and posted directly. Ready for Purchase Invoice creation.`,
         referenceNumber: grnNumber,
         details: [
           { label: 'Purchase Order', value: selectedPO?.poNumber || selectedPoId || 'MANUAL-PO' },
-          { label: 'Vendor / Supplier', value: selectedPO?.vendor?.name || selectedInvoice?.vendorName || 'Supplier' },
+          { label: 'Vendor / Supplier', value: selectedPO?.vendor?.name || selectedInvoice?.vendorName || selectedDispatchNote?.vendor?.name || 'Supplier' },
+          { label: 'Inbound Document', value: vendorDispatchNoteNumber || selectedInboundDocId || 'Direct Dispatch' },
           { label: 'Items Received', value: `${payloadItems.length} line items` },
           { label: 'Received Date', value: receivedDate },
         ],
-        primaryBtnText: 'View in Recorded GRNs',
+        primaryBtnText: 'Create Purchase Invoice',
         onPrimaryClick: () => {
-          navigate('/procurement/goods-receipt?tab=recorded', {
-            state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber }
-          });
+          navigate(
+            `/procurement/create-purchase-invoice?poId=${encodeURIComponent(selectedPO?.id || selectedPO?.poNumber || selectedPoId)}&grnId=${encodeURIComponent(grnNumber)}`
+          );
         },
       });
 
@@ -738,6 +853,19 @@ export default function CreateGRNPage() {
         <div className="mb-4">
           <MessageStrip type="warning">
             A Goods Receipt Note has already been recorded for this Purchase Order (#{selectedPO?.poNumber || selectedPoId}). You can view the verified document in Recorded GRNs. Duplicate GRN creation is disabled.
+          </MessageStrip>
+        </div>
+      )}
+
+      {selectedPO && !hasInboundDispatch && (
+        <div className="mb-4">
+          <MessageStrip type="warning">
+            <div className="flex items-start gap-2.5">
+              <Clock className="size-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Awaiting Vendor Dispatch or Invoice:</span> The vendor has not yet submitted a Dispatch Note (Delivery Challan) or Vendor Invoice for Purchase Order #{selectedPO.poNumber || selectedPoId}. Goods Receipt (GRN) requires an inbound dispatch or invoice from the vendor before it can be verified and posted.
+              </div>
+            </div>
           </MessageStrip>
         </div>
       )}
@@ -891,21 +1019,26 @@ export default function CreateGRNPage() {
               />
             </div>
 
-            {/* If Mode == AUTO_FILL, Vendor Invoice Dropdown */}
+            {/* If Mode == AUTO_FILL, Vendor Inbound Document Dropdown */}
             {entryMode === 'AUTO_FILL' && (
               <div>
-                <label className="block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5">
-                  Vendor Dispatch / Invoice *
+                <label className="block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Vendor Dispatch / Invoice *</span>
+                  {selectedInboundDocId && (
+                    <span className="text-[11px] font-normal text-emerald-600 dark:text-emerald-400">
+                      ✓ Inbound Verified
+                    </span>
+                  )}
                 </label>
                 <select
-                  value={selectedVendorInvoiceId}
-                  onChange={(e) => setSelectedVendorInvoiceId(e.target.value)}
+                  value={selectedInboundDocId}
+                  onChange={(e) => handleInboundDocSelect(e.target.value)}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="">-- Select Incoming Vendor Invoice --</option>
-                  {displayInvoiceOptions.map((inv) => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.invoiceNumber} — {inv.vendorName || 'Vendor'} ({formatAmount(inv.amount || 0, currency)})
+                  <option value="">-- Select Incoming Dispatch / Invoice --</option>
+                  {displayInboundDocOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
                     </option>
                   ))}
                 </select>
@@ -1031,6 +1164,18 @@ export default function CreateGRNPage() {
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold">
                   {selectedPO.status}
                 </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground font-medium">Inbound Dispatch:</span>
+                {hasInboundDispatch ? (
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="size-3" /> Dispatched ({vendorDispatchNoteNumber || selectedInboundDocId || 'Verified'})
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-semibold flex items-center gap-1">
+                    <Clock className="size-3" /> Awaiting Vendor Dispatch
+                  </Badge>
+                )}
               </div>
             </div>
           )}
@@ -1269,7 +1414,8 @@ export default function CreateGRNPage() {
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || (Boolean(selectedPO) && !hasInboundDispatch)}
+              title={Boolean(selectedPO) && !hasInboundDispatch ? 'Vendor Dispatch Note or Invoice is required before GRN can be posted.' : undefined}
               className="w-full py-2.5 gap-2 shadow-sm font-bold"
             >
               <Send className="size-4" /> {submitting ? 'Posting GRN…' : 'Save & Post GRN'}

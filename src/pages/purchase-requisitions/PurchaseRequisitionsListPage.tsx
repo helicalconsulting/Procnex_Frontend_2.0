@@ -870,9 +870,13 @@ export default function PurchaseRequisitionsListPage() {
                               return <td key="currency" className="px-4 py-4 text-muted-foreground">{requisition.currency || companyDefaultCurrency}</td>;
                             }
                             if (col.key === 'grandTotal') {
+                              const resolvedAmount = Number(requisition.grandTotal || requisition.totalAmount || 0) ||
+                                (Array.isArray(requisition.items) && requisition.items.length > 0
+                                  ? requisition.items.reduce((s: number, it: any) => s + (Number(it.total || it.totalPrice || (Number(it.quantity || 1) * Number(it.unitPrice || 0))) || 0), 0)
+                                  : 0);
                               return (
                                 <td key="grandTotal" className="px-4 py-4 text-right font-semibold tabular-nums">
-                                  {formatAmount(requisition.grandTotal || 0, requisition.currency || companyDefaultCurrency)}
+                                  {formatAmount(resolvedAmount, requisition.currency || companyDefaultCurrency)}
                                 </td>
                               );
                             }

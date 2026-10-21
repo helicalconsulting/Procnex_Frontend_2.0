@@ -92,6 +92,7 @@ async function apiList(params?: { page?: number; limit?: number }): Promise<List
       const vOrders = await vendorPortalService.listOrders();
       const orders: any[] = vOrders.map((vo, idx) => ({
         ...vo,
+        vendorFulfillmentAllowed: vo.vendorFulfillmentAllowed || (vo as any).vendor_fulfillment_allowed || 'DISPATCH_AND_INVOICE',
         id: vo.id,
         poNumber: vo.poNumber,
         totalAmount: Number(vo.totalAmount || (vo as any).grandTotal || 0),

@@ -9,6 +9,7 @@ import { vendorService } from '../../services/vendorService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { grnService, type GoodsReceivedNote } from '../../services/grnService';
 import { invoiceService, type APInvoice } from '../../services/invoiceService';
+import { dispatchNoteService, type DispatchNote } from '../../services/dispatchNoteService';
 import { sequencePreview } from '../../components/admin/company-settings/serializationModel';
 import { companySettingsService } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
@@ -34,7 +35,9 @@ import {
   Search,
   Eye,
   Pencil,
-  Download
+  Download,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import TablePagination from '../../components/shared/TablePagination';
 import { MessageStrip } from '../../components/shared/MessageStrip';
@@ -179,6 +182,32 @@ export default function CreatePurchaseInvoicePage() {
   const [selectedGrnId, setSelectedGrnId] = useState<string>(() => grnIdParam || '');
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
   const [invoiceOptions, setInvoiceOptions] = useState<APInvoice[]>([]);
+
+  // Dispatch Notes list for checking vendor dispatch status
+  const { data: dnData } = useServiceData(
+    () => dispatchNoteService.list({ limit: 1000 }),
+    { dispatchNotes: [], total: 0 },
+    []
+  );
+  const dispatchNotes = dnData.dispatchNotes || [];
+
+  const hasVendorDispatched = useMemo(() => {
+    if (!selectedPoId) return false;
+    const target = String(selectedPoId).toLowerCase().trim();
+    const hasDn = (dispatchNotes || []).some((dn) => {
+      const pId = String(dn.poId || '').toLowerCase().trim();
+      const pNum = String(dn.poNumber || '').toLowerCase().trim();
+      return (pId && (pId === target || pNum === target)) ||
+             (pNum && (pId === target || pNum === target));
+    });
+    if (hasDn) return true;
+    if (invoiceOptions.length > 0) return true;
+    return false;
+  }, [selectedPoId, dispatchNotes, invoiceOptions]);
+
+  const isGrnBlocked = useMemo(() => {
+    return creationMode === 'linked' && Boolean(selectedPoId) && grnOptions.length === 0;
+  }, [creationMode, selectedPoId, grnOptions]);
 
   // Form Details
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
@@ -1073,9 +1102,17 @@ export default function CreatePurchaseInvoicePage() {
       setErrorMsg('Please select a Supplier.');
       return false;
     }
-    if (!selectedPoId && creationMode === 'linked') {
-      setErrorMsg('Please select a linked Purchase Order (PO Selection).');
-      return false;
+    if (creationMode === 'linked') {
+      if (!selectedPoId) {
+        setErrorMsg('Please select a linked Purchase Order (PO Selection).');
+        return false;
+      }
+      if (isGrnBlocked) {
+        setErrorMsg(
+          `Goods Received Note (GRN) Required: A verified Goods Received Note must be recorded in the system before an invoice can be created for Purchase Order #${displayPoNumber}.`
+        );
+        return false;
+      }
     }
     const validItems = lineItems.filter(
       (item) => (item.itemName || '').trim().length > 0 && Number(item.supplierQty || 0) > 0
@@ -1112,6 +1149,10 @@ export default function CreatePurchaseInvoicePage() {
 
       const cleanVendorInv = displayGrnNumber && displayGrnNumber !== '—' && !displayGrnNumber.startsWith('GRN-') && !displayGrnNumber.toLowerCase().includes('select') ? displayGrnNumber : undefined;
 
+      const resolvedGrnId =
+        (selectedGrnId && selectedGrnId.startsWith('grn_') ? selectedGrnId.replace(/^grn_/, '') : selectedGrnId) ||
+        (grnOptions.length > 0 ? grnOptions[0].id : null);
+
       await apiRequest('/invoices/manual', {
         method: 'POST',
         body: JSON.stringify({
@@ -1120,7 +1161,7 @@ export default function CreatePurchaseInvoicePage() {
           erpInvoiceRef: cleanVendorInv,
           vendorId: selectedVendorId || selectedPOObj?.vendorId,
           poId: selectedPoId || null,
-          grnId: selectedGrnId || null,
+          grnId: resolvedGrnId || null,
           invoiceDate,
           dueDate,
           paymentTerms,
@@ -1828,8 +1869,14 @@ export default function CreatePurchaseInvoicePage() {
                     className="cpi-btn cpi-btn--outline"
                     onClick={() => submitInvoiceToAPI(true)}
                     onMouseDown={(e) => e.stopPropagation()}
-                    disabled={savingDraft || submitting || !canCreateInvoice}
-                    title={!canCreateInvoice ? 'Admin permission required to save draft purchase invoices.' : undefined}
+                    disabled={savingDraft || submitting || !canCreateInvoice || isGrnBlocked}
+                    title={
+                      isGrnBlocked
+                        ? 'Goods Received Note (GRN) must be recorded before saving invoice.'
+                        : !canCreateInvoice
+                        ? 'Admin permission required to save draft purchase invoices.'
+                        : undefined
+                    }
                   >
                     <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
                   </button>
@@ -1849,6 +1896,57 @@ export default function CreatePurchaseInvoicePage() {
 
       {/* Form Content */}
       <div className="cpi-form-body">
+        {/* GRN Required Warning Banner */}
+        {isGrnBlocked && (
+          <div style={{
+            marginBottom: 20,
+            padding: '16px 20px',
+            borderRadius: 12,
+            background: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <AlertCircle size={22} style={{ color: '#f59e0b', marginTop: 2, flexShrink: 0 }} />
+              <div>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 700, color: 'var(--foreground)' }}>
+                  Goods Received Note (GRN) Required for Invoicing
+                </h4>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--muted-foreground)', lineHeight: 1.5 }}>
+                  {hasVendorDispatched
+                    ? `The vendor has dispatched materials for PO #${displayPoNumber}, but a Goods Received Note (GRN) has not yet been verified. Please inspect and post the GRN first.`
+                    : `Purchase Invoice cannot be created yet. A Goods Received Note (GRN) must be recorded in the system after the vendor dispatches the materials.`}
+                </p>
+              </div>
+            </div>
+            {hasVendorDispatched && (
+              <button
+                type="button"
+                onClick={() => navigate(`/procurement/create-company-grn?poId=${encodeURIComponent(selectedPoId)}`)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  backgroundColor: '#f59e0b',
+                  color: '#000',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <PackageCheck size={16} /> Record GRN Now
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Section 01: Supplier, PO & Dispatch Note Cascade Selection */}
         {creationMode === 'linked' && (
           <div className="cpi-section">
@@ -1909,17 +2007,29 @@ export default function CreatePurchaseInvoicePage() {
                 </select>
               </div>
 
-              {/* 3. Auto-Linked Dispatch Note / Vendor Invoice */}
+              {/* 3. Verified Goods Received Note (GRN) */}
               <div className="cpi-field">
-                <label>3. LINKED DISPATCH NOTE / VENDOR INVOICE</label>
+                <label>
+                  3. VERIFIED GOODS RECEIVED NOTE (GRN) <span className="required">*</span>
+                </label>
                 <div className="cpi-auto-linked-box">
                   <div className="cpi-auto-linked-text">
-                    {displayGrnNumber}
+                    {grnOptions.length > 0 ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#10b981', fontWeight: 600 }}>
+                        <CheckCircle2 size={16} /> {grnOptions[0].grnNumber || selectedGrnId || 'Verified GRN'}
+                      </span>
+                    ) : selectedPoId ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#f59e0b', fontWeight: 500 }}>
+                        <Clock size={16} /> Awaiting Verified GRN
+                      </span>
+                    ) : (
+                      '— Select PO First —'
+                    )}
                   </div>
-                  {selectedPoId && (grnOptions.length > 0 || invoiceOptions.length > 0) && (
+                  {grnOptions.length > 0 && (
                     <span className="cpi-auto-linked-badge">
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                      Auto-linked
+                      3-Way Match Verified
                     </span>
                   )}
                 </div>
@@ -2430,7 +2540,12 @@ export default function CreatePurchaseInvoicePage() {
                   style={{ width: '100%', padding: '12px 20px', fontSize: 15 }}
                   onClick={() => submitInvoiceToAPI(false)}
                   onMouseDown={(e) => e.stopPropagation()}
-                  disabled={savingDraft || submitting}
+                  disabled={savingDraft || submitting || isGrnBlocked}
+                  title={
+                    isGrnBlocked
+                      ? 'Verified Goods Received Note (GRN) is required before submitting purchase invoice.'
+                      : undefined
+                  }
                 >
                   <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Purchase Invoice'}
                 </button>
