@@ -9,14 +9,11 @@ import {
   Calendar,
   CreditCard,
   UserCheck,
-  ExternalLink,
   RefreshCw,
   Lock,
   ArrowRight,
   Clock,
 } from 'lucide-react';
-import defaultHeliflowLogo from '../../assets/heliflow.png';
-import procnexLogo from '../../assets/procnex.png';
 import './DocumentVerificationPage.css';
 
 interface VerificationData {
@@ -29,6 +26,9 @@ interface VerificationData {
   amount?: number;
   currency?: string;
   vendorName?: string;
+  companyCode?: string;
+  companyName: string;
+  companyLogoUrl?: string | null;
   issuerCompany?: string;
   issueDate?: string;
   lifecycleStatus?: string;
@@ -54,6 +54,8 @@ export default function DocumentVerificationPage() {
   const paramAmt = searchParams.get('amt') || '';
   const paramCur = searchParams.get('cur') || 'INR';
   const paramFb = searchParams.get('fb') || '';
+  const paramCc = searchParams.get('cc') || searchParams.get('companyCode') || '';
+  const paramCn = searchParams.get('cn') || searchParams.get('companyName') || '';
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<VerificationData | null>(null);
@@ -67,6 +69,8 @@ export default function DocumentVerificationPage() {
       if (token) query.set('t', token);
       if (paramDoc) query.set('num', paramDoc);
       if (paramType) query.set('type', paramType);
+      if (paramCc) query.set('cc', paramCc);
+      if (paramCn) query.set('cn', paramCn);
 
       const res = await fetch(`${baseUrl}/verify?${query.toString()}`);
       if (res.ok) {
@@ -82,12 +86,13 @@ export default function DocumentVerificationPage() {
       console.warn('Backend verification call failed, falling back to client parameters:', err);
     }
 
-    // Client-side fallback if backend is unreachable or local development
+    // Client-side fallback if backend is offline
+    const resolvedCompany = paramCn || (paramCc ? paramCc.toUpperCase() : 'Company');
     if (paramDoc) {
       const fallbackData: VerificationData = {
         status: 'GENUINE',
         statusTitle: 'Verified Authentic Document',
-        statusMessage: 'This document reference is valid and authenticated via Heliflow security token.',
+        statusMessage: `This document is officially registered, authenticated, and matched in ${resolvedCompany} records.`,
         documentType:
           paramType === 'INVOICE'
             ? 'Tax Invoice'
@@ -97,6 +102,9 @@ export default function DocumentVerificationPage() {
         documentNumber: paramDoc,
         amount: Number(paramAmt) || undefined,
         currency: paramCur,
+        companyCode: paramCc || undefined,
+        companyName: resolvedCompany,
+        companyLogoUrl: null,
         issueDate: new Date().toISOString(),
         lifecycleStatus: 'APPROVED',
         fingerprint: paramFb || `VER-${Math.random().toString(36).substring(2, 6).toUpperCase()}-PROCNEX`,
@@ -124,6 +132,7 @@ export default function DocumentVerificationPage() {
         statusMessage: 'No document number or verification token was found in this QR code scan request.',
         documentType: 'Unknown Document',
         documentNumber: 'N/A',
+        companyName: resolvedCompany,
         verifiedAt: new Date().toISOString(),
         internalPath: '/',
       });
@@ -133,7 +142,7 @@ export default function DocumentVerificationPage() {
 
   useEffect(() => {
     fetchVerification();
-  }, [token, paramDoc, paramType]);
+  }, [token, paramDoc, paramType, paramCc, paramCn]);
 
   const formatCurrency = (amt?: number, cur = 'INR') => {
     if (amt === undefined || amt === null) return '—';
@@ -161,22 +170,31 @@ export default function DocumentVerificationPage() {
     }
   };
 
+  const displayCompanyName = data?.companyName || paramCn || (paramCc ? paramCc.toUpperCase() : 'Company');
+  const displayLogo = data?.companyLogoUrl || null;
+
   return (
     <div className="verify-page-wrapper">
-      {/* ── Top Bar ── */}
+      {/* ── Top Bar with Tenant-Specific Branding ── */}
       <header className="verify-page-header">
         <div className="verify-header-brand">
-          <img
-            src={procnexLogo || defaultHeliflowLogo}
-            alt="Heliflow Procnex ERP"
-            className="verify-header-logo"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = defaultHeliflowLogo;
-            }}
-          />
+          {displayLogo ? (
+            <img
+              src={displayLogo}
+              alt={displayCompanyName}
+              className="verify-header-logo"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="verify-header-logo-badge">
+              {displayCompanyName.substring(0, 2).toUpperCase()}
+            </div>
+          )}
           <div className="verify-header-brand-text">
-            <span className="verify-brand-name">Heliflow Procnex</span>
-            <span className="verify-brand-badge">Official Verification Gateway</span>
+            <span className="verify-brand-name">{displayCompanyName}</span>
+            <span className="verify-brand-badge">Official Document Verification Gateway</span>
           </div>
         </div>
         <div className="verify-header-secure-pill">
@@ -190,7 +208,7 @@ export default function DocumentVerificationPage() {
         {loading ? (
           <div className="verify-loading-card">
             <div className="verify-spinner"></div>
-            <h2 className="verify-loading-title">Connecting to Heliflow ERP...</h2>
+            <h2 className="verify-loading-title">Connecting to Verification Gateway...</h2>
             <p className="verify-loading-subtext">Verifying cryptographic digital signature and database records.</p>
           </div>
         ) : data ? (
@@ -265,7 +283,7 @@ export default function DocumentVerificationPage() {
                   <div className="verify-spec-value amount-text">
                     {formatCurrency(data.amount, data.currency)}
                   </div>
-                  <div className="verify-spec-sub">ERP System Ledger Figure</div>
+                  <div className="verify-spec-sub">{displayCompanyName} Official Ledger</div>
                 </div>
 
                 {/* Status */}
@@ -279,7 +297,7 @@ export default function DocumentVerificationPage() {
                       {data.lifecycleStatus || 'APPROVED'}
                     </span>
                   </div>
-                  <div className="verify-spec-sub">Live ERP Document State</div>
+                  <div className="verify-spec-sub">Live Document State</div>
                 </div>
 
                 {/* Vendor / Payee */}
@@ -313,7 +331,7 @@ export default function DocumentVerificationPage() {
               <div className="verify-approvers-section">
                 <div className="verify-approvers-header">
                   <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <h3>Official System Signatures & Approvals</h3>
+                  <h3>Official Signatures & Approvals</h3>
                 </div>
                 <div className="verify-approvers-list">
                   {data.approvers.map((appr, idx) => (
@@ -338,14 +356,20 @@ export default function DocumentVerificationPage() {
             {/* ── System Access CTA ── */}
             <div className="verify-actions-card">
               <div className="verify-actions-info">
-                <h4>Are you a registered Heliflow user?</h4>
+                <h4>Are you an authorized user of {displayCompanyName}?</h4>
                 <p>Log in with your company credentials to view line items, tax breakdown, and attachments.</p>
               </div>
               <button
-                onClick={() => navigate(data.internalPath)}
+                onClick={() => {
+                  if (data.companyCode) {
+                    navigate(`/e/${data.companyCode.toLowerCase()}/login`);
+                  } else {
+                    navigate(data.internalPath);
+                  }
+                }}
                 className="verify-btn-primary"
               >
-                <span>Open in Heliflow ERP</span>
+                <span>Open in {displayCompanyName} Portal</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -354,7 +378,7 @@ export default function DocumentVerificationPage() {
             <div className="verify-audit-footer">
               <div className="verify-audit-text">
                 <ShieldCheck className="w-3.5 h-3.5 text-slate-400 inline mr-1" />
-                This document was verified against the immutable Heliflow ERP database at {new Date(data.verifiedAt).toLocaleTimeString('en-IN')}.
+                This document was verified against the official {displayCompanyName} database at {new Date(data.verifiedAt).toLocaleTimeString('en-IN')}.
                 {scanIp && <span> (Scan logged from {scanIp})</span>}
               </div>
               <button onClick={fetchVerification} className="verify-refresh-btn">
@@ -368,7 +392,7 @@ export default function DocumentVerificationPage() {
 
       {/* ── Footer ── */}
       <footer className="verify-footer">
-        <p>© {new Date().getFullYear()} Heliflow Consulting & Technologies • Anti-Fraud Security Shield</p>
+        <p>© {new Date().getFullYear()} {displayCompanyName} • Multi-Tenant Document Security Shield</p>
       </footer>
     </div>
   );

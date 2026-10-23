@@ -22,6 +22,9 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
   amount = 0,
   currency = 'INR',
   vendorName = '',
+  companyCode = '',
+  companyName = '',
+  companyLogoUrl = '',
   token,
   size = 105,
   showCaption = true,
@@ -52,12 +55,17 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
     const cleanDocNum = encodeURIComponent((docNumber || '').trim());
     const cleanAmt = encodeURIComponent(String(amount || 0));
     const cleanCur = encodeURIComponent(String(currency || 'INR'));
+    const cleanCC = encodeURIComponent((companyCode || '').trim());
+    const cleanCN = encodeURIComponent((companyName || '').trim());
 
     if (token) {
       return `${cleanOrigin}/verify?t=${encodeURIComponent(token)}`;
     }
-    return `${cleanOrigin}/verify?type=${docType}&doc=${cleanDocNum}&amt=${cleanAmt}&cur=${cleanCur}&fb=${fallbackCode}`;
-  }, [docType, docNumber, amount, currency, token, fallbackCode]);
+    let url = `${cleanOrigin}/verify?type=${docType}&doc=${cleanDocNum}&amt=${cleanAmt}&cur=${cleanCur}&fb=${fallbackCode}`;
+    if (cleanCC) url += `&cc=${cleanCC}`;
+    if (cleanCN) url += `&cn=${cleanCN}`;
+    return url;
+  }, [docType, docNumber, amount, currency, companyCode, companyName, token, fallbackCode]);
 
   // Synchronous, zero-delay SVG generation using industry-standard QRCode engine
   const qrSvgData = useMemo(() => {

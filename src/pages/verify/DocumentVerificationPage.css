@@ -26,6 +26,22 @@
   height: 36px;
   width: auto;
   object-fit: contain;
+  border-radius: 6px;
+}
+
+.verify-header-logo-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .verify-header-brand-text {
