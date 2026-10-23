@@ -55,6 +55,7 @@ export interface PurchaseRequisition {
   paymentTerms: string;
   deliveryDate: string;
   shippingTerms: string;
+  vendorFulfillmentAllowed?: 'DISPATCH_AND_INVOICE' | 'DISPATCH_ONLY' | 'INVOICE_ONLY';
 
   // Items
   items: PurchaseRequisitionItem[];
@@ -114,6 +115,7 @@ function generateMockPR(rfqId: string): PurchaseRequisition {
     paymentTerms: 'Net 30',
     deliveryDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
     shippingTerms: 'FOB Destination',
+    vendorFulfillmentAllowed: 'DISPATCH_AND_INVOICE',
 
     items: [
       { itemNo: 1, description: 'Industrial Bearing Assembly - Type A', quantity: 50, unit: 'Pcs', unitPrice: 1250, taxPercent: 18, discount: 0, total: 73750 },

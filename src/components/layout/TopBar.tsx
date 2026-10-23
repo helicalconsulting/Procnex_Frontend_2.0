@@ -36,6 +36,12 @@ const PAGE_TITLES: Record<string, string> = {
   '/procurement/goods-receipt': 'Goods Receipt Note (GRN)',
   '/procurement/create-company-grn': 'Create Goods Receipt Note (GRN)',
   '/procurement/create-grn': 'Create Dispatch Note',
+  '/grn/create': 'Create Goods Receipt Note (GRN)',
+  '/grn': 'Goods Receipt Notes (GRN)',
+  '/goods-receipt': 'Goods Receipt Note (GRN)',
+  '/budget': 'Budget Management',
+  '/budget/create': 'Create New Budget',
+  '/procurement/budget': 'Budget Management',
   '/procurement': 'PO Creation & Orders',
   '/contracts': 'Contracts',
   '/vendors': 'Vendors',
@@ -81,6 +87,13 @@ const SECTION_MAP: Record<string, string> = {
   '/quotations': 'Procurement',
   '/procurement/purchase-requisitions': 'Procurement',
   '/procurement/purchase-requisition': 'Procurement',
+  '/procurement/grns': 'Procurement',
+  '/procurement/goods-receipt': 'Procurement',
+  '/procurement/create-company-grn': 'Procurement',
+  '/procurement/create-grn': 'Procurement',
+  '/grn': 'Procurement',
+  '/goods-receipt': 'Procurement',
+  '/budget': 'Procurement',
   '/procurement': 'Procurement',
   '/contracts': 'Procurement',
   '/approvals': 'Approvals',
@@ -119,6 +132,9 @@ const SECTION_MAP: Record<string, string> = {
 
 function getPageTitle(pathname: string, fallback: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  if (pathname.startsWith('/budget/') && pathname !== '/budget/create') {
+    return 'Budget Command Centre';
+  }
   const match = Object.keys(PAGE_TITLES)
     .sort((a, b) => b.length - a.length)
     .find((key) => pathname.startsWith(key));
@@ -248,7 +264,6 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
 
         <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground sm:flex">
           <button
-            ref={accountButtonRef}
             type="button"
             className="inline-flex size-8 items-center justify-center rounded-lg outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => navigate(dashboardPath)}
@@ -263,7 +278,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
             </>
           )}
           <ChevronRight size={12} className="text-border-strong" />
-          <span className="max-w-[240px] truncate font-semibold text-foreground">{pageTitle}</span>
+          <span className="max-w-[180px] sm:max-w-[280px] md:max-w-[360px] truncate font-semibold text-foreground">{pageTitle}</span>
         </nav>
         <span className="truncate pr-2 text-sm font-semibold text-foreground sm:hidden">{pageTitle}</span>
       </div>
@@ -329,6 +344,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
 
         <div className="relative" ref={dropdownRef}>
           <button
+            ref={accountButtonRef}
             type="button"
             className="flex min-h-11 items-center gap-2 rounded-xl p-1 pr-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => setDropdownOpen(!dropdownOpen)}

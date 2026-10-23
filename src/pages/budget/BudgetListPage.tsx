@@ -182,7 +182,7 @@ export default function BudgetListPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search budget name, code..."
-            className="h-10 pl-9 pr-9 text-xs rounded-xl"
+            className="h-10 pl-9 pr-9 text-sm rounded-xl"
           />
           {search && (
             <button
@@ -203,7 +203,7 @@ export default function BudgetListPage() {
             value={fiscalYear}
             onChange={(e) => setFiscalYear(e.target.value)}
             aria-label="Filter by Fiscal Year"
-            className="h-10 px-3 text-xs rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 px-3 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">All Fiscal Years</option>
             <option value="FY2026">FY2026</option>
@@ -215,7 +215,7 @@ export default function BudgetListPage() {
             value={budgetType}
             onChange={(e) => setBudgetType(e.target.value)}
             aria-label="Filter by Budget Type"
-            className="h-10 px-3 text-xs rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 px-3 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">All Types</option>
             <option value="OPEX">OPEX (Operational)</option>
@@ -228,7 +228,7 @@ export default function BudgetListPage() {
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             aria-label="Filter by Status"
-            className="h-10 px-3 text-xs rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 px-3 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">All Statuses</option>
             <option value="ACTIVE">Active</option>
@@ -272,7 +272,7 @@ export default function BudgetListPage() {
       ) : (
         <Card className="overflow-hidden border-border/80 shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[900px]">
+            <table className="w-full text-left text-xs min-w-[900px] table-divided">
               <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/70">
                 <tr>
                   <th className="px-5 py-3.5">Budget Code & Name</th>
@@ -296,7 +296,7 @@ export default function BudgetListPage() {
                         <FileText className="size-4 text-primary shrink-0" />
                         <span>{b.budgetName}</span>
                       </div>
-                      <div className="text-[11px] text-primary font-mono mt-0.5">
+                      <div className="text-xs text-primary font-medium mt-0.5">
                         {b.budgetCode}
                       </div>
                     </td>

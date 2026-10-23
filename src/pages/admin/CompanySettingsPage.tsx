@@ -7,7 +7,7 @@ import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, Search,
   Save, Settings, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock,
-  Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
+  Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, ArrowLeft, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
   Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -15,7 +15,7 @@ import ImageCropperModal from '../../components/shared/ImageCropperModal';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { useBranding } from '../../context/BrandingContext';
 import { CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
-import RichTextEditor from '../../components/shared/RichTextEditor';
+import RichTextEditor, { type RichTextEditorRef } from '../../components/shared/RichTextEditor';
 import '../../components/shared/RichTextEditor.css';
 import './CompanySettingsPage.css';
 import { Button } from '../../components/ui/button';
@@ -1583,12 +1583,17 @@ export default function CompanySettingsPage() {
   const ocrPollActiveRef = useRef(false);
   const [selectedPlaceholderCategory, setSelectedPlaceholderCategory] = useState<string>('all');
   const [insertedPlaceholderNotice, setInsertedPlaceholderNotice] = useState<string | null>(null);
+  const contractEditorRef = useRef<RichTextEditorRef>(null);
 
   const handleInsertPlaceholderTag = (tagCode: string) => {
-    setEditedContractContent((prev) => {
-      const spacePrefix = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
-      return `${prev}${spacePrefix}${tagCode} `;
-    });
+    if (contractEditorRef.current) {
+      contractEditorRef.current.insertText(tagCode);
+    } else {
+      setEditedContractContent((prev) => {
+        const spacePrefix = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
+        return `${prev}${spacePrefix}${tagCode} `;
+      });
+    }
     setContractTemplateDirty(true);
     setInsertedPlaceholderNotice(tagCode);
     setTimeout(() => setInsertedPlaceholderNotice(null), 2500);
@@ -4956,58 +4961,74 @@ export default function CompanySettingsPage() {
                 <ErrorBoundary>
                   <div className="cs-dt-detail">
                     <div className="cs-dt-detail__topbar">
-                      <Button variant="outline" size="default"
-                        type="button"
-                        className="settings-action"
-                        onClick={() => {
-                          if (templateDirty) {
-                            setConfirmModalConfig({
-                              isOpen: true,
-                              title: 'Unsaved Changes',
-                              message: 'Discard unsaved changes?',
-                              confirmText: 'Discard',
-                              cancelText: 'Cancel',
-                              variant: 'warning',
-                              onConfirm: () => {
-                                setSelectedTemplateKey(null);
-                                setEditedBodyHtml('');
-                                setTemplateDirty(false);
-                              },
-                            });
-                          } else {
-                            setSelectedTemplateKey(null);
-                            setEditedBodyHtml('');
-                            setTemplateDirty(false);
-                          }
-                        }}
-                      >
-                        <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
-                        Back to Templates
-                      </Button>
-                      <div className="cs-dt-detail__breadcrumb">
-                        <span className="cs-dt-detail__breadcrumb-type">Email Template</span>
-                        <span className="cs-dt-detail__breadcrumb-sep">›</span>
-                        <span className="cs-dt-detail__breadcrumb-name">{EMAIL_TEMPLATE_LABELS[selectedTemplateKey] || selectedTemplateKey}</span>
-                      </div>
-                      <span className={templateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
-                        {templateDirty ? 'Unsaved changes' : isDefaultTemplate ? 'Using default' : 'Customized'}
-                      </span>
-                      <div className="cs-dt-detail__actions">
-                        <Button variant="outline" size="default"
+                      <div className="cs-dt-detail__topbar-left">
+                        <Button variant="outline" size="sm"
                           type="button"
-                          className="settings-action"
+                          className="cs-dt-detail__back-btn"
+                          onClick={() => {
+                            if (templateDirty) {
+                              setConfirmModalConfig({
+                                isOpen: true,
+                                title: 'Unsaved Changes',
+                                message: 'Discard unsaved changes?',
+                                confirmText: 'Discard',
+                                cancelText: 'Cancel',
+                                variant: 'warning',
+                                onConfirm: () => {
+                                  setSelectedTemplateKey(null);
+                                  setEditedBodyHtml('');
+                                  setTemplateDirty(false);
+                                },
+                              });
+                            } else {
+                              setSelectedTemplateKey(null);
+                              setEditedBodyHtml('');
+                              setTemplateDirty(false);
+                            }
+                          }}
+                        >
+                          <ArrowLeft size={14} />
+                          Back
+                        </Button>
+
+                        <div className="cs-dt-detail__divider" />
+
+                        <div className="cs-dt-detail__title-wrap">
+                          <span className="cs-dt-detail__title">
+                            {EMAIL_TEMPLATE_LABELS[selectedTemplateKey] || selectedTemplateKey}
+                          </span>
+                          <span className="cs-dt-detail__badge cs-dt-detail__badge--type">
+                            Email
+                          </span>
+                        </div>
+
+                        <span className={`cs-dt-status-badge ${templateDirty ? 'is-dirty' : 'is-clean'}`}>
+                          {templateDirty ? (
+                            <>
+                              <span className="cs-dt-pulse-dot" />
+                              Unsaved changes
+                            </>
+                          ) : (
+                            isDefaultTemplate ? 'Default' : 'Customized'
+                          )}
+                        </span>
+                      </div>
+                      <div className="cs-dt-detail__actions">
+                        <Button variant="outline" size="sm"
+                          type="button"
+                          className="cs-dt-action-btn"
                           onClick={handleResetTemplate}
                           disabled={savingTemplate}
                         >
                           <RotateCcw size={14} /> Reset
                         </Button>
-                        <Button variant="default" size="default"
+                        <Button variant="default" size="sm"
                           type="button"
-                          className="settings-action"
+                          className="cs-dt-action-btn cs-dt-action-btn--primary"
                           onClick={handleSaveTemplate}
                           disabled={savingTemplate || !templateDirty}
                         >
-                          <Save size={15} />
+                          {savingTemplate ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                           {savingTemplate ? 'Saving…' : 'Save'}
                         </Button>
                       </div>
@@ -5266,69 +5287,99 @@ export default function CompanySettingsPage() {
                   <ErrorBoundary>
                     <div className="cs-dt-detail">
                       <div className="cs-dt-detail__topbar">
-                        <Button variant="outline" size="default"
-                          type="button"
-                          className="settings-action"
-                          onClick={() => {
-                            if (contractTemplateDirty) {
-                              setConfirmModalConfig({
-                                isOpen: true,
-                                title: 'Unsaved Changes',
-                                message: 'Discard unsaved changes?',
-                                confirmText: 'Discard',
-                                cancelText: 'Cancel',
-                                variant: 'warning',
-                                onConfirm: () => {
-                                  setSelectedContractType(null);
-                                  setEditedContractContent('');
-                                  setEditedContractName('');
-                                  setContractTemplateDirty(false);
-                                },
-                              });
-                            } else {
-                              setSelectedContractType(null);
-                              setEditedContractContent('');
-                              setEditedContractName('');
-                              setContractTemplateDirty(false);
-                            }
-                          }}
-                        >
-                          <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
-                          Back to Templates
-                        </Button>
-                        <div className="cs-dt-detail__breadcrumb">
-                          <span className="cs-dt-detail__breadcrumb-type">{selectedContractTemplate?.name || selectedContractTemplate?.type}</span>
-                          <span className="cs-dt-detail__breadcrumb-sep">›</span>
-                          <span className="cs-dt-detail__breadcrumb-name">{editedContractName || selectedContractTemplate?.name}</span>
-                        </div>
-                        <label className="cs-dt-detail__toggle">
-                          <input
-                            type="checkbox"
-                            checked={editedContractIsActive}
-                            onChange={(e) => { setEditedContractIsActive(e.target.checked); setContractTemplateDirty(true); }}
-                          />
-                          {editedContractIsActive ? 'Active' : 'Inactive'}
-                        </label>
-                        <span className={contractTemplateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
-                          {contractTemplateDirty ? 'Unsaved changes' : contractTemplateIsDefault ? 'Default' : 'Customized'}
-                        </span>
-                        <div className="cs-dt-detail__actions">
-                          <Button type="button" variant="outline" onClick={()=>setContractPreviewOpen(true)} disabled={!editedContractContent}><Eye size={15}/>Preview Template</Button>
-                          <Button variant="outline" size="default"
+                        <div className="cs-dt-detail__topbar-left">
+                          <Button variant="outline" size="sm"
                             type="button"
-                            className="settings-action"
+                            className="cs-dt-detail__back-btn"
+                            onClick={() => {
+                              if (contractTemplateDirty) {
+                                setConfirmModalConfig({
+                                  isOpen: true,
+                                  title: 'Unsaved Changes',
+                                  message: 'Discard unsaved changes?',
+                                  confirmText: 'Discard',
+                                  cancelText: 'Cancel',
+                                  variant: 'warning',
+                                  onConfirm: () => {
+                                    setSelectedContractType(null);
+                                    setEditedContractContent('');
+                                    setEditedContractName('');
+                                    setContractTemplateDirty(false);
+                                  },
+                                });
+                              } else {
+                                setSelectedContractType(null);
+                                setEditedContractContent('');
+                                setEditedContractName('');
+                                setContractTemplateDirty(false);
+                              }
+                            }}
+                          >
+                            <ArrowLeft size={14} />
+                            Back
+                          </Button>
+
+                          <div className="cs-dt-detail__divider" />
+
+                          <div className="cs-dt-detail__title-wrap">
+                            <span className="cs-dt-detail__title">
+                              {editedContractName || selectedContractTemplate?.name || 'Contract Template'}
+                            </span>
+                            <span className="cs-dt-detail__badge cs-dt-detail__badge--type">
+                              {selectedContractTemplate?.type || 'Contract'}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={`cs-dt-status-pill ${editedContractIsActive ? 'is-active' : 'is-inactive'}`}
+                            onClick={() => {
+                              setEditedContractIsActive(!editedContractIsActive);
+                              setContractTemplateDirty(true);
+                            }}
+                            title={editedContractIsActive ? 'Click to deactivate' : 'Click to activate'}
+                          >
+                            <span className="cs-dt-status-dot" />
+                            <span>{editedContractIsActive ? 'Active' : 'Inactive'}</span>
+                          </button>
+
+                          <span className={`cs-dt-status-badge ${contractTemplateDirty ? 'is-dirty' : 'is-clean'}`}>
+                            {contractTemplateDirty ? (
+                              <>
+                                <span className="cs-dt-pulse-dot" />
+                                Unsaved changes
+                              </>
+                            ) : (
+                              contractTemplateIsDefault ? 'Default' : 'Customized'
+                            )}
+                          </span>
+                        </div>
+                        <div className="cs-dt-detail__actions">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="cs-dt-action-btn"
+                            onClick={() => setContractPreviewOpen(true)}
+                            disabled={!editedContractContent}
+                          >
+                            <Eye size={14} /> Preview
+                          </Button>
+                          <Button variant="outline" size="sm"
+                            type="button"
+                            className="cs-dt-action-btn"
                             onClick={handleResetContractTemplate}
                             disabled={savingContractTemplate || contractTemplateIsDefault}
                           >
                             <RotateCcw size={14} /> Reset
                           </Button>
-                          <Button variant="default" size="default"
+                          <Button variant="default" size="sm"
                             type="button"
-                            className="settings-action"
+                            className="cs-dt-action-btn cs-dt-action-btn--primary"
                             onClick={handleSaveContractTemplate}
                             disabled={savingContractTemplate || !contractTemplateDirty}
                           >
-                            <Save size={15} />
+                            {savingContractTemplate ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                             {savingContractTemplate ? 'Saving…' : 'Save'}
                           </Button>
                         </div>
@@ -5470,11 +5521,11 @@ export default function CompanySettingsPage() {
                               <FileSignature size={14} /> Contract Template Content
                             </div>
                             <RichTextEditor
+                              ref={contractEditorRef}
                               key={selectedContractType ?? 'none'}
                               value={editedContractContent}
                               onChange={handleContractContentChange}
                               placeholder="Write contract template content here... Use {{contract_number}}, {{vendor_name}}, {{contract_value}}, etc."
-                              maxHeight="100%"
                             />
                           </div>
                         </div>
@@ -5498,6 +5549,7 @@ export default function CompanySettingsPage() {
                                   key={cat.id}
                                   type="button"
                                   className={`cs-doc-placeholders__tab ${selectedPlaceholderCategory === cat.id ? 'cs-doc-placeholders__tab--active' : ''}`}
+                                  onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => setSelectedPlaceholderCategory(cat.id)}
                                 >
                                   {(() => { const Icon = ({company:Building2,vendor:Users,contract:FileText,commercial:CreditCard,signature:FileSignature,all:Tag} as const)[cat.id]; return <><Icon size={13}/>{cat.id === 'all' ? cat.label : cat.label.substring(cat.label.indexOf(' ') + 1)}</>; })()}
@@ -5512,6 +5564,7 @@ export default function CompanySettingsPage() {
                                   key={ph.code}
                                   type="button"
                                   className="cs-doc-placeholders__chip"
+                                  onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => handleInsertPlaceholderTag(ph.code)}
                                   title={`Click to insert ${ph.code} (${ph.description})`}
                                 >
@@ -5568,60 +5621,76 @@ export default function CompanySettingsPage() {
                   <ErrorBoundary>
                     <div className="cs-dt-detail">
                       <div className="cs-dt-detail__topbar">
-                        <Button variant="outline" size="default"
-                          type="button"
-                          className="settings-action"
-                          onClick={() => {
-                            if (docTemplateDirty) {
-                              setConfirmModalConfig({
-                                isOpen: true,
-                                title: 'Unsaved Changes',
-                                message: 'Discard unsaved changes?',
-                                confirmText: 'Discard',
-                                cancelText: 'Cancel',
-                                variant: 'warning',
-                                onConfirm: () => {
-                                  setSelectedDocId(null);
-                                  setEditedDocContent('');
-                                  setEditedDocName('');
-                                  setDocTemplateDirty(false);
-                                },
-                              });
-                            } else {
-                              setSelectedDocId(null);
-                              setEditedDocContent('');
-                              setEditedDocName('');
-                              setDocTemplateDirty(false);
-                            }
-                          }}
-                        >
-                          <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
-                          Back to Templates
-                        </Button>
-                        <div className="cs-dt-detail__breadcrumb">
-                          <span className="cs-dt-detail__breadcrumb-type">{selectedDocTemplate?.type}</span>
-                          <span className="cs-dt-detail__breadcrumb-sep">›</span>
-                          <span className="cs-dt-detail__breadcrumb-name">{editedDocName || selectedDocTemplate?.name}</span>
-                        </div>
-                        <span className={docTemplateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
-                          {docTemplateDirty ? 'Unsaved changes' : docTemplateIsDefault ? 'Default' : 'Customized'}
-                        </span>
-                        <div className="cs-dt-detail__actions">
-                          <Button variant="outline" size="default"
+                        <div className="cs-dt-detail__topbar-left">
+                          <Button variant="outline" size="sm"
                             type="button"
-                            className="settings-action"
+                            className="cs-dt-detail__back-btn"
+                            onClick={() => {
+                              if (docTemplateDirty) {
+                                setConfirmModalConfig({
+                                  isOpen: true,
+                                  title: 'Unsaved Changes',
+                                  message: 'Discard unsaved changes?',
+                                  confirmText: 'Discard',
+                                  cancelText: 'Cancel',
+                                  variant: 'warning',
+                                  onConfirm: () => {
+                                    setSelectedDocId(null);
+                                    setEditedDocContent('');
+                                    setEditedDocName('');
+                                    setDocTemplateDirty(false);
+                                  },
+                                });
+                              } else {
+                                setSelectedDocId(null);
+                                setEditedDocContent('');
+                                setEditedDocName('');
+                                setDocTemplateDirty(false);
+                              }
+                            }}
+                          >
+                            <ArrowLeft size={14} />
+                            Back
+                          </Button>
+
+                          <div className="cs-dt-detail__divider" />
+
+                          <div className="cs-dt-detail__title-wrap">
+                            <span className="cs-dt-detail__title">
+                              {editedDocName || selectedDocTemplate?.name || 'Document Template'}
+                            </span>
+                            <span className="cs-dt-detail__badge cs-dt-detail__badge--type">
+                              {selectedDocTemplate?.type || 'NDA'}
+                            </span>
+                          </div>
+
+                          <span className={`cs-dt-status-badge ${docTemplateDirty ? 'is-dirty' : 'is-clean'}`}>
+                            {docTemplateDirty ? (
+                              <>
+                                <span className="cs-dt-pulse-dot" />
+                                Unsaved changes
+                              </>
+                            ) : (
+                              docTemplateIsDefault ? 'Default' : 'Customized'
+                            )}
+                          </span>
+                        </div>
+                        <div className="cs-dt-detail__actions">
+                          <Button variant="outline" size="sm"
+                            type="button"
+                            className="cs-dt-action-btn"
                             onClick={handleResetDocTemplate}
                             disabled={savingDocTemplate}
                           >
                             <RotateCcw size={14} /> Reset
                           </Button>
-                          <Button variant="default" size="default"
+                          <Button variant="default" size="sm"
                             type="button"
-                            className="settings-action"
+                            className="cs-dt-action-btn cs-dt-action-btn--primary"
                             onClick={handleSaveDocTemplate}
                             disabled={savingDocTemplate || !docTemplateDirty}
                           >
-                            <Save size={15} />
+                            {savingDocTemplate ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                             {savingDocTemplate ? 'Saving…' : 'Save'}
                           </Button>
                         </div>

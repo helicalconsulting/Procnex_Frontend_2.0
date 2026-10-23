@@ -201,6 +201,7 @@ export interface ContractCreatePayload {
   clauses?: ContractClause[];
   slaEntries?: ContractSLAEntry[];
   milestones?: ContractMilestone[];
+  contentSnapshot?: string;
 }
 
 export interface ContractListResponse {

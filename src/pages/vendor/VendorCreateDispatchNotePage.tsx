@@ -35,6 +35,7 @@ import '../purchase-orders/CreatePurchaseOrderPage.css';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import '../../styles/vendor-portal.css';
 import './vendor-invoice-workspace.css';
+import { PrintDispatchNoteModal } from '../../components/dispatch-notes/PrintDispatchNoteModal';
 
 interface LineItemState {
   id: string;
@@ -99,6 +100,7 @@ export default function VendorCreateDispatchNotePage() {
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   // Selected PO
   const selectedPO = useMemo(() => {
@@ -344,7 +346,7 @@ export default function VendorCreateDispatchNotePage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.print()}
+            onClick={() => setShowPrintModal(true)}
             className="gap-2"
           >
             <Printer className="size-4" /> Print Challan
@@ -826,6 +828,42 @@ export default function VendorCreateDispatchNotePage() {
         currency={companyDefaultCurrency}
         mode="approval"
       />
+
+      {showPrintModal && (
+        <PrintDispatchNoteModal
+          data={{
+            dispatchNoteNumber,
+            dispatchDate,
+            expectedDeliveryDate,
+            transportMode,
+            transporterName,
+            vehicleNumber,
+            trackingNumber,
+            driverName,
+            driverPhone,
+            dispatchFromAddress,
+            shippingAddress,
+            totalPackages: totalPackages || 1,
+            totalWeight,
+            notes,
+            poId: selectedPoId,
+            poNumber: selectedPO?.poNumber || selectedPoId,
+            vendorName: user?.name || (selectedPO as any)?.vendorName || (selectedPO as any)?.vendor?.name || 'Authorized Supplier',
+            status: 'IN_TRANSIT',
+            items: lineItems.map((li) => ({
+              id: li.id,
+              itemCode: li.itemCode,
+              itemName: li.itemName,
+              orderedQty: li.orderedQty,
+              dispatchedQty: li.dispatchedQty,
+              unit: li.unit,
+              remarks: li.remarks,
+            })),
+          }}
+          po={selectedPO}
+          onClose={() => setShowPrintModal(false)}
+        />
+      )}
     </PageFrame>
   );
 }

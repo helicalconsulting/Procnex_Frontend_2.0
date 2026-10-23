@@ -391,11 +391,17 @@ export default function PaymentsPage() {
           );
 
         if (activeApp) {
-          const isUserMatchingPendingStep = pendingRow ? isRoleMatching(reqRole, authRoles) : false;
+          const isUserMatchingPendingStep = pendingRow
+            ? isRoleMatching(reqRole, authRoles) ||
+              (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
+              ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
+              (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
+              (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase())
+            : false;
           const canAct =
             !allApproved &&
             (activeApp.status === 'PENDING' || activeApp.status === 'RETURNED' || Boolean(pendingRow)) &&
-            (isAdmin || isUserMatchingPendingStep);
+            isUserMatchingPendingStep;
 
           let status: PaymentStatus;
           if (rejectedRow) {
@@ -645,18 +651,33 @@ export default function PaymentsPage() {
               signatureUrl,
             };
           });
+          // Ensure Level 3 is included if only 2 levels were in the chain
+          if (mapped.length === 2 && (uniqueDocSigs.length >= 3 || uniqueDocSigs.some(d => Number(d.levelNumber) === 3 || (d.signedByName || '').toLowerCase().includes('nischal')) || localStorage.getItem('heliflow_sig_nischal') || isVoucherConfirmed)) {
+            const sigL3 = getSigForLevel(3) || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : localStorage.getItem('heliflow_sig_nischal') || undefined);
+            mapped.push({
+              level: 'Level 3',
+              name: uniqueDocSigs.find(d => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal',
+              role: 'General Manager',
+              date: selectedPrintVoucher.date,
+              status: isVoucherConfirmed ? ('APPROVED' as const) : ('PENDING' as const),
+              comments: isVoucherConfirmed ? 'Approved & Digitally Signed' : 'Awaiting Level 3 Approval',
+              signatureUrl: isVoucherConfirmed ? sigL3 : undefined,
+            });
+          }
           setVoucherApprovers(mapped);
         } else {
           const sigL1 = getSigForLevel(1, null, selectedPrintVoucher.approvedBy) || (currentLvl > 1 || isVoucherConfirmed ? (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined) : undefined);
           const sigL2 = getSigForLevel(2);
+          const sigL3 = getSigForLevel(3) || (isVoucherConfirmed ? (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : localStorage.getItem('heliflow_sig_nischal') || undefined) : undefined);
 
           const isL1Approved = currentLvl > 1 || isVoucherConfirmed;
-          const isL2Approved = isVoucherConfirmed;
+          const isL2Approved = currentLvl > 2 || isVoucherConfirmed;
+          const isL3Approved = isVoucherConfirmed;
 
           setVoucherApprovers([
             {
               level: 'Level 1',
-              name: isL1Approved ? (selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : 'Purchase Manager') : 'Purchase Manager',
+              name: isL1Approved ? (selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : 'Kanika Agarwal') : 'Kanika Agarwal',
               role: 'Purchase Manager',
               date: selectedPrintVoucher.date,
               status: isL1Approved ? ('APPROVED' as const) : ('PENDING' as const),
@@ -665,12 +686,21 @@ export default function PaymentsPage() {
             },
             {
               level: 'Level 2',
-              name: isL2Approved ? 'Purchase Clerk' : 'Purchase Clerk',
+              name: isL2Approved ? 'Mahi Agarwal' : 'Mahi Agarwal',
               role: 'Purchase Clerk',
               date: selectedPrintVoucher.date,
               status: isL2Approved ? ('APPROVED' as const) : ('PENDING' as const),
               comments: isL2Approved ? 'Approved & Digitally Signed' : 'Awaiting Level 2 Approval',
               signatureUrl: isL2Approved ? sigL2 : undefined,
+            },
+            {
+              level: 'Level 3',
+              name: isL3Approved ? 'Nischal Agarwal' : 'Nischal Agarwal',
+              role: 'General Manager',
+              date: selectedPrintVoucher.date,
+              status: isL3Approved ? ('APPROVED' as const) : ('PENDING' as const),
+              comments: isL3Approved ? 'Approved & Digitally Signed' : 'Awaiting Level 3 Approval',
+              signatureUrl: isL3Approved ? sigL3 : undefined,
             },
           ]);
         }

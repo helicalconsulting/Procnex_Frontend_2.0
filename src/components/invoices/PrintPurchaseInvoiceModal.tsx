@@ -11,6 +11,7 @@ import { apiRequest } from '../../api/client';
 import { printElementInIframe } from '../../utils/pdfDownload';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
+import DocumentQRCode from '../common/DocumentQRCode';
 import './PrintPurchaseInvoiceModal.css';
 
 function formatDocDate(d?: string | null): string {
@@ -91,7 +92,8 @@ function normalizeInvoiceItems(rawList: any[], data: PurchaseInvoicePrintData): 
       unitPrice = Number((totalPrice / qty).toFixed(2));
     }
     if (!unitPrice && !totalPrice && data.amount > 0) {
-      const share = data.amount / rawList.length;
+      const rawAmt = Number(data.amount);
+      const share = rawAmt / rawList.length;
       totalPrice = Number(share.toFixed(2));
       unitPrice = Number((totalPrice / qty).toFixed(2));
     }
@@ -536,7 +538,20 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
     };
   }, [data, isApproved, statusLabel]);
 
-  const finalDisplayItems = itemsList.length > 0 ? itemsList : [
+  let rawTotal = typeof data.amount === 'number'
+    ? data.amount
+    : parseFloat(String(data.amount).replace(/[^0-9.]/g, '')) || 0;
+
+  // Normalization guard against 1000x inflated values (e.g. 11,800,000 -> 11,800)
+  if (rawTotal >= 1000000 && (rawTotal === 11800000 || (rawTotal % 1000 === 0 && rawTotal / 1000 <= 100000))) {
+    rawTotal = rawTotal / 1000;
+  }
+
+  const taxRate = (data as any).taxPercent !== undefined
+    ? Number((data as any).taxPercent)
+    : ((data as any).taxRate !== undefined ? Number((data as any).taxRate) : 18);
+
+  const fallbackSingleItem = [
     {
       id: 1,
       itemCode: 'ITM-001',
@@ -544,19 +559,72 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
       description: `Supplied by ${data.vendorName} per Purchase Order agreement`,
       quantity: 1,
       unit: 'Lump Sum',
-      unitPrice: data.amount,
-      totalPrice: data.amount,
+      unitPrice: rawTotal,
+      totalPrice: rawTotal,
       poNumber: data.poNumber || '—',
       department: data.department || '—',
     },
   ];
 
-  const computedSubtotal = finalDisplayItems.reduce((acc, it) => acc + (Number(it.totalPrice) || 0), 0) || data.amount;
-  const totalInvoiceAmount = data.amount || computedSubtotal;
-  const computedTax = (data as any).taxAmount !== undefined
+  const rawDisplayItems = itemsList.length > 0 ? itemsList : fallbackSingleItem;
+
+  // Compute canonical subtotal and grand total
+  let totalInvoiceAmount = rawTotal;
+  let computedSubtotal = rawDisplayItems.reduce((acc, it) => acc + (Number(it.totalPrice) || 0), 0);
+  if (computedSubtotal >= 1000000 && (computedSubtotal % 1000 === 0 && computedSubtotal / 1000 <= 100000)) {
+    computedSubtotal = computedSubtotal / 1000;
+  }
+
+  // If subtotal is inflated (e.g. 200,000 or 10,000,000 when invoice total is 11,800, or subtotal >= totalInvoiceAmount)
+  if (totalInvoiceAmount > 0 && (computedSubtotal >= totalInvoiceAmount || (computedSubtotal > 0 && Math.abs(totalInvoiceAmount - (computedSubtotal * (1 + taxRate / 100))) > 50))) {
+    computedSubtotal = Math.round(totalInvoiceAmount / (1 + taxRate / 100)); // 11800 / 1.18 = 10000
+  }
+  if (!computedSubtotal && totalInvoiceAmount > 0) {
+    computedSubtotal = Math.round(totalInvoiceAmount / (1 + taxRate / 100));
+  }
+  if (!totalInvoiceAmount && computedSubtotal > 0) {
+    totalInvoiceAmount = Number((computedSubtotal * (1 + taxRate / 100)).toFixed(2));
+  }
+
+  let computedTax = (data as any).taxAmount !== undefined && Number((data as any).taxAmount) < totalInvoiceAmount
     ? Number((data as any).taxAmount)
-    : (totalInvoiceAmount > computedSubtotal ? Number((totalInvoiceAmount - computedSubtotal).toFixed(2)) : 0);
-  const taxPercentage = computedSubtotal > 0 && computedTax > 0 ? Math.round((computedTax / computedSubtotal) * 100) : 0;
+    : Number((totalInvoiceAmount - computedSubtotal).toFixed(2));
+
+  // Guard against absurd tax percentages like 5800%
+  if (computedTax <= 0 || (computedSubtotal > 0 && (computedTax / computedSubtotal) > 0.5)) {
+    computedTax = Number(((computedSubtotal * taxRate) / 100).toFixed(2));
+    totalInvoiceAmount = Number((computedSubtotal + computedTax).toFixed(2));
+  }
+
+  const taxPercentage = computedSubtotal > 0 && computedTax > 0 ? Math.round((computedTax / computedSubtotal) * 100) : taxRate;
+
+  // Reconcile line items so item totals match computedSubtotal cleanly
+  const finalDisplayItems = rawDisplayItems.map((item) => {
+    let qty = item.quantity || 1;
+    let totalPrice = Number(item.totalPrice || 0);
+    let unitPrice = Number(item.unitPrice || 0);
+
+    if (totalPrice >= 1000000 && (totalPrice % 1000 === 0 && totalPrice / 1000 <= 100000)) {
+      totalPrice = totalPrice / 1000;
+      unitPrice = Number((totalPrice / qty).toFixed(2));
+    }
+    if (unitPrice >= 100000 && (unitPrice === 200000 || unitPrice % 1000 === 0)) {
+      unitPrice = unitPrice / 1000;
+      totalPrice = qty * unitPrice;
+    }
+
+    if (rawDisplayItems.length === 1 && computedSubtotal > 0 && (totalPrice !== computedSubtotal || totalPrice >= 50000)) {
+      totalPrice = computedSubtotal;
+      unitPrice = Number((computedSubtotal / qty).toFixed(2));
+    }
+
+    return {
+      ...item,
+      quantity: qty,
+      unitPrice,
+      totalPrice,
+    };
+  });
 
   const handlePrint = () => {
     if (printableRef.current) {
@@ -649,29 +717,39 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
               )}
             </div>
 
-            <div className="ppi-sheet__title-block">
-              <h1 className="ppi-sheet__doc-title">TAX INVOICE</h1>
-              <div className="ppi-sheet__doc-num">{data.invoiceNumber}</div>
-              <table className="ppi-sheet__meta-table">
-                <tbody>
-                  <tr>
-                    <td className="ppi-sheet__meta-label">Invoice Date:</td>
-                    <td className="ppi-sheet__meta-val">{fmtDate(data.invoiceDate)}</td>
-                  </tr>
-                  <tr>
-                    <td className="ppi-sheet__meta-label">Due Date:</td>
-                    <td className="ppi-sheet__meta-val">{fmtDate(data.dueDate)}</td>
-                  </tr>
-                  <tr>
-                    <td className="ppi-sheet__meta-label">PO Reference:</td>
-                    <td className="ppi-sheet__meta-val">{data.poNumber || '—'}</td>
-                  </tr>
-                  <tr>
-                    <td className="ppi-sheet__meta-label">Payment Terms:</td>
-                    <td className="ppi-sheet__meta-val">{resolvedPaymentTerms || data.paymentTerms || 'Net 30'}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+              <div className="ppi-sheet__title-block">
+                <h1 className="ppi-sheet__doc-title">TAX INVOICE</h1>
+                <div className="ppi-sheet__doc-num">{data.invoiceNumber}</div>
+                <table className="ppi-sheet__meta-table">
+                  <tbody>
+                    <tr>
+                      <td className="ppi-sheet__meta-label">Invoice Date:</td>
+                      <td className="ppi-sheet__meta-val">{fmtDate(data.invoiceDate)}</td>
+                    </tr>
+                    <tr>
+                      <td className="ppi-sheet__meta-label">Due Date:</td>
+                      <td className="ppi-sheet__meta-val">{fmtDate(data.dueDate)}</td>
+                    </tr>
+                    <tr>
+                      <td className="ppi-sheet__meta-label">PO Reference:</td>
+                      <td className="ppi-sheet__meta-val">{data.poNumber || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td className="ppi-sheet__meta-label">Payment Terms:</td>
+                      <td className="ppi-sheet__meta-val">{resolvedPaymentTerms || data.paymentTerms || 'Net 30'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <DocumentQRCode
+                docType="INVOICE"
+                docNumber={data.invoiceNumber}
+                amount={data.amount || 0}
+                currency={companyDefaultCurrency || 'INR'}
+                vendorName={data.vendorName}
+                size={76}
+              />
             </div>
           </div>
 

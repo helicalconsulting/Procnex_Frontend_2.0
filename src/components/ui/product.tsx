@@ -53,21 +53,21 @@ export function MetricCard({ label, value, detail, icon: Icon, tone = 'primary',
   return (
     <Card
       className={cn(
-        'group min-w-0 p-4 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-5',
+        'group min-w-0 p-3.5 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-4',
         isPressed &&
           'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)]',
         className
       )}
       {...props}
     >
-      <div className="flex items-start gap-3.5">
-        <div className={cn('grid size-10 shrink-0 place-items-center rounded-xl ring-1', toneClasses[tone])}>
-          <Icon className="size-[18px]" strokeWidth={1.8} />
+      <div className="flex items-start gap-3">
+        <div className={cn('grid size-9 sm:size-10 shrink-0 place-items-center rounded-xl ring-1', toneClasses[tone])}>
+          <Icon className="size-4 sm:size-[18px]" strokeWidth={1.8} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-2xl font-semibold leading-none tracking-[-0.04em] text-foreground">{value}</div>
-          <div className="mt-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
-          {detail && <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</div>}
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="text-xl sm:text-2xl font-semibold leading-tight tracking-[-0.03em] text-foreground truncate" title={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}>{value}</div>
+          <div className="mt-1 text-[11px] sm:text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground truncate" title={label}>{label}</div>
+          {detail && <div className="mt-0.5 text-[11px] sm:text-xs leading-tight text-muted-foreground truncate">{detail}</div>}
         </div>
       </div>
     </Card>

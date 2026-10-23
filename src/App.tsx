@@ -109,6 +109,7 @@ const CreatePurchaseOrderPage = lazy(() => import("./pages/purchase-orders/Creat
 const BudgetListPage = lazy(() => import("./pages/budget/BudgetListPage"));
 const BudgetCreatePage = lazy(() => import("./pages/budget/BudgetCreatePage"));
 const BudgetDetailPage = lazy(() => import("./pages/budget/BudgetDetailPage"));
+const DocumentVerificationPage = lazy(() => import("./pages/verify/DocumentVerificationPage"));
 
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 
@@ -172,6 +173,7 @@ export default function App() {
                   <SuccessModalProvider>
                     <Routes>
                     {/* Public */}
+                    <Route path="/verify" element={page(DocumentVerificationPage)} />
                     <Route path="/helicalconsulting" element={page(HelicalConsultingPage)} />
                     <Route path="/login" element={<LoginRedirect />} />
                     <Route path="/e/:companyCode/login" element={page(BrandedEmployeeLoginPage)} />

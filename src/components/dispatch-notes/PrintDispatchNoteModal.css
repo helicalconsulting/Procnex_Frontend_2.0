@@ -1,0 +1,440 @@
+/* ── Print Dispatch Note / Delivery Challan Modal & Document CSS ── */
+
+.pdn-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px 15px;
+  overflow-y: auto;
+}
+
+.pdn-modal {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 960px;
+  max-height: 94vh;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdn-modal__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.pdn-modal__topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.pdn-modal__icon {
+  color: #0284c7;
+}
+
+.pdn-badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pdn-badge--received {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pdn-badge--transit {
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(2, 132, 199, 0.3);
+}
+
+.pdn-badge--draft {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.pdn-modal__topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pdn-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.pdn-btn--primary {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+}
+
+.pdn-btn--primary:hover {
+  background: #0369a1;
+}
+
+.pdn-btn--close {
+  background: #334155;
+  color: #94a3b8;
+  padding: 8px;
+}
+
+.pdn-btn--close:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+/* ── Printable A4 Sheet ── */
+.pdn-sheet {
+  background: #ffffff;
+  color: #0f172a;
+  padding: 36px 40px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.pdn-sheet__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 18px;
+  border-bottom: 2px solid #0369a1;
+}
+
+.pdn-sheet__company h2 {
+  font-size: 21px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.02em;
+}
+
+.pdn-sheet__company p {
+  font-size: 12px;
+  color: #475569;
+  margin: 0 0 2px 0;
+  line-height: 1.4;
+  max-width: 440px;
+}
+
+.pdn-sheet__title-block {
+  text-align: right;
+  min-width: 260px;
+}
+
+.pdn-sheet__doc-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #0369a1;
+  letter-spacing: 0.05em;
+  margin: 0 0 2px 0;
+  text-transform: uppercase;
+}
+
+.pdn-sheet__doc-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.pdn-sheet__doc-num {
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  background: #f1f5f9;
+  padding: 3px 10px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 8px;
+  border: 1px solid #cbd5e1;
+}
+
+.pdn-sheet__meta-table {
+  margin-left: auto;
+  font-size: 12.5px;
+  border-collapse: collapse !important;
+  border: none !important;
+  margin-top: 8px;
+}
+
+.pdn-sheet__meta-table td,
+.pdn-sheet__meta-table th {
+  padding: 3px 0 !important;
+  border: none !important;
+  border-right: none !important;
+  border-left: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  background: transparent !important;
+}
+
+.pdn-sheet__meta-label {
+  color: #64748b;
+  font-weight: 600;
+  padding-right: 14px !important;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.pdn-sheet__meta-val {
+  color: #0f172a;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 12.5px;
+  padding-left: 6px !important;
+}
+
+/* ── Logistics Strip ── */
+.pdn-sheet__logistics {
+  margin-top: 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 18px;
+}
+
+.pdn-sheet__logistic-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.pdn-sheet__logistic-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.pdn-sheet__logistic-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pdn-sheet__logistic-sub {
+  font-size: 11px;
+  color: #475569;
+}
+
+/* ── Consignor / Consignee Parties ── */
+.pdn-sheet__parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 18px;
+}
+
+.pdn-sheet__party-box {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.pdn-sheet__party-heading {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0369a1;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.pdn-sheet__party-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.pdn-sheet__party-address {
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.pdn-sheet__party-detail {
+  font-size: 11.5px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+/* ── Items Table ── */
+.pdn-sheet__items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 22px;
+  font-size: 12px;
+}
+
+.pdn-sheet__items-table th {
+  background: #0369a1;
+  color: #ffffff;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.pdn-sheet__items-table th:first-child {
+  border-top-left-radius: 6px;
+}
+
+.pdn-sheet__items-table th:last-child {
+  border-top-right-radius: 6px;
+}
+
+.pdn-sheet__items-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+  vertical-align: top;
+}
+
+.pdn-sheet__items-table tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.pdn-sheet__items-table .text-center {
+  text-align: center;
+}
+
+.pdn-sheet__items-table .text-right {
+  text-align: right;
+}
+
+.pdn-sheet__item-code {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.pdn-sheet__item-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pdn-sheet__item-desc {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.pdn-sheet__table-summary {
+  background: #f1f5f9 !important;
+  font-weight: 700;
+}
+
+/* ── Notes / Instructions ── */
+.pdn-sheet__notes-box {
+  margin-top: 18px;
+  background: #fffbeb;
+  border: 1px dashed #fde68a;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.pdn-sheet__notes-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+
+
+/* ── Print Styles ── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .no-print,
+  .pdn-modal__topbar {
+    display: none !important;
+  }
+
+  .pdn-modal-backdrop {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .pdn-modal {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  .pdn-sheet {
+    padding: 0 !important;
+  }
+}

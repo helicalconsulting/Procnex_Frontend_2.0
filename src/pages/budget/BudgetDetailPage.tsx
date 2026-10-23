@@ -108,7 +108,7 @@ export default function BudgetDetailPage() {
         title={budget.budgetName}
         description={
           <span className="flex flex-wrap items-center gap-2 mt-1">
-            <span className="font-mono text-primary font-bold text-xs">{budget.budgetCode}</span>
+            <span className="text-primary font-semibold text-xs">{budget.budgetCode}</span>
             <span>&bull;</span>
             <span className="text-xs">{budget.fiscalYear} ({budget.budgetType})</span>
             <span>&bull;</span>
@@ -247,7 +247,7 @@ export default function BudgetDetailPage() {
       {activeTab === 'lines' && (
         <Card className="overflow-hidden border-border/80 shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[950px]">
+            <table className="w-full text-left text-xs min-w-[950px] table-divided">
               <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/70">
                 <tr>
                   <th className="px-4 py-3 w-28">Line Code</th>
@@ -262,7 +262,7 @@ export default function BudgetDetailPage() {
               <tbody className="divide-y divide-border/40">
                 {lines.map((line) => (
                   <tr key={line.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3.5 font-bold text-foreground font-mono">
+                    <td className="px-4 py-3.5 font-semibold text-foreground">
                       {line.lineCode}
                     </td>
                     <td className="px-4 py-3.5">
@@ -274,7 +274,7 @@ export default function BudgetDetailPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="font-mono text-foreground">
+                      <div className="text-foreground">
                         {line.glAccountCode || '—'}
                       </div>
                       <div className="text-[11px] text-muted-foreground">

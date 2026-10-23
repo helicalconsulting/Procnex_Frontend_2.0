@@ -3,6 +3,7 @@ import { useBranding } from '../../context/BrandingContext';
 import type { PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import procnexLogo from '../../assets/procnex.png';
+import DocumentQRCode from '../common/DocumentQRCode';
 import './PurchaseOrderDocument.css';
 
 interface Props {
@@ -94,27 +95,39 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
           </div>
         </div>
         <div className="po-doc__header-right">
-          <div className="po-doc__title-block">
-            <span className="po-doc__title-label">PURCHASE ORDER</span>
-            <span className="po-doc__title-po-num">{ensurePONumber(pr.poNumber)}</span>
-          </div>
-          <div className="po-doc__meta-grid">
-            <div className="po-doc__meta-row">
-              <span className="po-doc__meta-label">PO Date:</span>
-              <span className="po-doc__meta-value">{formatDate(pr.poDate)}</span>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+            <div>
+              <div className="po-doc__title-block">
+                <span className="po-doc__title-label">PURCHASE ORDER</span>
+                <span className="po-doc__title-po-num">{ensurePONumber(pr.poNumber)}</span>
+              </div>
+              <div className="po-doc__meta-grid">
+                <div className="po-doc__meta-row">
+                  <span className="po-doc__meta-label">PO Date:</span>
+                  <span className="po-doc__meta-value">{formatDate(pr.poDate)}</span>
+                </div>
+                {pr.quotationNumber && (
+                  <div className="po-doc__meta-row">
+                    <span className="po-doc__meta-label">Quotation Ref:</span>
+                    <span className="po-doc__meta-value">{pr.quotationNumber}</span>
+                  </div>
+                )}
+                {pr.requisitionNumber && (
+                  <div className="po-doc__meta-row">
+                    <span className="po-doc__meta-label">PR Number:</span>
+                    <span className="po-doc__meta-value">{pr.requisitionNumber}</span>
+                  </div>
+                )}
+              </div>
             </div>
-            {pr.quotationNumber && (
-              <div className="po-doc__meta-row">
-                <span className="po-doc__meta-label">Quotation Ref:</span>
-                <span className="po-doc__meta-value">{pr.quotationNumber}</span>
-              </div>
-            )}
-            {pr.requisitionNumber && (
-              <div className="po-doc__meta-row">
-                <span className="po-doc__meta-label">PR Number:</span>
-                <span className="po-doc__meta-value">{pr.requisitionNumber}</span>
-              </div>
-            )}
+            <DocumentQRCode
+              docType="PO"
+              docNumber={ensurePONumber(pr.poNumber)}
+              amount={pr.totalAmount || pr.estimatedTotal || 0}
+              currency={pr.currency || 'INR'}
+              vendorName={pr.vendorName}
+              size={76}
+            />
           </div>
         </div>
       </div>
@@ -303,9 +316,7 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
                   (!isGenericApproverName(appr.signedByName) ? appr.signedByName : null) ||
                   (!isGenericApproverName(appr.approverName) ? appr.approverName : null) ||
                   (!isGenericApproverName(appr.name) ? appr.name : null) ||
-                  (isApproved
-                    ? (levelNum === 1 ? 'Mahi Agarwal' : levelNum === 2 ? 'Nischal Agarwal' : 'Authorized Approver')
-                    : (appr.requiredRole || `Level ${levelNum} Approver`));
+                  (appr.requiredRole || `Level ${levelNum} Approver`);
 
                 return (
                   <div key={idx} className="po-doc__stamp-card">

@@ -287,7 +287,6 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     PAYMENT: 'Payment',
   };
   const level = a.level as { levelNumber?: number; requiredRole?: string } | undefined;
-  const createdBy = a.createdBy as { fullName?: string } | undefined;
   const amount = Number(a.amount || 0);
   const currency = (a.currency as string) || 'KES';
 
@@ -303,14 +302,26 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     level?.requiredRole ||
     (rawLevelNum === 2 ? 'Purchase Clerk' : 'Purchase Manager');
 
+  const rawCreatedBy = a.createdBy as { fullName?: string; name?: string; username?: string } | string | undefined;
+  const requestedByName =
+    typeof rawCreatedBy === 'object' && rawCreatedBy !== null
+      ? rawCreatedBy.fullName || rawCreatedBy.name || rawCreatedBy.username || 'Unknown'
+      : typeof rawCreatedBy === 'string' && rawCreatedBy
+      ? rawCreatedBy
+      : typeof a.creator === 'object' && a.creator !== null
+      ? (a.creator as any).fullName || (a.creator as any).name || 'Unknown'
+      : typeof a.requestedBy === 'string' && a.requestedBy
+      ? a.requestedBy
+      : 'Unknown';
+
   return {
     id: String(a.id),
     referenceId: String(a.referenceId || a.entityId || ''),
     module: moduleMap[String(a.module || a.entityType)] || 'RFQ',
     referenceNumber: String(a.referenceNumber || a.referenceId || `#${a.id}`),
     title: String(a.title || `${a.module} #${a.referenceId}`),
-    requestedBy: createdBy?.fullName || String(a.createdBy || 'Unknown'),
-    requestedByInitials: initials(createdBy?.fullName || String(a.createdBy || 'Unknown')),
+    requestedBy: requestedByName,
+    requestedByInitials: initials(requestedByName),
     avatarMod: String((Number(a.id) % 6) + 1),
     amount: amount ? formatApprovalAmount(amount, currency) : '—',
     amountNum: amount,

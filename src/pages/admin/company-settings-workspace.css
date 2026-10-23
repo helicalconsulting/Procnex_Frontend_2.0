@@ -400,8 +400,21 @@
 }
 .settings-workspace .cs-mandatory-item-label { color: var(--settings-muted); background: transparent; font-size: 12px !important; font-weight: 500 !important; padding: 0; letter-spacing: 0; text-transform: none; }
 
-.settings-workspace .rte-toolbar__select { background: transparent !important; color: var(--foreground); border: 1px solid var(--input); border-radius: 9px; }
+.settings-workspace .rte-toolbar__select { background-color: transparent !important; color: var(--foreground); border: 1px solid var(--input); border-radius: 8px; }
 .settings-workspace .cs-dt-detail__topbar { background: transparent; border-radius: 0; }
+.settings-workspace .cs-dt-detail__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.settings-workspace .cs-dt-detail__actions :is(.cs-dt-action-btn, button) {
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  height: 34px !important;
+  padding: 0 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+}
 .settings-workspace .cs-dt-detail__editor-wrap .rte-editor { min-height: 360px !important; max-height: 620px !important; }
 .settings-workspace .cs-doc-placeholders__tabs { display: flex; flex-wrap: wrap; overflow: visible; gap: 6px; }
 .settings-workspace .cs-doc-placeholders__tab {

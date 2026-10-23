@@ -13,11 +13,13 @@ import {
   ChevronLeft, ChevronUp, DollarSign, PieChart,
 } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
-import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
+import { cleanDuplicateSignatures, type ContractPlaceholderContext } from '../../utils/cleanSignatures';
 import { sseClient } from '../../services/sseClient';
 import { DetailSkeleton } from '../../components/shared/Skeleton';
 import { signatureService, type SavedSignature } from '../../services/signatureService';
 import { useAuth } from '../../context/AuthContext';
+import { useBranding } from '../../context/BrandingContext';
+import { readCachedProfile } from '../../lib/branding';
 import './ContractDetailPage.css';
 
 // ─── Status helpers ──────────────────────────────────────────
@@ -115,58 +117,138 @@ function SignModal({
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (mode !== 'draw') return;
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const dpr = Math.max(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+
+    ctx.scale(dpr, dpr);
     ctx.strokeStyle = penColor;
-    ctx.lineWidth = 2;
+    ctx.fillStyle = penColor;
+    ctx.lineWidth = 1.6;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, [penColor, mode]);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  }, [penColor]);
+
+  useEffect(() => {
+    if (mode === 'draw') {
+      const timer = setTimeout(setupCanvas, 30);
+      window.addEventListener('resize', setupCanvas);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('resize', setupCanvas);
+      };
+    }
+  }, [mode, setupCanvas]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = penColor;
+      ctx.fillStyle = penColor;
+      ctx.lineWidth = 1.6;
+    }
+  }, [penColor]);
 
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    if ('touches' in e) {
-      return { x: (e.touches[0].clientX - rect.left) * (canvas.width / rect.width), y: (e.touches[0].clientY - rect.top) * (canvas.height / rect.height) };
-    }
-    return { x: (e.clientX - rect.left) * (canvas.width / rect.width), y: (e.clientY - rect.top) * (canvas.height / rect.height) };
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
   const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(window.devicePixelRatio || 1, 2);
+    if (canvas.width !== Math.round(rect.width * dpr)) {
+      setupCanvas();
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     setIsDrawing(true);
     setHasDrawn(true);
-    const ctx = canvasRef.current?.getContext('2d');
-    if (ctx) {
-      ctx.strokeStyle = penColor;
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-    }
+
+    ctx.strokeStyle = penColor;
+    ctx.fillStyle = penColor;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
     const pos = getCanvasPos(e);
-    if (ctx) { ctx.beginPath(); ctx.moveTo(pos.x, pos.y); }
+    lastPointRef.current = pos;
+
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
-    const ctx = canvasRef.current?.getContext('2d');
-    const pos = getCanvasPos(e);
-    if (ctx) { ctx.lineTo(pos.x, pos.y); ctx.stroke(); }
+    if (!isDrawing || !lastPointRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const currentPos = getCanvasPos(e);
+    const prevPos = lastPointRef.current;
+
+    const midX = (prevPos.x + currentPos.x) / 2;
+    const midY = (prevPos.y + currentPos.y) / 2;
+
+    ctx.strokeStyle = penColor;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.quadraticCurveTo(prevPos.x, prevPos.y, midX, midY);
+    ctx.stroke();
+
+    lastPointRef.current = currentPos;
   };
 
-  const stopDraw = () => { setIsDrawing(false); };
+  const stopDraw = () => {
+    setIsDrawing(false);
+    lastPointRef.current = null;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (ctx) ctx.beginPath();
+  };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext('2d');
-      if (ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+      if (ctx) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
     }
     setHasDrawn(false);
     setUploadedImage(null);
+    lastPointRef.current = null;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -309,7 +391,6 @@ function SignModal({
               <canvas
                 ref={canvasRef}
                 className="ctr-sign-modal__canvas"
-                width={400} height={140}
                 onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
                 onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
               />
@@ -350,10 +431,13 @@ function SignModal({
 export default function ContractDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const branding = useBranding();
 
   const location = useLocation();
+  const hasAutoOpenedSignRef = useRef(false);
+
   const resolveInitialTab = useCallback((tab: string | null | undefined): string => {
     if (!tab) return 'overview';
     if (tab === 'orders' || tab === 'purchase-orders' || tab === 'po') return 'purchase-orders';
@@ -367,6 +451,15 @@ export default function ContractDetailPage() {
     return resolveInitialTab(fromQuery || fromState);
   });
   const [showSignModal, setShowSignModal] = useState(false);
+
+  const handleCloseSignModal = useCallback(() => {
+    setShowSignModal(false);
+    if (searchParams.get('action') === 'sign') {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('action');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [signing, setSigning] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [terminating, setTerminating] = useState(false);
@@ -391,6 +484,39 @@ export default function ContractDetailPage() {
     [id],
     { cacheKey: `contract:${id}` }
   );
+
+  const contractContext = React.useMemo<ContractPlaceholderContext>(() => {
+    const contractCode = (data?.contract as any)?.companyCode;
+    const cached = contractCode ? readCachedProfile(contractCode) : readCachedProfile();
+
+    const fromBrandingAddr = [
+      branding.companyAddress,
+      branding.companyCity,
+      branding.companyState,
+      branding.companyCountry,
+    ].filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(', ');
+
+    const fromCachedAddr = [
+      cached?.companyAddress,
+      cached?.companyCity,
+      cached?.companyState,
+      cached?.companyCountry,
+    ].filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(', ');
+
+    const v = (data?.contract as any)?.vendor;
+    const vAddr = v?.address || v?.location || '';
+
+    return {
+      companyAddress: fromBrandingAddr || fromCachedAddr || branding.companyAddress || cached?.companyAddress || '',
+      companyEmail: branding.companyEmail || cached?.companyEmail || cached?.supportEmail || '',
+      companyPhone: branding.companyPhone || cached?.companyPhone || '',
+      companyTaxId: branding.taxRegistrationNumber || cached?.taxRegistrationNumber || '',
+      vendorAddress: vAddr,
+      vendorEmail: v?.email || '',
+      vendorPhone: v?.phone || '',
+      vendorContact: v?.contactPerson || v?.phone || '',
+    };
+  }, [branding, data?.contract]);
 
   // Refresh contract data and balance instantly
   const refreshAll = useCallback(async () => {
@@ -446,14 +572,15 @@ export default function ContractDetailPage() {
 
   // Check if we should open sign modal from query param
   useEffect(() => {
-    if (searchParams.get('action') === 'sign' && data && !showSignModal) {
+    if (searchParams.get('action') === 'sign' && data && !hasAutoOpenedSignRef.current) {
+      hasAutoOpenedSignRef.current = true;
       setShowSignModal(true);
     }
     const tabParam = searchParams.get('tab') || (location.state as any)?.tab;
     if (tabParam) {
       setActiveTab(resolveInitialTab(tabParam));
     }
-  }, [searchParams, location.state, data, showSignModal, resolveInitialTab]);
+  }, [searchParams, location.state, data, resolveInitialTab]);
 
   // ─── Handlers (moved BEFORE early returns to obey Rules of Hooks) ─
   const handleSign = useCallback(async (signerName: string, signerTitle: string, signatureDataUrl: string) => {
@@ -462,12 +589,12 @@ export default function ContractDetailPage() {
     try {
       const result = await contractService.signContractBuyer(id, signerName, signerTitle, signatureDataUrl);
       setPageMsg(`Contract signed successfully. Status: ${result.status}`);
-      setShowSignModal(false);
+      handleCloseSignModal();
       await reload();
     } finally {
       setSigning(false);
     }
-  }, [id, reload]);
+  }, [id, reload, handleCloseSignModal]);
 
   // Fetch contract balance when contract is accepted
   const isAccepted = ['ACCEPTED', 'VENDOR_SIGNED', 'ACTIVE', 'COMPLETED'].includes(data?.contract?.status || '');
@@ -585,11 +712,11 @@ export default function ContractDetailPage() {
   const handleDownload = useCallback(() => {
     if (!data?.contract) return;
     downloadContractAsPdf(
-      data.contract.contentSnapshot,
+      cleanDuplicateSignatures(data.contract.contentSnapshot, undefined, contractContext),
       data.contract.contractNumber,
       data.contract.title,
     );
-  }, [data?.contract?.contentSnapshot, data?.contract?.contractNumber, data?.contract?.title]);
+  }, [data?.contract?.contentSnapshot, data?.contract?.contractNumber, data?.contract?.title, contractContext]);
 
   if (loading) return <DetailSkeleton />;
   if (error) return (
@@ -636,7 +763,7 @@ export default function ContractDetailPage() {
   })();
 
   const hasPO = (contract._count?.purchaseOrders || contract.purchaseOrders?.length || contractBalance?.totalPOs || 0) > 0;
-  const canSign = contract.status === 'DRAFT' || contract.status === 'AWAITING_CUSTOMER_SIGNATURE';
+  const canSign = !contract.signedByCustomerAt && !['CANCELLED', 'TERMINATED', 'COMPLETED'].includes(contract.status);
   const canSendToVendor = contract.status === 'DRAFT';
   const canComplete = contract.status === 'VENDOR_SIGNED' || contract.status === 'ACCEPTED' || contract.status === 'ACTIVE';
   const isLimitReached = contractBalance ? contractBalance.remainingValue <= 0 : false;
@@ -647,7 +774,8 @@ export default function ContractDetailPage() {
   const handlePrint = () => {
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(contract.contentSnapshot || '<html><body><p>No content available</p></body></html>');
+    const printContent = cleanDuplicateSignatures(contract.contentSnapshot, undefined, contractContext) || '<html><body><p>No content available</p></body></html>';
+    win.document.write(printContent);
     win.document.close();
     win.print();
   };
@@ -1114,7 +1242,7 @@ export default function ContractDetailPage() {
           <div>
             <div className="ctr-detail__doc-preview">
               {contract.contentSnapshot ? (
-                <div className="ctr-doc-preview-content" dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }} />
+                <div className="ctr-doc-preview-content" dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot, undefined, contractContext) }} />
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 48 }}>
                   No generated document content available. The contract document will appear here after generation.
@@ -1242,7 +1370,7 @@ export default function ContractDetailPage() {
           contractNumber={contract.contractNumber}
           signerLabel="Buyer / Customer"
           onSign={handleSign}
-          onClose={() => setShowSignModal(false)}
+          onClose={handleCloseSignModal}
           signing={signing}
         />
       )}

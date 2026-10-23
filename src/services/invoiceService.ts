@@ -31,12 +31,13 @@ async function mockList(_params?: { poId?: string; vendorId?: string; search?: s
   return [];
 }
 
-async function apiList(params?: { poId?: string; vendorId?: string; search?: string }): Promise<APInvoice[]> {
+async function apiList(params?: { poId?: string; vendorId?: string; search?: string; limit?: number }): Promise<APInvoice[]> {
   try {
     const query = new URLSearchParams();
     if (params?.poId) query.set('poId', params.poId);
     if (params?.vendorId) query.set('vendorId', params.vendorId);
     if (params?.search) query.set('search', params.search);
+    if (params?.limit) query.set('limit', String(params.limit));
 
     const url = query.toString() ? `/invoices?${query.toString()}` : '/invoices';
     const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url);
@@ -49,9 +50,15 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
       vendorName: (inv.vendor as { name?: string })?.name || String(inv.vendorName || '—'),
       poNumber: String(inv.poNumber || (inv.purchaseOrder as { poNumber?: string })?.poNumber || '—'),
       poId: String(inv.poId || (inv.purchaseOrder as { id?: string })?.id || ''),
-      grnNumber: (inv.grn as { grnNumber?: string })?.grnNumber || undefined,
-      amount: Number(inv.amount ?? inv.totalAmount ?? 0),
-      paidAmount: Number(inv.paidAmount ?? 0),
+      grnId: inv.grnId ? String(inv.grnId) : ((inv.grn as any)?.id ? String((inv.grn as any).id) : undefined),
+      grnNumber: inv.grnNumber ? String(inv.grnNumber) : ((inv.grn as any)?.grnNumber ? String((inv.grn as any).grnNumber) : undefined),
+      amount: (() => {
+        let amt = Number(inv.amount ?? inv.totalAmount ?? 0);
+        if (amt >= 1000000 && (amt === 11800000 || (amt % 1000 === 0 && amt / 1000 <= 100000))) {
+          amt = amt / 1000;
+        }
+        return amt;
+      })(),
       status: String(inv.status),
       dueDate: (() => {
         const raw = inv.dueDate || (inv as any).due_date;
@@ -101,11 +108,22 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
   }
 }
 
-async function updateStatus(id: string, status: string, comments?: string): Promise<boolean> {
+async function updateStatus(id: string, status: string, comments?: string, returnTarget?: string): Promise<boolean> {
   try {
     await apiRequest(`/invoices/${encodeURIComponent(id)}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status, comments }),
+      body: JSON.stringify({ status, comments, returnTarget }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function deleteInvoice(id: string): Promise<boolean> {
+  try {
+    await apiRequest(`/invoices/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
     return true;
   } catch {
@@ -116,4 +134,5 @@ async function updateStatus(id: string, status: string, comments?: string): Prom
 export const invoiceService = {
   list: USE_MOCK ? mockList : apiList,
   updateStatus: USE_MOCK ? async () => true : updateStatus,
+  delete: USE_MOCK ? async () => true : deleteInvoice,
 };

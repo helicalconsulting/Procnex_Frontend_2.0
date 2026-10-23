@@ -1,11 +1,19 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   Undo2, Redo2, Bold, Italic, Underline, Strikethrough,
   List, ListOrdered, Indent, Outdent,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Palette, Highlighter, Table, Minus, RemoveFormatting,
-  Subscript, Superscript, Maximize2, Minimize2, Printer
+  Table, Minus, RemoveFormatting,
+  Subscript, Superscript, Maximize2, Minimize2, Printer, FilePlus, Plus
 } from 'lucide-react';
+
+export interface RichTextEditorRef {
+  insertText: (text: string) => void;
+  insertHtml: (html: string) => void;
+  insertPageBreak: () => void;
+  focus: () => void;
+  getEditorElement: () => HTMLDivElement | null;
+}
 
 interface RichTextEditorProps {
   value: string;
@@ -15,16 +23,26 @@ interface RichTextEditorProps {
   maxHeight?: number | string;
 }
 
-export default function RichTextEditor({
-  value,
-  onChange,
-  placeholder = 'Write content here...',
-  minHeight = 200,
-  maxHeight,
-}: RichTextEditorProps) {
+const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(function RichTextEditor(
+  {
+    value,
+    onChange,
+    placeholder = 'Write content here...',
+    minHeight = 750,
+    maxHeight,
+  },
+  ref
+) {
   const editorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorScrollRef = useRef<HTMLDivElement>(null);
   const isInternalChange = useRef(false);
+  const savedRangeRef = useRef<Range | null>(null);
+
+  // Pagination & Multi-Page States (MS Word / Google Docs Style)
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [paperMode, setPaperMode] = useState<'theme' | 'white'>('theme');
 
   // Formatting States (Google Docs Style Selection Tracking)
   const [fontFamily, setFontFamily] = useState('Segoe UI');
@@ -56,6 +74,15 @@ export default function RichTextEditor({
     // Selection formatting inspection
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
+
+    try {
+      const range = sel.getRangeAt(0);
+      if (editorRef.current && editorRef.current.contains(range.commonAncestorContainer)) {
+        savedRangeRef.current = range.cloneRange();
+      }
+    } catch {
+      // Ignore security/range edge cases
+    }
 
     try {
       setIsBold(document.queryCommandState('bold'));
@@ -107,9 +134,11 @@ export default function RichTextEditor({
   // Listen to selectionchange globally when editor is focused
   useEffect(() => {
     const handleSelectionChange = () => {
+      const sel = window.getSelection();
       if (
         document.activeElement === editorRef.current ||
-        editorRef.current?.contains(document.activeElement)
+        editorRef.current?.contains(document.activeElement) ||
+        (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.getRangeAt(0).commonAncestorContainer))
       ) {
         updateStatsAndSelection();
       }
@@ -128,10 +157,297 @@ export default function RichTextEditor({
 
     if (editorRef.current && !isInternalChange.current) {
       editorRef.current.innerHTML = value || '';
+      savedRangeRef.current = null;
       updateStatsAndSelection();
     }
     isInternalChange.current = false;
   }, [value, updateStatsAndSelection]);
+
+  // A4 Pagination & Multi-Page Engine (MS Word Style)
+  const recalculatePagination = useCallback(() => {
+    if (!editorRef.current) return;
+    const container = editorRef.current;
+    const children = Array.from(container.children) as HTMLElement[];
+    if (children.length === 0) {
+      setTotalPages(1);
+      return;
+    }
+
+    // A4 printable content height in px (standard A4 1123px - top 56px - bottom 56px = 1011px)
+    const PAGE_CONTENT_HEIGHT = 1011;
+    let pageNum = 1;
+
+    // Reset automatic page breaks
+    children.forEach((el) => {
+      if (el.classList.contains('rte-auto-page-break')) {
+        el.classList.remove('rte-auto-page-break');
+        el.removeAttribute('data-page');
+      }
+    });
+
+    let currentAccHeight = 0;
+    children.forEach((child) => {
+      const isManual =
+        child.classList.contains('rte-manual-page-break') ||
+        !!child.querySelector('.rte-manual-page-break');
+
+      if (isManual) {
+        pageNum++;
+        const targetEl = child.classList.contains('rte-manual-page-break')
+          ? child
+          : (child.querySelector('.rte-manual-page-break') as HTMLElement);
+
+        if (targetEl) {
+          targetEl.setAttribute('data-page', String(pageNum));
+          // MS Word Page Break behavior: push the next page boundary down
+          const remainingOnPage = Math.max(50, PAGE_CONTENT_HEIGHT - currentAccHeight);
+          targetEl.style.marginTop = `${remainingOnPage}px`;
+
+          const lbl = targetEl.querySelector('.rte-page-break-label');
+          if (lbl) {
+            lbl.textContent = `Page Break • Starts Page ${pageNum}`;
+          }
+        }
+        currentAccHeight = 0;
+        return;
+      }
+
+      const childHeight = child.offsetHeight || 24;
+      if (currentAccHeight > 0 && currentAccHeight + childHeight > PAGE_CONTENT_HEIGHT) {
+        pageNum++;
+        child.classList.add('rte-auto-page-break');
+        child.setAttribute('data-page', String(pageNum));
+        currentAccHeight = childHeight;
+      } else {
+        currentAccHeight += childHeight;
+      }
+    });
+
+    setTotalPages(Math.max(1, pageNum));
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    if (!editorScrollRef.current) return;
+    const scrollTop = editorScrollRef.current.scrollTop;
+    const page = Math.min(totalPages, Math.max(1, Math.floor((scrollTop + 200) / 1050) + 1));
+    setCurrentPage(page);
+  }, [totalPages]);
+
+  const insertPageBreak = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    const pageBreakHtml = `<div class="rte-manual-page-break" contenteditable="false" data-page-break="true"><span class="rte-page-break-label">Page Break</span></div><p><br></p>`;
+    let inserted = false;
+    try {
+      inserted = document.execCommand('insertHTML', false, pageBreakHtml);
+    } catch {
+      inserted = false;
+    }
+
+    if (!inserted) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        const div = document.createElement('div');
+        div.className = 'rte-manual-page-break';
+        div.contentEditable = 'false';
+        div.innerHTML = '<span class="rte-page-break-label">Page Break</span>';
+        const p = document.createElement('p');
+        p.innerHTML = '<br>';
+        range.insertNode(p);
+        range.insertNode(div);
+        range.setStart(p, 0);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+
+    isInternalChange.current = true;
+    onChange(editorRef.current.innerHTML);
+    updateStatsAndSelection();
+    setTimeout(() => {
+      recalculatePagination();
+      const allBreaks = editorRef.current?.querySelectorAll('.rte-manual-page-break');
+      if (allBreaks && allBreaks.length > 0) {
+        const lastBreak = allBreaks[allBreaks.length - 1];
+        lastBreak.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 60);
+  }, [onChange, updateStatsAndSelection, recalculatePagination]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      insertPageBreak();
+    }
+  }, [insertPageBreak]);
+
+  useEffect(() => {
+    recalculatePagination();
+  }, [value, recalculatePagination]);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const observer = new ResizeObserver(() => {
+      recalculatePagination();
+    });
+    observer.observe(editorRef.current);
+    return () => observer.disconnect();
+  }, [recalculatePagination]);
+
+  // Ensure scrollbar starts at the very top of Page 1
+  useEffect(() => {
+    if (editorScrollRef.current) {
+      editorScrollRef.current.scrollTop = 0;
+    }
+  }, []);
+
+  const insertText = useCallback((text: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    const sel = window.getSelection();
+    if (sel) {
+      if (
+        savedRangeRef.current &&
+        editorRef.current.contains(savedRangeRef.current.commonAncestorContainer)
+      ) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current);
+      } else {
+        const hasRangeInEditor =
+          sel.rangeCount > 0 &&
+          editorRef.current.contains(sel.getRangeAt(0).commonAncestorContainer);
+        if (!hasRangeInEditor) {
+          const range = document.createRange();
+          range.selectNodeContents(editorRef.current);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+    }
+
+    let inserted = false;
+    try {
+      inserted = document.execCommand('insertText', false, text);
+    } catch {
+      inserted = false;
+    }
+
+    if (!inserted) {
+      try {
+        inserted = document.execCommand('insertHTML', false, text);
+      } catch {
+        inserted = false;
+      }
+    }
+
+    if (!inserted && sel && sel.rangeCount > 0) {
+      try {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(text);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inserted = true;
+      } catch {
+        editorRef.current.appendChild(document.createTextNode(text));
+      }
+    }
+
+    if (sel && sel.rangeCount > 0 && editorRef.current.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+
+    const html = editorRef.current.innerHTML;
+    const cleanHtml = html === '<br>' ? '' : html;
+    isInternalChange.current = true;
+    onChange(cleanHtml);
+    updateStatsAndSelection();
+  }, [onChange, updateStatsAndSelection]);
+
+  const insertHtml = useCallback((html: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    const sel = window.getSelection();
+    if (sel) {
+      if (
+        savedRangeRef.current &&
+        editorRef.current.contains(savedRangeRef.current.commonAncestorContainer)
+      ) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current);
+      } else {
+        const hasRangeInEditor =
+          sel.rangeCount > 0 &&
+          editorRef.current.contains(sel.getRangeAt(0).commonAncestorContainer);
+        if (!hasRangeInEditor) {
+          const range = document.createRange();
+          range.selectNodeContents(editorRef.current);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+    }
+
+    let inserted = false;
+    try {
+      inserted = document.execCommand('insertHTML', false, html);
+    } catch {
+      inserted = false;
+    }
+
+    if (!inserted && sel && sel.rangeCount > 0) {
+      try {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        const el = document.createElement('div');
+        el.innerHTML = html;
+        const frag = document.createDocumentFragment();
+        let node: Node | null;
+        let lastNode: Node | null = null;
+        while ((node = el.firstChild)) {
+          lastNode = frag.appendChild(node);
+        }
+        range.insertNode(frag);
+        if (lastNode) {
+          range.setStartAfter(lastNode);
+          range.setEndAfter(lastNode);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch {
+        editorRef.current.insertAdjacentHTML('beforeend', html);
+      }
+    }
+
+    if (sel && sel.rangeCount > 0 && editorRef.current.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+
+    const editorHtml = editorRef.current.innerHTML;
+    const cleanHtml = editorHtml === '<br>' ? '' : editorHtml;
+    isInternalChange.current = true;
+    onChange(cleanHtml);
+    updateStatsAndSelection();
+  }, [onChange, updateStatsAndSelection]);
+
+  useImperativeHandle(ref, () => ({
+    insertText,
+    insertHtml,
+    insertPageBreak,
+    focus: () => editorRef.current?.focus(),
+    getEditorElement: () => editorRef.current,
+  }), [insertText, insertHtml, insertPageBreak]);
 
   const execCmd = useCallback((command: string, val?: string) => {
     document.execCommand(command, false, val);
@@ -142,8 +458,9 @@ export default function RichTextEditor({
       isInternalChange.current = true;
       onChange(cleanHtml);
       updateStatsAndSelection();
+      setTimeout(recalculatePagination, 40);
     }
-  }, [onChange, updateStatsAndSelection]);
+  }, [onChange, updateStatsAndSelection, recalculatePagination]);
 
   const handleInput = useCallback(() => {
     if (editorRef.current) {
@@ -152,8 +469,9 @@ export default function RichTextEditor({
       isInternalChange.current = true;
       onChange(cleanHtml);
       updateStatsAndSelection();
+      recalculatePagination();
     }
-  }, [onChange, updateStatsAndSelection]);
+  }, [onChange, updateStatsAndSelection, recalculatePagination]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
@@ -172,26 +490,112 @@ export default function RichTextEditor({
       isInternalChange.current = true;
       onChange(editorRef.current.innerHTML);
       updateStatsAndSelection();
+      setTimeout(recalculatePagination, 50);
     }
-  }, [onChange, updateStatsAndSelection]);
+  }, [onChange, updateStatsAndSelection, recalculatePagination]);
+
+  // Capture selection before clicking dropdowns
+  const captureSelectionBeforeSelect = useCallback(() => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+  }, []);
 
   // Apply custom CSS inline style (Font Size / Font Family)
-  const applyInlineStyle = (styleProp: string, styleValue: string) => {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
+  const applyInlineStyle = useCallback((styleProp: string, styleValue: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
 
-    execCmd('fontSize', '7');
-    if (editorRef.current) {
-      const fontTags = editorRef.current.querySelectorAll('font[size="7"]');
-      fontTags.forEach((el) => {
-        (el as HTMLElement).removeAttribute('size');
-        (el as HTMLElement).style.setProperty(styleProp, styleValue);
-      });
-      isInternalChange.current = true;
-      onChange(editorRef.current.innerHTML);
-      updateStatsAndSelection();
+    const sel = window.getSelection();
+    let range: Range | null = null;
+
+    // 1. Restore saved selection if available inside editor
+    if (
+      savedRangeRef.current &&
+      editorRef.current.contains(savedRangeRef.current.commonAncestorContainer)
+    ) {
+      range = savedRangeRef.current;
+      if (sel) {
+        try {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } catch {
+          // ignore restore errors
+        }
+      }
+    } else if (sel && sel.rangeCount > 0 && editorRef.current.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      range = sel.getRangeAt(0);
     }
-  };
+
+    // 2. If text is highlighted (range is not collapsed)
+    if (range && !range.collapsed) {
+      try {
+        const fragment = range.extractContents();
+        const hasBlock = fragment.querySelector('p, div, h1, h2, h3, blockquote, table, ul, ol, li');
+        const wrapper = document.createElement(hasBlock ? 'div' : 'span');
+        wrapper.style.setProperty(styleProp, styleValue, 'important');
+
+        // Clear conflicting child styles of same property so new style takes precedence
+        wrapper.querySelectorAll('*').forEach((child) => {
+          (child as HTMLElement).style.removeProperty(styleProp);
+        });
+
+        wrapper.appendChild(fragment);
+        range.insertNode(wrapper);
+
+        // Keep text selected after styling
+        const newRange = document.createRange();
+        newRange.selectNodeContents(wrapper);
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+        savedRangeRef.current = newRange.cloneRange();
+      } catch (err) {
+        console.warn('Range wrap error:', err);
+      }
+    } else {
+      // 3. Range is collapsed or no selection: style the current block or paragraph
+      let targetNode: HTMLElement | null = null;
+      if (range) {
+        let node: Node | null = range.commonAncestorContainer;
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+        if (node && node instanceof HTMLElement && editorRef.current.contains(node)) {
+          targetNode = (node.closest('span, p, h1, h2, h3, blockquote, li, td, th') as HTMLElement) || node;
+        }
+      }
+
+      if (targetNode && targetNode !== editorRef.current) {
+        targetNode.style.setProperty(styleProp, styleValue, 'important');
+        targetNode.querySelectorAll('*').forEach((child) => {
+          (child as HTMLElement).style.removeProperty(styleProp);
+        });
+      } else {
+        // Fallback: apply to root blocks or entire content
+        const blocks = editorRef.current.querySelectorAll('p, div, h1, h2, h3');
+        if (blocks.length > 0) {
+          blocks.forEach((b) => {
+            (b as HTMLElement).style.setProperty(styleProp, styleValue, 'important');
+            (b as HTMLElement).querySelectorAll('*').forEach((child) => {
+              (child as HTMLElement).style.removeProperty(styleProp);
+            });
+          });
+        } else {
+          editorRef.current.style.setProperty(styleProp, styleValue, 'important');
+        }
+      }
+    }
+
+    if (editorRef.current) {
+      const html = editorRef.current.innerHTML;
+      const cleanHtml = html === '<br>' ? '' : html;
+      isInternalChange.current = true;
+      onChange(cleanHtml);
+      updateStatsAndSelection();
+      setTimeout(recalculatePagination, 40);
+    }
+  }, [onChange, updateStatsAndSelection, recalculatePagination]);
 
   const handleAlign = useCallback((alignment: 'left' | 'center' | 'right' | 'justify') => {
     if (alignment === 'justify') {
@@ -221,6 +625,16 @@ export default function RichTextEditor({
   const handleHeadingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setHeading(val);
+    if (editorRef.current) {
+      editorRef.current.focus();
+      const sel = window.getSelection();
+      if (savedRangeRef.current && sel && editorRef.current.contains(savedRangeRef.current.commonAncestorContainer)) {
+        try {
+          sel.removeAllRanges();
+          sel.addRange(savedRangeRef.current);
+        } catch {}
+      }
+    }
     execCmd('formatBlock', val);
   };
 
@@ -234,6 +648,39 @@ export default function RichTextEditor({
     const size = e.target.value;
     setFontSize(size);
     applyInlineStyle('font-size', size);
+  };
+
+  const handleLineHeightChange = (val: string) => {
+    setLineHeight(val);
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const sel = window.getSelection();
+    let range: Range | null = null;
+    if (savedRangeRef.current && sel && editorRef.current.contains(savedRangeRef.current.commonAncestorContainer)) {
+      range = savedRangeRef.current;
+      try {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch {}
+    } else if (sel && sel.rangeCount > 0 && editorRef.current.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      range = sel.getRangeAt(0);
+    }
+
+    if (range) {
+      let node: Node | null = range.commonAncestorContainer;
+      if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+      const block = (node?.parentElement?.closest('p, div, h1, h2, h3, blockquote, li, td') as HTMLElement) || (node as HTMLElement);
+      if (block && block !== editorRef.current) {
+        block.style.lineHeight = val;
+      } else {
+        editorRef.current.style.lineHeight = val;
+      }
+    } else {
+      editorRef.current.style.lineHeight = val;
+    }
+    const html = editorRef.current.innerHTML;
+    onChange(html === '<br>' ? '' : html);
+    updateStatsAndSelection();
   };
 
   const insertTable = () => {
@@ -306,8 +753,9 @@ export default function RichTextEditor({
 
         {/* Headings */}
         <select
-          className="rte-toolbar__select"
+          className="rte-toolbar__select rte-toolbar__select--heading"
           value={heading}
+          onMouseDown={captureSelectionBeforeSelect}
           onChange={handleHeadingChange}
           title="Text Formatting / Headings"
         >
@@ -322,6 +770,7 @@ export default function RichTextEditor({
         <select
           className="rte-toolbar__select rte-toolbar__select--font"
           value={fontFamily}
+          onMouseDown={captureSelectionBeforeSelect}
           onChange={handleFontFamilyChange}
           title="Font Family"
         >
@@ -339,6 +788,7 @@ export default function RichTextEditor({
         <select
           className="rte-toolbar__select rte-toolbar__select--size"
           value={fontSize}
+          onMouseDown={captureSelectionBeforeSelect}
           onChange={handleFontSizeChange}
           title="Font Size"
         >
@@ -355,7 +805,8 @@ export default function RichTextEditor({
         <select
           className="rte-toolbar__select rte-toolbar__select--spacing"
           value={lineHeight}
-          onChange={(e) => setLineHeight(e.target.value)}
+          onMouseDown={captureSelectionBeforeSelect}
+          onChange={(e) => handleLineHeightChange(e.target.value)}
           title="Line Spacing"
         >
           <option value="1.2">Single (1.15)</option>
@@ -420,27 +871,6 @@ export default function RichTextEditor({
         >
           <Superscript size={14} />
         </button>
-
-        <span className="rte-toolbar__sep" />
-
-        {/* Colors */}
-        <label className="rte-toolbar__btn rte-toolbar__color-btn" title="Text Color">
-          <Palette size={14} />
-          <input
-            type="color"
-            className="rte-toolbar__color-input"
-            onChange={(e) => applyInlineStyle('color', e.target.value)}
-          />
-        </label>
-        <label className="rte-toolbar__btn rte-toolbar__color-btn" title="Highlight / Background Color">
-          <Highlighter size={14} />
-          <input
-            type="color"
-            className="rte-toolbar__color-input"
-            defaultValue="#fef08a"
-            onChange={(e) => applyInlineStyle('background-color', e.target.value)}
-          />
-        </label>
 
         <span className="rte-toolbar__sep" />
 
@@ -546,6 +976,15 @@ export default function RichTextEditor({
         <button
           type="button"
           className="rte-toolbar__btn"
+          onClick={insertPageBreak}
+          title="Insert Page Break / Add Next Page (Ctrl+Enter)"
+          tabIndex={-1}
+        >
+          <FilePlus size={14} />
+        </button>
+        <button
+          type="button"
+          className="rte-toolbar__btn"
           onClick={() => execCmd('removeFormat')}
           title="Clear Formatting"
           tabIndex={-1}
@@ -563,37 +1002,68 @@ export default function RichTextEditor({
         </button>
       </div>
 
-      {/* Main Editor Content Area */}
+      {/* Main Editor Content Area (Desk Workspace) */}
       <div
-        className="rte-editor"
-        style={{ minHeight: minHeight || undefined, maxHeight: maxHeight || '100%' }}
-        onClick={() => editorRef.current?.focus()}
+        ref={editorScrollRef}
+        className={`rte-editor ${paperMode === 'white' ? 'rte-editor--white-paper' : ''}`}
+        onClick={(e) => {
+          if (e.target === editorScrollRef.current) {
+            editorRef.current?.focus();
+          }
+        }}
+        onScroll={handleScroll}
       >
-        <div
-          ref={editorRef}
-          className="rte-editor__content"
-          contentEditable
-          suppressContentEditableWarning
-          onInput={handleInput}
-          onPaste={handlePaste}
-          onKeyUp={updateStatsAndSelection}
-          onMouseUp={updateStatsAndSelection}
-          data-placeholder={placeholder}
-          style={{ lineHeight }}
-        />
+        <div className="rte-paper-container">
+          <div className="rte-paper-page-header">
+            <span>A4 Document • Page 1</span>
+          </div>
+
+          <div
+            ref={editorRef}
+            className="rte-editor__content"
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleInput}
+            onPaste={handlePaste}
+            onKeyDown={handleKeyDown}
+            onKeyUp={updateStatsAndSelection}
+            onMouseUp={updateStatsAndSelection}
+            onBlur={updateStatsAndSelection}
+            data-placeholder={placeholder}
+            style={{ lineHeight, minHeight: `${Math.max(1, totalPages) * 1050}px` }}
+          />
+
+          <div className="rte-paper-page-footer">
+            <span>Page {totalPages} of {totalPages}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Google Docs Status Bar */}
+      {/* MS Word / Google Docs Status Bar */}
       <div className="rte-statusbar">
         <div className="rte-statusbar__left">
+          <span className="rte-statusbar__page-badge">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            className="rte-statusbar__add-page-btn"
+            onClick={insertPageBreak}
+            title="Add Next Page (Ctrl+Enter)"
+          >
+            <Plus size={13} /> Add Page
+          </button>
+          <span className="rte-statusbar__sep">•</span>
           <span>{wordCount} words</span>
           <span className="rte-statusbar__sep">•</span>
           <span>{charCount} characters</span>
         </div>
         <div className="rte-statusbar__right">
-          <span>Live Google Docs Mode</span>
+          <span>MS Word A4 View</span>
         </div>
       </div>
     </div>
   );
-}
+});
+
+export default RichTextEditor;

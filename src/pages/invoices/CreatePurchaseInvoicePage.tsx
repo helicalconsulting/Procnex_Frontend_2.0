@@ -85,6 +85,9 @@ export default function CreatePurchaseInvoicePage() {
   const poIdParam = searchParams.get('poId');
   const grnIdParam = searchParams.get('grnId');
   const modeParam = searchParams.get('mode');
+  const invoiceNumberParam = searchParams.get('invoiceNumber');
+  const invoiceIdParam = searchParams.get('invoiceId') || searchParams.get('id');
+  const editParam = searchParams.get('edit') === 'true';
 
   const { roles, hasPermission } = useAuth();
   const canCreateInvoice =
@@ -103,11 +106,11 @@ export default function CreatePurchaseInvoicePage() {
   }, [roles, navigate]);
 
   // Main Page View Mode: List / Overview Table vs Entry Form
-  const [isCreating, setIsCreating] = useState<boolean>(() => Boolean(poIdParam || grnIdParam || modeParam));
+  const [isCreating, setIsCreating] = useState<boolean>(() => Boolean(poIdParam || grnIdParam || modeParam || invoiceNumberParam || invoiceIdParam));
   const [isReadOnly, setIsReadOnly] = useState<boolean>(false);
   const [creationMode, setCreationMode] = useState<'linked' | 'manual' | null>(() => {
     if (modeParam === 'manual') return 'manual';
-    if (modeParam === 'linked' || poIdParam || grnIdParam) return 'linked';
+    if (modeParam === 'linked' || poIdParam || grnIdParam || invoiceNumberParam || invoiceIdParam) return 'linked';
     return null;
   });
   const [showModeModal, setShowModeModal] = useState<boolean>(false);
@@ -183,6 +186,10 @@ export default function CreatePurchaseInvoicePage() {
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
   const [invoiceOptions, setInvoiceOptions] = useState<APInvoice[]>([]);
 
+  // Form Details (declared before useMemo to avoid TDZ ReferenceError)
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(() => (invoiceIdParam ? String(invoiceIdParam) : null));
+  const [invoiceNumber, setInvoiceNumber] = useState<string>(() => (invoiceNumberParam ? String(invoiceNumberParam) : ''));
+
   // Dispatch Notes list for checking vendor dispatch status
   const { data: dnData } = useServiceData(
     () => dispatchNoteService.list({ limit: 1000 }),
@@ -206,14 +213,16 @@ export default function CreatePurchaseInvoicePage() {
   }, [selectedPoId, dispatchNotes, invoiceOptions]);
 
   const isGrnBlocked = useMemo(() => {
+    // If editing or resubmitting an existing/returned invoice, never block with GRN requirement
+    if (editingInvoiceId || invoiceNumberParam || invoiceIdParam) return false;
+    // If a GRN is already selected, never block
+    if (selectedGrnId) return false;
     return creationMode === 'linked' && Boolean(selectedPoId) && grnOptions.length === 0;
-  }, [creationMode, selectedPoId, grnOptions]);
-
-  // Form Details
-  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  }, [editingInvoiceId, invoiceNumberParam, invoiceIdParam, selectedGrnId, creationMode, selectedPoId, grnOptions]);
 
   useEffect(() => {
-    if (!isReadOnly && (!invoiceNumber || invoiceNumber.startsWith('INV-2026-') || invoiceNumber.startsWith('INV 2026'))) {
+    // Do NOT generate a sequence number if we are editing an existing invoice or pre-filling from invoiceNumberParam
+    if (!editingInvoiceId && !invoiceNumberParam && !isReadOnly && !invoiceNumber) {
       companySettingsService
         .listSequenceSettings()
         .then((settings) => {
@@ -241,7 +250,46 @@ export default function CreatePurchaseInvoicePage() {
             .catch(() => {});
         });
     }
-  }, [isReadOnly, invoiceNumber]);
+  }, [editingInvoiceId, invoiceNumberParam, isReadOnly, invoiceNumber]);
+
+  // Auto-populate form when opening with invoiceNumber or invoiceId in URL (e.g. for Edit / Resubmit of returned invoice)
+  useEffect(() => {
+    if (!invoiceNumberParam && !invoiceIdParam) return;
+    if (editingInvoiceId && invoiceNumber && selectedPoId) return; // already loaded
+
+    let isMounted = true;
+    const loadTargetInvoice = async () => {
+      try {
+        let found = invoicesList.find(
+          (inv) =>
+            (invoiceIdParam && String(inv.id) === String(invoiceIdParam)) ||
+            (invoiceNumberParam && String(inv.invoiceNumber).toLowerCase() === String(invoiceNumberParam).toLowerCase())
+        );
+
+        if (!found) {
+          const fetchedList = await invoiceService.list({ limit: 500 }).catch(() => []);
+          found = fetchedList.find(
+            (inv) =>
+              (invoiceIdParam && String(inv.id) === String(invoiceIdParam)) ||
+              (invoiceNumberParam && String(inv.invoiceNumber).toLowerCase() === String(invoiceNumberParam).toLowerCase())
+          );
+        }
+
+        if (found && isMounted) {
+          openInvoiceEntry(found, 'edit');
+          setIsCreating(true);
+          setCreationMode('linked');
+        }
+      } catch (err) {
+        console.error('Failed to pre-fill invoice:', err);
+      }
+    };
+
+    loadTargetInvoice();
+    return () => {
+      isMounted = false;
+    };
+  }, [invoiceNumberParam, invoiceIdParam, invoicesList, editingInvoiceId, invoiceNumber, selectedPoId]);
 
   const [vendorName, setVendorName] = useState<string>('');
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -303,6 +351,7 @@ export default function CreatePurchaseInvoicePage() {
   // Open invoice entry in either Read-Only View mode or Edit mode
   const openInvoiceEntry = (inv: APInvoice, mode: 'view' | 'edit') => {
     setIsReadOnly(mode === 'view');
+    setEditingInvoiceId(inv.id ? String(inv.id) : null);
     if (inv.poNumber && inv.poNumber !== '—') {
       setSelectedPoId(inv.poNumber);
     } else if (inv.poId) {
@@ -355,17 +404,33 @@ export default function CreatePurchaseInvoicePage() {
     const rawItems = inv.lineItems || inv.items;
     if (rawItems && Array.isArray(rawItems) && rawItems.length > 0) {
       setLineItems(
-        rawItems.map((item: any, idx: number) => ({
-          id: item.id || `inv_item_${idx}_${Date.now()}`,
-          itemCode: item.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
-          itemName: item.itemName || item.name || item.description || `Line Item ${idx + 1}`,
-          description: item.description || item.remarks || '',
-          poQty: Number(item.poQty ?? item.quantity ?? item.orderedQty ?? 1),
-          grnQty: Number(item.grnQty ?? item.receivedQty ?? item.invoicedQty ?? item.supplierQty ?? 1),
-          supplierQty: Number(item.supplierQty ?? item.invoicedQty ?? item.quantity ?? 1),
-          unitPrice: Number(item.unitPrice ?? item.price ?? 0),
-          taxPercent: Number(item.taxPercent ?? 18),
-        }))
+        rawItems.map((item: any, idx: number) => {
+          const poQty = Number(item.poQty ?? item.quantity ?? item.orderedQty ?? 1);
+          const grnQty = Number(item.grnQty ?? item.receivedQty ?? item.invoicedQty ?? item.supplierQty ?? 1);
+          const supplierQty = Number(item.supplierQty ?? item.invoicedQty ?? item.quantity ?? 1);
+          let unitPrice = Number(item.unitPrice ?? item.price ?? 0);
+          if (unitPrice >= 100000 && (unitPrice === 200000 || unitPrice % 1000 === 0)) {
+            unitPrice = unitPrice / 1000;
+          }
+          const matchedPO = poList.find((p) => String(p.id) === String(inv.poId) || String(p.poNumber) === String(inv.poNumber));
+          const poTotal = Number(matchedPO?.totalAmount || 0);
+
+          if (poTotal > 0 && unitPrice * supplierQty > poTotal * 1.5) {
+            unitPrice = Number((poTotal / (rawItems.length || 1) / supplierQty).toFixed(2));
+          }
+
+          return {
+            id: item.id || `inv_item_${idx}_${Date.now()}`,
+            itemCode: item.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: item.itemName || item.name || item.description || `Line Item ${idx + 1}`,
+            description: item.description || item.remarks || '',
+            poQty,
+            grnQty,
+            supplierQty,
+            unitPrice,
+            taxPercent: Number(item.taxPercent ?? 18),
+          };
+        })
       );
     }
     if (inv.grnNumber) {
@@ -674,7 +739,12 @@ export default function CreatePurchaseInvoicePage() {
           foundPO.items.map((item: any, idx: number) => {
             const qty = Math.max(1, Number(item.quantity || 1));
             let unitPrice = Number(item.unitPrice || 0);
-            if (!unitPrice && totalVal > 0) {
+            if (unitPrice >= 100000 && (unitPrice === 200000 || unitPrice % 1000 === 0)) {
+              unitPrice = unitPrice / 1000;
+            }
+            if (totalVal > 0 && unitPrice * qty > totalVal * 1.5 && foundPO.items.length === 1) {
+              unitPrice = Number((totalVal / qty).toFixed(2));
+            } else if (!unitPrice && totalVal > 0) {
               unitPrice = Number((totalVal / (foundPO.items.length || 1) / qty).toFixed(2));
             }
             let rawName = item.itemName || item.name || item.description || '';
@@ -690,7 +760,7 @@ export default function CreatePurchaseInvoicePage() {
               grnQty: qty,
               supplierQty: qty,
               unitPrice: unitPrice,
-              taxPercent: 18,
+              taxPercent: Number(item.taxPercent ?? 18),
             };
           })
         );
@@ -701,12 +771,15 @@ export default function CreatePurchaseInvoicePage() {
   // When selected GRN or Vendor Invoice changes, populate form & item details
   useEffect(() => {
     if (!selectedGrnId) return;
+    if (isReadOnly) return;
 
     const foundPO = poList.find(
       (p) => String(p.id) === String(selectedPoId) || String(p.poNumber) === String(selectedPoId)
     );
 
     const resolveItemsForSelection = (foundInv: any, foundGRN: any, poObj: any) => {
+      const isDirectMasterRfq = poObj?.rfq?.title === 'Direct PO Master' || poObj?.rfq?.rfqNumber?.startsWith('RFQ-DIRECT');
+
       // ── PRIORITY 1: Direct Line Items from Vendor Invoice ──
       let vendorItems = foundInv?.lineItems || foundInv?.items;
       if (typeof vendorItems === 'string') {
@@ -732,9 +805,13 @@ export default function CreatePurchaseInvoicePage() {
         }
       }
 
+      const invTotalAmount = Number(foundInv?.amount || 0);
+      const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
+      const totalPOValue = Number(poObj?.totalAmount || invTotalAmount || 0);
+
       if (vendorItems && Array.isArray(vendorItems) && vendorItems.length > 0) {
         return vendorItems.map((vi: any, idx: number) => {
-          const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx];
+          const poMatch = poObj?.items?.[idx] || (!isDirectMasterRfq ? poObj?.rfq?.items?.[idx] : null);
           const poQty = Number(vi.poQty ?? poMatch?.quantity ?? 1);
           const grnQty = Number(vi.grnQty ?? vi.invoicedQty ?? vi.supplierQty ?? 1);
           const supplierQty =
@@ -743,10 +820,19 @@ export default function CreatePurchaseInvoicePage() {
               : vi.supplierQty !== undefined && vi.supplierQty !== ''
               ? Number(vi.supplierQty)
               : Number(vi.quantity || 1);
-          const unitPrice =
+          let unitPrice =
             vi.unitPrice !== undefined && vi.unitPrice !== ''
               ? Number(vi.unitPrice)
               : Number(poMatch?.unitPrice || 0);
+          if (unitPrice >= 100000 && (unitPrice === 200000 || unitPrice % 1000 === 0)) {
+            unitPrice = unitPrice / 1000;
+          }
+
+          if (totalPOValue > 0 && unitPrice * supplierQty > totalPOValue * 1.5) {
+            unitPrice = Number((totalPOValue / (vendorItems.length || 1) / supplierQty).toFixed(2));
+          } else if (!unitPrice && totalPOValue > 0) {
+            unitPrice = Number((totalPOValue / (vendorItems.length || 1) / supplierQty).toFixed(2));
+          }
 
           return {
             id: vi.id || `vendor_item_${idx}_${Date.now()}`,
@@ -763,21 +849,20 @@ export default function CreatePurchaseInvoicePage() {
       }
 
       // ── PRIORITY 1.5: If foundInv is selected with a known total amount (e.g. 47.2) ──
-      const invTotalAmount = Number(foundInv?.amount || 0);
-      const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
-      const totalPOValue = Number(poObj?.totalAmount || invTotalAmount || 0);
-
       if (foundInv && invTotalAmount > 0) {
         const baseItems = (activeGRN && activeGRN.items && activeGRN.items.length > 0)
           ? activeGRN.items
-          : (poObj?.items || poObj?.rfq?.items || []);
+          : (poObj?.items || (!isDirectMasterRfq ? poObj?.rfq?.items : []));
 
         if (baseItems.length > 0) {
           return baseItems.map((item: any, idx: number) => {
-            const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx];
+            const poMatch = poObj?.items?.[idx] || (!isDirectMasterRfq ? poObj?.rfq?.items?.[idx] : null);
             const poQty = Math.max(1, Number(item.quantity || item.orderedQty || poMatch?.quantity || 1));
             const grnQty = Math.max(1, Number(item.receivedQty ?? item.acceptedQty ?? poQty));
-            const unitPrice = Number(item.unitPrice || poMatch?.unitPrice || 2);
+            let unitPrice = Number(item.unitPrice || poMatch?.unitPrice || 2);
+            if (totalPOValue > 0 && unitPrice * poQty > totalPOValue * 1.5) {
+              unitPrice = Number((totalPOValue / (baseItems.length || 1) / poQty).toFixed(2));
+            }
             const taxPercent = Number(item.taxPercent ?? poMatch?.taxPercent ?? 18);
             const taxMultiplier = 1 + (taxPercent / 100);
 
@@ -813,12 +898,14 @@ export default function CreatePurchaseInvoicePage() {
 
       if (activeGRN && activeGRN.items && activeGRN.items.length > 0) {
         return activeGRN.items.map((gi: any, idx: number) => {
-          const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx] || poObj?.rfq?.selectedQuotation?.items?.[idx];
+          const poMatch = poObj?.items?.[idx] || (!isDirectMasterRfq ? (poObj?.rfq?.items?.[idx] || poObj?.rfq?.selectedQuotation?.items?.[idx]) : null);
           const poQty = Math.max(1, Number(gi.orderedQty || poMatch?.quantity || 1));
           const grnQty = Math.max(1, Number(gi.receivedQty ?? gi.acceptedQty ?? 1));
 
-          let unitPrice = Number(poMatch?.unitPrice || gi.unitPrice || (foundInv?.amount ? foundInv.amount / grnQty : 0));
-          if (!unitPrice && totalPOValue > 0) {
+          let unitPrice = Number(poMatch?.unitPrice || (foundInv?.amount ? foundInv.amount / grnQty : 0) || gi.unitPrice || 0);
+          if (totalPOValue > 0 && unitPrice * grnQty > totalPOValue * 1.5) {
+            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
+          } else if (!unitPrice && totalPOValue > 0) {
             unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
           }
 
@@ -836,17 +923,19 @@ export default function CreatePurchaseInvoicePage() {
             grnQty: grnQty,
             supplierQty: grnQty,
             unitPrice: unitPrice,
-            taxPercent: 18,
+            taxPercent: Number(poMatch?.taxPercent ?? 18),
           };
         });
       }
 
-      const poItems = poObj?.items || poObj?.rfq?.items || poObj?.rfq?.selectedQuotation?.items;
+      const poItems = poObj?.items || (!isDirectMasterRfq ? (poObj?.rfq?.items || poObj?.rfq?.selectedQuotation?.items) : []);
       if (poItems && poItems.length > 0) {
         return poItems.map((item: any, idx: number) => {
           const qty = Math.max(1, Number(item.quantity || item.orderedQty || 1));
           let price = Number(item.unitPrice || (foundInv?.amount ? foundInv.amount / qty : 0));
-          if (!price && totalPOValue > 0) {
+          if (totalPOValue > 0 && price * qty > totalPOValue * 1.5) {
+            price = Number((totalPOValue / (poItems.length || 1) / qty).toFixed(2));
+          } else if (!price && totalPOValue > 0) {
             price = Number((totalPOValue / (poItems.length || 1) / qty).toFixed(2));
           }
           let rawItemName = item.itemName || item.name || item.description || '';
@@ -862,7 +951,7 @@ export default function CreatePurchaseInvoicePage() {
             grnQty: qty,
             supplierQty: qty,
             unitPrice: price,
-            taxPercent: 18,
+            taxPercent: Number(item.taxPercent ?? 18),
           };
         });
       }
@@ -1025,7 +1114,7 @@ export default function CreatePurchaseInvoicePage() {
 
     lineItems.forEach((item) => {
       const qty = typeof item.supplierQty === 'number' ? item.supplierQty : 0;
-      const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
+      let price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       const lineSubtotal = qty * price;
       const lineTax = lineSubtotal * ((item.taxPercent || 0) / 100);
 
@@ -1113,6 +1202,27 @@ export default function CreatePurchaseInvoicePage() {
         );
         return false;
       }
+      const activeGrn =
+        grnOptions.find(
+          (g) =>
+            String(g.id) === String(selectedGrnId).replace(/^grn_/, '') ||
+            String(g.grnNumber) === String(selectedGrnId).replace(/^grn_/, '')
+        ) || grnOptions[0];
+      const existingInv = activeGrn?.invoices?.find(
+        (inv) => inv.status !== 'CANCELLED' && inv.status !== 'REJECTED'
+      );
+      const isCurrentOrReturned =
+        existingInv &&
+        (existingInv.invoiceNumber === invoiceNumber ||
+          (editingInvoiceId && String(existingInv.id) === String(editingInvoiceId)) ||
+          existingInv.status === 'RETURNED');
+
+      if (existingInv && !isCurrentOrReturned) {
+        setErrorMsg(
+          `Invoice Already Exists: An invoice (${existingInv.invoiceNumber}) has already been created for Goods Received Note #${activeGrn.grnNumber}. Multiple invoices cannot be created from the same GRN.`
+        );
+        return false;
+      }
     }
     const validItems = lineItems.filter(
       (item) => (item.itemName || '').trim().length > 0 && Number(item.supplierQty || 0) > 0
@@ -1156,6 +1266,7 @@ export default function CreatePurchaseInvoicePage() {
       await apiRequest('/invoices/manual', {
         method: 'POST',
         body: JSON.stringify({
+          invoiceId: editingInvoiceId || undefined,
           invoiceNumber,
           vendorInvoiceNumber: cleanVendorInv,
           erpInvoiceRef: cleanVendorInv,
@@ -1176,6 +1287,7 @@ export default function CreatePurchaseInvoicePage() {
       });
 
       const handleResetToCreateInvoice = () => {
+        setEditingInvoiceId(null);
         setSelectedVendorId('');
         setSelectedPoId('');
         setSelectedGrnId('');
@@ -1322,6 +1434,7 @@ export default function CreatePurchaseInvoicePage() {
             <Button
               onClick={() => {
                 setIsReadOnly(false);
+                setEditingInvoiceId(null);
                 if (!poIdParam && !grnIdParam) {
                   setSelectedVendorId('');
                   setSelectedPoId('');

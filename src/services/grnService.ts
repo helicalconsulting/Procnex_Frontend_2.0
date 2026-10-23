@@ -69,6 +69,12 @@ export interface GoodsReceivedNote {
     status: string;
     vendor?: { id: string; name: string; email: string };
   };
+  invoices?: Array<{
+    id: string;
+    invoiceNumber: string;
+    status: string;
+    amount?: number;
+  }>;
 }
 
 const MOCK_GRNS: GoodsReceivedNote[] = [];

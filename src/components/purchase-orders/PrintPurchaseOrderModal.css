@@ -175,24 +175,34 @@
 
 .ppo-sheet__meta-table {
   margin-top: 12px;
-  border-collapse: collapse;
+  border-collapse: collapse !important;
+  border: none !important;
   font-size: 13px;
 }
 
-.ppo-sheet__meta-table td {
-  padding: 3px 8px;
+.ppo-sheet__meta-table td,
+.ppo-sheet__meta-table th {
+  padding: 3px 8px !important;
+  border: none !important;
+  border-right: none !important;
+  border-left: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  background: transparent !important;
 }
 
 .ppo-sheet__meta-label {
   color: #64748b;
   font-weight: 600;
   text-align: right;
+  white-space: nowrap;
 }
 
 .ppo-sheet__meta-val {
   color: #0f172a;
   font-weight: 700;
   text-align: right;
+  white-space: nowrap;
 }
 
 /* Parties */

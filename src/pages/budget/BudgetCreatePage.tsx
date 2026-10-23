@@ -20,7 +20,7 @@ import { budgetApi, type CreateBudgetLineInput } from '../../api/budgetApi';
 import { PageFrame, PageLead } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Input, Select } from '../../components/ui/input';
 
 export default function BudgetCreatePage() {
   const navigate = useNavigate();
@@ -201,40 +201,40 @@ export default function BudgetCreatePage() {
         <button
           type="button"
           onClick={() => setActiveStep(1)}
-          className={`py-2.5 rounded-xl flex items-center justify-center gap-2 transition ${
+          className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-2 min-w-0 transition ${
             activeStep === 1
               ? 'bg-card text-foreground shadow-xs border border-border font-bold'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">1</span>
-          <span>Header (A)</span>
+          <span className="w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">1</span>
+          <span className="truncate">Header (A)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveStep(2)}
-          className={`py-2.5 rounded-xl flex items-center justify-center gap-2 transition ${
+          className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-2 min-w-0 transition ${
             activeStep === 2
               ? 'bg-card text-foreground shadow-xs border border-border font-bold'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">2</span>
-          <span>Lines & Dimensions (B, C)</span>
+          <span className="w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">2</span>
+          <span className="truncate">Lines & Dimensions (B, C)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveStep(3)}
-          className={`py-2.5 rounded-xl flex items-center justify-center gap-2 transition ${
+          className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-2 min-w-0 transition ${
             activeStep === 3
               ? 'bg-card text-foreground shadow-xs border border-border font-bold'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">3</span>
-          <span>Rules & Approvals (D, E, H)</span>
+          <span className="w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">3</span>
+          <span className="truncate">Rules & Approvals (D, E, H)</span>
         </button>
       </div>
 
@@ -249,77 +249,77 @@ export default function BudgetCreatePage() {
       {activeStep === 1 && (
         <Card className="p-6 border-border/80 shadow-sm space-y-6">
           <div className="border-b border-border/60 pb-3">
-            <h3 className="text-sm font-bold text-foreground">
+            <h3 className="text-base font-semibold text-foreground">
               Section A: Budget Header & Financial Setup
             </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               Specify budgeting boundaries, currency, accounting treatment, and planning dates.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
-                Budget Name *
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Budget Name <span className="text-destructive font-normal">*</span>
               </label>
               <Input
                 type="text"
                 value={budgetName}
                 onChange={(e) => setBudgetName(e.target.value)}
                 placeholder="e.g. FY2026 Commercial Banking OPEX"
-                className="h-10 text-xs rounded-xl"
+                className="h-10 text-sm rounded-xl"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
-                Budget Code *
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Budget Code <span className="text-destructive font-normal">*</span>
               </label>
               <Input
                 type="text"
                 value={budgetCode}
                 onChange={(e) => setBudgetCode(e.target.value)}
-                className="h-10 text-xs rounded-xl font-mono"
+                className="h-10 text-sm rounded-xl"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Budget Type
               </label>
-              <select
+              <Select
                 value={budgetType}
                 onChange={(e) => setBudgetType(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 text-sm rounded-xl"
               >
                 <option value="OPEX">OPEX (Operating Expenditure)</option>
                 <option value="CAPEX">CAPEX (Capital Expenditure)</option>
                 <option value="PROJECT">Project Spend</option>
                 <option value="DONOR_GRANT">Donor / Grant Funded</option>
-              </select>
+              </Select>
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
-                Fiscal Year *
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Fiscal Year <span className="text-destructive font-normal">*</span>
               </label>
               <Input
                 type="text"
                 value={fiscalYear}
                 onChange={(e) => setFiscalYear(e.target.value)}
                 placeholder="e.g. FY2026"
-                className="h-10 text-xs rounded-xl"
+                className="h-10 text-sm rounded-xl"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
-                Base Currency (Single Budget Currency) *
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Base Currency (Single Budget Currency) <span className="text-destructive font-normal">*</span>
               </label>
-              <select
+              <Select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-input bg-card text-foreground font-semibold focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 text-sm rounded-xl"
               >
                 <option value="KES">KES — Kenya Shilling</option>
                 <option value="UGX">UGX — Uganda Shilling</option>
@@ -330,97 +330,97 @@ export default function BudgetCreatePage() {
                 <option value="CDF">CDF — Congolese Franc</option>
                 <option value="AED">AED — UAE Dirham</option>
                 <option value="USD">USD — US Dollar (Donor / Regional)</option>
-              </select>
+              </Select>
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Period Granularity
               </label>
-              <select
+              <Select
                 value={periodGranularity}
                 onChange={(e) => setPeriodGranularity(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 text-sm rounded-xl"
               >
                 <option value="QUARTERLY">Quarterly (Q1, Q2, Q3, Q4)</option>
                 <option value="MONTHLY">Monthly (M1 – M12)</option>
                 <option value="SEMI_ANNUAL">Semi-Annual (H1, H2)</option>
                 <option value="ANNUAL">Annual (Lump sum)</option>
-              </select>
+              </Select>
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Start Date
               </label>
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="h-10 text-xs rounded-xl"
+                className="h-10 text-sm rounded-xl"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 End Date
               </label>
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="h-10 text-xs rounded-xl"
+                className="h-10 text-sm rounded-xl"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 VAT / Tax Treatment
               </label>
-              <select
+              <Select
                 value={vatTreatment}
                 onChange={(e) => setVatTreatment(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 text-sm rounded-xl"
               >
                 <option value="EXCLUSIVE">Exclusive of VAT</option>
                 <option value="INCLUSIVE">Inclusive of VAT</option>
                 <option value="EXEMPT">Exempt / Zero-rated</option>
-              </select>
+              </Select>
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Funding Source
               </label>
-              <select
+              <Select
                 value={fundingSource}
                 onChange={(e) => setFundingSource(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 text-sm rounded-xl"
               >
                 <option value="INTERNAL_REVENUE">Internal Revenue / Operational Cashflow</option>
                 <option value="COMMERCIAL_LOAN">Commercial Bank Loan</option>
                 <option value="DONOR_GRANT">Donor Grant / Development Partner</option>
                 <option value="EQUITY">Equity Financing</option>
-              </select>
+              </Select>
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 FX Source
               </label>
-              <select
+              <Select
                 value={fxSource}
                 onChange={(e) => setFxSource(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 text-sm rounded-xl"
               >
                 <option value="LIVE_MARKET">Live Market Rates (open.er-api.com)</option>
                 <option value="FIXED_PLANNING_RATE">Fixed Planning Rate</option>
                 <option value="CENTRAL_BANK">Central Bank Official Rate</option>
-              </select>
+              </Select>
             </div>
 
             <div>
-              <label className="block font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 ERP Reference Code (Optional)
               </label>
               <Input
@@ -428,7 +428,7 @@ export default function BudgetCreatePage() {
                 value={erpReference}
                 onChange={(e) => setErpReference(e.target.value)}
                 placeholder="e.g. SAP-2026-BDG"
-                className="h-10 text-xs rounded-xl"
+                className="h-10 text-sm rounded-xl"
               />
             </div>
           </div>
@@ -472,7 +472,7 @@ export default function BudgetCreatePage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[900px]">
+            <table className="w-full text-left text-xs min-w-[900px] table-divided">
               <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/70">
                 <tr>
                   <th className="px-3 py-2.5 w-24">Line Code</th>
@@ -496,7 +496,7 @@ export default function BudgetCreatePage() {
                         type="text"
                         value={line.lineCode}
                         onChange={(e) => updateLineField(idx, 'lineCode', e.target.value)}
-                        className="h-8 text-xs font-mono"
+                        className="h-8 text-xs"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -523,7 +523,7 @@ export default function BudgetCreatePage() {
                         value={line.glAccountCode}
                         onChange={(e) => updateLineField(idx, 'glAccountCode', e.target.value)}
                         placeholder="e.g. GL-5100"
-                        className="h-8 text-xs font-mono"
+                        className="h-8 text-xs"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -624,41 +624,41 @@ export default function BudgetCreatePage() {
       {activeStep === 3 && (
         <Card className="p-6 border-border/80 shadow-sm space-y-6">
           <div className="border-b border-border/60 pb-3">
-            <h3 className="text-sm font-bold text-foreground">
+            <h3 className="text-base font-semibold text-foreground">
               Screen 2: Control Rules & Multi-Tier Approvals
             </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               Set automated tolerance thresholds and lifecycle document checkpoints.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Section D: Control Level */}
-            <div className="p-4 rounded-xl bg-muted/40 border border-border/60 space-y-3">
-              <h4 className="font-bold text-foreground flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-muted/40 border border-border/60 space-y-4">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Sliders className="size-4 text-primary" />
-                Section D: Control Level & Tolerance
+                <span>Section D: Control Level & Tolerance</span>
               </h4>
 
               <div>
-                <label className="block font-semibold text-foreground mb-1.5">
-                  Default Control Level *
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Default Control Level <span className="text-destructive font-normal">*</span>
                 </label>
-                <select
+                <Select
                   value={controlLevel}
                   onChange={(e) => setControlLevel(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl border border-input bg-card text-foreground font-semibold focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-10 text-sm rounded-xl"
                 >
                   <option value="HARD_STOP">Hard Stop — Opens Exception Approval Modal</option>
                   <option value="SOFT_WARNING">Soft Warning — Requires Written Override Justification</option>
                   <option value="ADVISORY">Advisory — Informational Banner Only</option>
                   <option value="NONE">None — Tracking Only</option>
-                </select>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-foreground mb-1.5">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Tolerance %
                   </label>
                   <Input
@@ -667,11 +667,11 @@ export default function BudgetCreatePage() {
                     max="100"
                     value={tolerancePercent}
                     onChange={(e) => setTolerancePercent(Number(e.target.value))}
-                    className="h-10 text-xs"
+                    className="h-10 text-sm rounded-xl"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-foreground mb-1.5">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Tolerance Cap ({currency})
                   </label>
                   <Input
@@ -679,7 +679,7 @@ export default function BudgetCreatePage() {
                     min="0"
                     value={toleranceCap}
                     onChange={(e) => setToleranceCap(Number(e.target.value))}
-                    className="h-10 text-xs"
+                    className="h-10 text-sm rounded-xl"
                   />
                 </div>
               </div>
@@ -687,11 +687,11 @@ export default function BudgetCreatePage() {
 
             {/* Section E: Check Points */}
             <div className="p-4 rounded-xl bg-muted/40 border border-border/60 space-y-3">
-              <h4 className="font-bold text-foreground flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <FileCheck className="size-4 text-primary" />
-                Section E: Lifecycle Check Points
+                <span>Section E: Lifecycle Check Points</span>
               </h4>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Choose which documents validate against budget availability:
               </p>
 
@@ -713,7 +713,7 @@ export default function BudgetCreatePage() {
                       }
                       className="rounded border-input text-primary shadow-xs focus:ring-primary size-4"
                     />
-                    <span className="text-xs text-foreground font-medium">{label}</span>
+                    <span className="text-sm text-foreground font-medium">{label}</span>
                   </label>
                 ))}
               </div>
@@ -721,16 +721,16 @@ export default function BudgetCreatePage() {
           </div>
 
           {/* Section H: Multi-Tier Approval Summary */}
-          <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs">
-            <h4 className="font-bold text-primary flex items-center gap-2">
+          <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-2">
+            <h4 className="text-sm font-semibold text-primary flex items-center gap-2">
               <ShieldCheck className="size-4" />
-              Section H: Multi-Tier Approval Routing (Level 1 &rarr; 2 &rarr; 3)
+              <span>Section H: Multi-Tier Approval Routing (Level 1 &rarr; 2 &rarr; 3)</span>
             </h4>
-            <p className="text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Submitting this budget for approval will trigger the sequential approval chain:
               <br />
-              <strong className="text-foreground">Level 1 (Dept Head)</strong> &rarr; <strong className="text-foreground">Level 2 (Finance Manager)</strong> &rarr; <strong className="text-foreground">Level 3 (CFO / Board)</strong>.
-              Upon final Level 3 approval, status automatically becomes <strong className="text-emerald-600 dark:text-emerald-400">ACTIVE</strong>.
+              <strong className="text-foreground font-semibold">Level 1 (Dept Head)</strong> &rarr; <strong className="text-foreground font-semibold">Level 2 (Finance Manager)</strong> &rarr; <strong className="text-foreground font-semibold">Level 3 (CFO / Board)</strong>.
+              Upon final Level 3 approval, status automatically becomes <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">ACTIVE</strong>.
             </p>
           </div>
 

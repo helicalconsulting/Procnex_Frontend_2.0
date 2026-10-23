@@ -83,7 +83,7 @@ export function printElementInIframe(element: HTMLElement, title = 'Document'): 
           body * {
             visibility: visible !important;
           }
-          .ppi-sheet, .ppo-sheet, .bpv-sheet {
+          .ppi-sheet, .ppo-sheet, .bpv-sheet, .pdn-sheet, .pgrn-sheet {
             display: block !important;
             visibility: visible !important;
             position: static !important;

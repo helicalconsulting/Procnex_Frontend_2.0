@@ -179,9 +179,12 @@ export default function CreatePaymentVoucherPage() {
       });
 
       const mapped = rawPayments.map((p) => {
+        let pAmount = Number(p.amount || 0);
+        let pGross = p.grossAmount ? Number(p.grossAmount) : undefined;
+
         const pStatusUpper = String(p.status || '').toUpperCase();
         if (pStatusUpper === 'DRAFT') {
-          return { ...p, status: 'DRAFT' as const };
+          return { ...p, amount: pAmount, grossAmount: pGross, status: 'DRAFT' as const };
         }
 
         const pIdNorm = normalize(p.id);
@@ -233,6 +236,8 @@ export default function CreatePaymentVoucherPage() {
 
         return {
           ...p,
+          amount: pAmount,
+          grossAmount: pGross,
           status,
         };
       });
@@ -412,10 +417,8 @@ export default function CreatePaymentVoucherPage() {
   const [selectionMode, setSelectionMode] = useState<'single' | 'multiple'>('multiple');
   const [vendorInvoices, setVendorInvoices] = useState<VendorInvoiceItem[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState<boolean>(false);
-  // Invoice Entry Mode: null = not selected yet, 'AUTO_FILL' = fetch from DB, 'MANUAL' = user types manually
-  const [invoiceEntryMode, setInvoiceEntryMode] = useState<'AUTO_FILL' | 'MANUAL' | null>(
-    () => (vendorParam || invoiceRefParam || amountParam) ? 'AUTO_FILL' : null
-  );
+  // Invoice Entry Mode: 'AUTO_FILL' = fetch from DB (default), 'MANUAL' = user types manually
+  const [invoiceEntryMode, setInvoiceEntryMode] = useState<'AUTO_FILL' | 'MANUAL' | null>('AUTO_FILL');
 
   // Load invoices & GRNs when vendor is selected or creation starts (only when AUTO_FILL mode)
   useEffect(() => {
@@ -487,41 +490,51 @@ export default function CreatePaymentVoucherPage() {
           const invNum = String(inv.invoiceNumber || '').trim().toLowerCase();
           const invStatus = (inv.status || '').toUpperCase();
 
-          // 1. Approval Check: Only APPROVED / POSTED invoices can be vouchered
-          const isApproved =
-            invStatus === 'APPROVED' ||
-            invStatus === 'POSTED' ||
-            invStatus === 'READY_FOR_PAYMENT' ||
-            invStatus === 'PAYMENT_PENDING' ||
-            invStatus === 'VERIFIED';
-          if (!isApproved) return false;
+          // If editing a specific voucher, don't filter out its own attached invoices
+          const isAttachedToThisVoucher = Boolean(
+            voucherNumber && (
+              (inv.paymentId && (inv.paymentId === voucherNumber || String(inv.paymentId) === voucherNumber)) ||
+              (vouchersList.find((p) => p.paymentId === voucherNumber || String(p.id) === voucherNumber)?.invoices?.some((vi) => vi.invoiceId === inv.id || vi.invoiceNumber === inv.invoiceNumber))
+            )
+          );
 
-          // 2. Paid / Settled Check
-          const isStatusPaid =
-            invStatus === 'PAID' ||
-            invStatus === 'VOUCHERED' ||
-            invStatus === 'SETTLED' ||
-            invStatus === 'PROCESSED';
-          const isAmountPaid =
-            (Number(inv.paidAmount) || 0) > 0 &&
-            Number(inv.paidAmount) >= Number(inv.amount || 0);
+          if (!isAttachedToThisVoucher) {
+            // 1. Approval Check: Only APPROVED / POSTED invoices can be vouchered
+            const isApproved =
+              invStatus === 'APPROVED' ||
+              invStatus === 'POSTED' ||
+              invStatus === 'READY_FOR_PAYMENT' ||
+              invStatus === 'PAYMENT_PENDING' ||
+              invStatus === 'VERIFIED';
+            if (!isApproved) return false;
 
-          if (isStatusPaid || isAmountPaid) return false;
+            // 2. Paid / Settled Check
+            const isStatusPaid =
+              invStatus === 'PAID' ||
+              invStatus === 'VOUCHERED' ||
+              invStatus === 'SETTLED' ||
+              invStatus === 'PROCESSED';
+            const isAmountPaid =
+              (Number(inv.paidAmount) || 0) > 0 &&
+              Number(inv.paidAmount) >= Number(inv.amount || 0);
 
-          // 3. Already Vouchered Check
-          if (invId && voucheredInvoiceKeys.has(invId)) return false;
-          if (invNum && voucheredInvoiceKeys.has(invNum)) return false;
+            if (isStatusPaid || isAmountPaid) return false;
 
-          // Check if invoice number is contained in any active voucher's invoice reference string
-          const isAlreadyInVoucher = allKnownPayments.some((p) => {
-            if (voucherNumber && (p.paymentId === voucherNumber || String(p.id) === voucherNumber)) return false;
-            const pStatus = (p.status || '').toUpperCase();
-            if (pStatus === 'REJECTED' || pStatus === 'CANCELLED') return false;
-            if (!p.invoiceRef) return false;
-            const refLower = p.invoiceRef.toLowerCase();
-            return invNum && refLower.includes(invNum);
-          });
-          if (isAlreadyInVoucher) return false;
+            // 3. Already Vouchered Check
+            if (invId && voucheredInvoiceKeys.has(invId)) return false;
+            if (invNum && voucheredInvoiceKeys.has(invNum)) return false;
+
+            // Check if invoice number is contained in any active voucher's invoice reference string
+            const isAlreadyInVoucher = allKnownPayments.some((p) => {
+              if (voucherNumber && (p.paymentId === voucherNumber || String(p.id) === voucherNumber)) return false;
+              const pStatus = (p.status || '').toUpperCase();
+              if (pStatus === 'REJECTED' || pStatus === 'CANCELLED') return false;
+              if (!p.invoiceRef) return false;
+              const refLower = p.invoiceRef.toLowerCase();
+              return invNum && refLower.includes(invNum);
+            });
+            if (isAlreadyInVoucher) return false;
+          }
 
           return true;
         });
@@ -532,13 +545,14 @@ export default function CreatePaymentVoucherPage() {
           // If a vendor is selected or passed by name, filter to that vendor's invoices if needed
           const filteredInvs = (selectedVendorId || vendorName)
             ? unvoucheredInvoices.filter((inv) => {
+                const vIdMatch = selectedVendorId && (inv.vendorId === selectedVendorId || (inv.vendor as any)?.id === selectedVendorId);
                 const vNameMatch = vendorName && inv.vendorName && inv.vendorName.toLowerCase().includes(vendorName.toLowerCase());
                 const invRefMatch = qInvoiceRef && (inv.invoiceNumber === qInvoiceRef || qInvoiceRef.includes(inv.invoiceNumber));
-                return !selectedVendorId ? (vNameMatch || invRefMatch) : true;
+                return selectedVendorId ? (vIdMatch || vNameMatch) : (vNameMatch || invRefMatch);
               })
-            : unvoucheredInvoices;
+            : (qInvoiceRef ? unvoucheredInvoices.filter(inv => inv.invoiceNumber === qInvoiceRef) : (voucherNumber ? unvoucheredInvoices : []));
 
-          const rawBaseInvoices = filteredInvs.length > 0 ? filteredInvs : unvoucheredInvoices;
+          const rawBaseInvoices = (selectedVendorId || vendorName || qInvoiceRef || voucherNumber) ? filteredInvs : [];
           const seenInvKeys = new Set<string>();
           const baseInvoices = rawBaseInvoices.filter((inv) => {
             const k = String(inv.invoiceNumber || inv.id || '').trim().toLowerCase();
@@ -636,8 +650,8 @@ export default function CreatePaymentVoucherPage() {
                 const orderedQty = Number(li.quantity ?? li.qty ?? 10);
                 const receivedQty = Number(li.receivedQty ?? li.acceptedQty ?? (isDisc ? Math.max(0, orderedQty - 2) : orderedQty));
                 const shortfallQty = Math.max(0, orderedQty - receivedQty);
-                const unitPrice = Number(li.unitPrice ?? li.rate ?? li.price ?? (li.total && orderedQty > 0 ? li.total / orderedQty : (inv.amount / (orderedQty || 1))));
-                const orderedValue = Number(li.total ?? (orderedQty * unitPrice));
+                let unitPrice = Number(li.unitPrice ?? li.rate ?? li.price ?? (li.total && orderedQty > 0 ? li.total / orderedQty : (inv.amount / (orderedQty || 1))));
+                const orderedValue = Number(li.total || (orderedQty * unitPrice));
                 const receivedValue = receivedQty * unitPrice;
                 const shortfallValue = shortfallQty * unitPrice;
 
@@ -663,12 +677,13 @@ export default function CreatePaymentVoucherPage() {
                 });
               });
             } else if (inv.amount > 0) {
+              let rawInvAmt = typeof inv.amount === 'number' ? inv.amount : (Number(inv.amount) || 0);
               const isDisc = inv.threeWayMatch === 'DISCREPANCY' || inv.threeWayMatch === 'MISMATCH';
               const orderedQty = 10;
               const receivedQty = isDisc ? 8 : 10;
               const shortfallQty = Math.max(0, orderedQty - receivedQty);
-              const unitPrice = inv.amount / orderedQty;
-              const orderedValue = inv.amount;
+              const unitPrice = rawInvAmt / orderedQty;
+              const orderedValue = rawInvAmt;
               const receivedValue = receivedQty * unitPrice;
               const shortfallValue = shortfallQty * unitPrice;
 
@@ -710,14 +725,18 @@ export default function CreatePaymentVoucherPage() {
 
             const isMatchingParam = qInvoiceRef && (inv.invoiceNumber === qInvoiceRef || qInvoiceRef.includes(inv.invoiceNumber));
 
+            let invCleanAmount = typeof inv.amount === 'number' ? inv.amount : (Number(inv.amount) || 0);
+            const invPaid = typeof inv.paidAmount === 'number' ? inv.paidAmount : (Number(inv.paidAmount) || 0);
+            const invBalance = Math.max(0, invCleanAmount - invPaid);
+
             return {
               id: String(inv.id || idx),
               invoiceNumber: rawInvNum,
               poNumber: poNum,
               grnNumber: grnDisplayNumber,
-              amount: typeof inv.amount === 'number' ? inv.amount : (Number(inv.amount) || 0),
-              paidAmount: typeof inv.paidAmount === 'number' ? inv.paidAmount : (Number(inv.paidAmount) || 0),
-              balanceDue: Math.max(0, (typeof inv.amount === 'number' ? inv.amount : Number(inv.amount) || 0) - (Number(inv.paidAmount) || 0)),
+              amount: invCleanAmount,
+              paidAmount: invPaid,
+              balanceDue: invBalance,
               dueDate: (() => {
                 const raw = inv.dueDate || (inv as any).due_date;
                 if (typeof raw === 'string' && raw.trim()) return raw.trim().slice(0, 10);
@@ -732,7 +751,7 @@ export default function CreatePaymentVoucherPage() {
               })(),
               threeWayMatch: finalMatch,
               selected: Boolean(isMatchingParam || idx === 0),
-              paymentAmount: Math.max(0, (typeof inv.amount === 'number' ? inv.amount : Number(inv.amount) || 0) - (Number(inv.paidAmount) || 0)),
+              paymentAmount: invBalance,
               // Store GRN qty, amount, and items for Section 03 discrepancy detection
               grnOrderedQty: totalOrdered > 0 ? totalOrdered : undefined,
               grnReceivedQty: totalOrdered > 0 ? totalReceived : undefined,
@@ -785,9 +804,47 @@ export default function CreatePaymentVoucherPage() {
           ];
         }
 
+        // If voucherNumber is being edited and has attached invoices, ensure they are in mappedInvoices and marked selected
+        if (voucherNumber) {
+          const currentV = (vouchersList || []).find((p) => p.paymentId === voucherNumber || String(p.id) === voucherNumber);
+          if (currentV?.invoices && currentV.invoices.length > 0) {
+            currentV.invoices.forEach((vInv, vIdx) => {
+              const matchIdx = mappedInvoices.findIndex(
+                (m) =>
+                  (m.id && vInv.invoiceId && m.id === vInv.invoiceId) ||
+                  (m.invoiceNumber && vInv.invoiceNumber && m.invoiceNumber.toLowerCase() === vInv.invoiceNumber.toLowerCase())
+              );
+              if (matchIdx >= 0) {
+                mappedInvoices[matchIdx] = {
+                  ...mappedInvoices[matchIdx],
+                  selected: true,
+                  paymentAmount: vInv.amount ?? mappedInvoices[matchIdx].paymentAmount,
+                };
+              } else {
+                mappedInvoices.unshift({
+                  id: vInv.invoiceId || `v_inv_${vIdx}_${Date.now()}`,
+                  invoiceNumber: vInv.invoiceNumber || '',
+                  poNumber: vInv.poNumber || '',
+                  grnNumber: vInv.grnNumber || '',
+                  amount: vInv.amount || 0,
+                  paidAmount: 0,
+                  balanceDue: vInv.amount || 0,
+                  dueDate: '',
+                  invoiceDate: vInv.invoiceDate || '',
+                  threeWayMatch: (vInv.threeWayMatch as any) || 'MATCHED',
+                  selected: true,
+                  paymentAmount: vInv.amount || 0,
+                });
+              }
+            });
+          }
+        }
+
         setVendorInvoices(mappedInvoices);
         if (mappedInvoices.length > 0) {
-          updateTotalsFromInvoices(mappedInvoices);
+          if (!voucherNumber) {
+            updateTotalsFromInvoices(mappedInvoices);
+          }
         }
       } catch (_err) {
         if (isMounted) setVendorInvoices([]);
@@ -1179,7 +1236,7 @@ export default function CreatePaymentVoucherPage() {
     setPurpose('');
     setAttachments([]);
     setVendorInvoices([]);
-    setInvoiceEntryMode(null);
+    setInvoiceEntryMode('AUTO_FILL');
     setTdsPercent(0);
     setIsCreating(true);
   };
@@ -1191,8 +1248,8 @@ export default function CreatePaymentVoucherPage() {
     setSuccessMsg(null);
     setVoucherNumber(v.paymentId || '');
     setInvoiceRef(v.invoiceRef || '');
-    if (v.currency) setCurrency(v.currency);
-    setGrossAmount(typeof v.amount === 'number' ? v.amount : (typeof v.grossAmount === 'number' ? v.grossAmount : ''));
+    let editAmount = typeof v.amount === 'number' ? v.amount : (typeof v.grossAmount === 'number' ? v.grossAmount : '');
+    setGrossAmount(editAmount);
     if (v.method) setPaymentMethod(v.method);
     if (v.remarks) setRemarks(v.remarks);
     if (v.purpose) setPurpose(v.purpose);
@@ -1234,9 +1291,9 @@ export default function CreatePaymentVoucherPage() {
       setIfscCode(v.ifscCode || '');
     }
 
-    // Invoices / breakdown setup
+    // Invoices / breakdown setup: default to AUTO_FILL
+    setInvoiceEntryMode('AUTO_FILL');
     if (v.invoices && v.invoices.length > 0) {
-      setInvoiceEntryMode('MANUAL');
       setVendorInvoices(
         v.invoices.map((inv, idx) => ({
           id: inv.invoiceId || `inv_${idx}_${Date.now()}`,
@@ -1253,8 +1310,6 @@ export default function CreatePaymentVoucherPage() {
           paymentAmount: inv.amount || 0,
         }))
       );
-    } else if (v.invoiceRef) {
-      setInvoiceEntryMode('MANUAL');
     }
 
     // Load attachments if present
@@ -1520,8 +1575,10 @@ export default function CreatePaymentVoucherPage() {
 
   // Open voucher document modal for viewing
   const handleViewVoucherDoc = (voucher: Payment) => {
-    const vSubtotal = (voucher as any).subtotal || (voucher.grossAmount ? voucher.grossAmount : voucher.amount);
-    const vTaxAmount = (voucher as any).taxAmount || 0;
+    let vAmount = Number(voucher.amount || 0);
+    let vGross = Number(voucher.grossAmount || voucher.amount || 0);
+    let vSubtotal = Number((voucher as any).subtotal || (voucher.grossAmount ? voucher.grossAmount : voucher.amount) || 0);
+    let vTaxAmount = Number((voucher as any).taxAmount || 0);
     const vTaxPercent = (voucher as any).taxPercent !== undefined ? (voucher as any).taxPercent : 18;
 
     let voucherItems = voucher.items;
@@ -1557,18 +1614,19 @@ export default function CreatePaymentVoucherPage() {
       subtotal: vSubtotal,
       taxPercent: vTaxPercent,
       taxAmount: vTaxAmount,
-      grossAmount: voucher.grossAmount || voucher.amount,
-      tdsAmount: voucher.tdsAmount || 0,
-      netAmount: voucher.amount,
+      grossAmount: vGross || vAmount,
+      tdsAmount: voucher.tdsAmount ? Number(voucher.tdsAmount) : 0,
+      netAmount: vAmount,
       currency: companyDefaultCurrency,
       matchStatus: voucher.remarks?.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
       discrepancyReason: voucher.remarks,
       items: voucherItems || undefined,
       invoices: voucher.invoices || undefined,
       invoiceIds: voucher.invoiceIds || undefined,
-      poNumbers: (voucher as any).poNumbers || undefined,
+      poNumbers: (voucher as any).poNumbers || (voucher.invoiceRef?.includes('PO:') ? [voucher.invoiceRef.split('PO:')[1]?.trim()] : undefined),
       grnNumbers: (voucher as any).grnNumbers || undefined,
       attachments: voucher.attachments || undefined,
+      approvers: (voucher as any).approvers || (voucher as any).levels || undefined,
     });
   };
 
@@ -2246,10 +2304,10 @@ export default function CreatePaymentVoucherPage() {
                   <button
                     type="button"
                     className="cpv-mode-btn"
-                    onClick={() => { setInvoiceEntryMode(null); setVendorInvoices([]); setGrossAmount(''); setInvoiceRef(''); }}
+                    onClick={() => handleSelectInvoiceMode(invoiceEntryMode === 'AUTO_FILL' ? 'MANUAL' : 'AUTO_FILL')}
                     style={{ fontSize: 11, color: 'var(--text-secondary)' }}
                   >
-                    ↩ Change Mode
+                    {invoiceEntryMode === 'AUTO_FILL' ? '✏️ Switch to Manual' : '🔗 Switch to Auto-Fill'}
                   </button>
                   <button
                     type="button"
@@ -2596,6 +2654,16 @@ export default function CreatePaymentVoucherPage() {
               {vendorInvoices.length === 0 ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
                   <p>{selectedVendorId ? 'No open database invoices found for this supplier.' : 'Select a supplier above to auto-load invoices.'}</p>
+                  {selectedVendorId && (
+                    <button
+                      type="button"
+                      className="cpv-btn cpv-btn--secondary"
+                      onClick={() => handleSelectInvoiceMode('MANUAL')}
+                      style={{ marginTop: 12, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Edit3 size={13} /> Switch to Manual Invoice Entry
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="cpv-inv-table-wrap">

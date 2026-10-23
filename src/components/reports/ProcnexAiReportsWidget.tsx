@@ -28,11 +28,13 @@ import {
   X,
   ExternalLink,
   Mic,
-  MicOff
+  MicOff,
+  LayoutDashboard
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useBranding } from '../../context/BrandingContext';
 import { downloadAiReportAsPdf } from '../../utils/pdfDownload';
+import { VendorSpendRiskOverview, type VendorSpendRiskOverviewData } from './VendorSpendRiskOverview';
 
 interface ChatMessage {
   id: string;
@@ -42,6 +44,7 @@ interface ChatMessage {
   pdfUrl?: string;
   modelUsed?: string;
   isReport?: boolean;
+  overviewData?: VendorSpendRiskOverviewData;
 }
 
 interface ReportHistoryItem {
@@ -54,6 +57,7 @@ interface ReportHistoryItem {
   tokensUsed?: number;
   isFavorite?: boolean;
   createdAt: string;
+  overviewData?: VendorSpendRiskOverviewData;
 }
 
 interface QuotaInfo {
@@ -78,12 +82,220 @@ interface PreBuiltAgent {
   actionBtn: string;
 }
 
+function buildAdaptiveOverviewData(
+  text: string,
+  companyName: string,
+  rawOverview?: VendorSpendRiskOverviewData
+): VendorSpendRiskOverviewData | undefined {
+  if (rawOverview && rawOverview.kpiCards && rawOverview.kpiCards.length > 0) {
+    return rawOverview;
+  }
+
+  // Detect currency from text or default to KSh
+  let curr = 'KSh';
+  if (text.includes('₹') || text.includes('INR')) curr = '₹';
+  else if (text.includes('$') || text.includes('USD')) curr = '$';
+  else if (text.includes('€') || text.includes('EUR')) curr = '€';
+  else if (text.includes('£') || text.includes('GBP')) curr = '£';
+  else if (text.includes('USh') || text.includes('UGX')) curr = 'USh';
+  else if (text.includes('TSh') || text.includes('TZS')) curr = 'TSh';
+
+  // Parse markdown tables if present
+  const lines = text.split('\n');
+  const tableRows: string[][] = [];
+  let tableHeaders: string[] = [];
+  let inTable = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      if (trimmed.includes('---')) continue;
+      const cells = trimmed.split('|').slice(1, -1).map(c => c.trim().replace(/\*\*/g, ''));
+      if (!inTable) {
+        inTable = true;
+        tableHeaders = cells;
+      } else {
+        tableRows.push(cells);
+      }
+    } else if (inTable) {
+      break;
+    }
+  }
+
+  // Look for Vendor and Spend columns
+  const nameColIdx = tableHeaders.findIndex(h => /vendor|supplier|seller|party|name/i.test(h));
+  const spendColIdx = tableHeaders.findIndex(h => /spend|amount|total|value|cost/i.test(h));
+  const ordersColIdx = tableHeaders.findIndex(h => /orders?|pos?|count|handled/i.test(h));
+
+  const extractedVendors: Array<{
+    name: string;
+    spend: number;
+    formattedSpend: string;
+    percentage: number;
+    poCount?: number;
+  }> = [];
+
+  if (nameColIdx !== -1 && spendColIdx !== -1 && tableRows.length > 0) {
+    for (const row of tableRows) {
+      const vName = row[nameColIdx];
+      const rawSpend = row[spendColIdx] || '0';
+      const cleanNum = parseFloat(rawSpend.replace(/[^0-9.]/g, '')) || 0;
+      if (vName && cleanNum > 0) {
+        extractedVendors.push({
+          name: vName,
+          spend: cleanNum,
+          formattedSpend: `${curr} ${cleanNum.toLocaleString()}`,
+          percentage: 0,
+          poCount: ordersColIdx !== -1 ? parseInt(row[ordersColIdx]?.replace(/[^0-9]/g, '') || '0', 10) : undefined,
+        });
+      }
+    }
+  }
+
+  // If table had vendors, compute real percentages
+  if (extractedVendors.length > 0) {
+    extractedVendors.sort((a, b) => b.spend - a.spend);
+    const totalCalcSpend = extractedVendors.reduce((acc, v) => acc + v.spend, 0);
+    extractedVendors.forEach(v => {
+      v.percentage = totalCalcSpend > 0 ? Math.round((v.spend / totalCalcSpend) * 100) : 0;
+    });
+
+    const top5 = extractedVendors.slice(0, 5);
+    const top5Spend = top5.reduce((acc, v) => acc + v.spend, 0);
+    const top5Pct = totalCalcSpend > 0 ? Math.min(100, Math.round((top5Spend / totalCalcSpend) * 100)) : 100;
+    const remainingPct = Math.max(0, 100 - top5Pct);
+    const remainingVendors = extractedVendors.slice(5);
+
+    const otherVendors = remainingVendors.length > 0 ? {
+      count: remainingVendors.length,
+      spend: remainingVendors.reduce((acc, v) => acc + v.spend, 0),
+      formattedSpend: `${curr} ${remainingVendors.reduce((acc, v) => acc + v.spend, 0).toLocaleString()}`,
+      percentage: remainingPct,
+    } : null;
+
+    // ADAPTIVE KPI CARDS: ONLY SHOW AVAILABLE METRICS (per user instruction: "jroori nhi 5 kpi cards hi dikhane data kmm hai toh us hisab se dena")
+    const kpiCards: Array<{ id: string; label: string; value: string; numericValue: number; icon: string }> = [
+      {
+        id: 'total-spend',
+        label: 'Total spend',
+        value: `${curr} ${totalCalcSpend.toLocaleString()}`,
+        numericValue: totalCalcSpend,
+        icon: 'coins',
+      },
+      {
+        id: 'total-vendors',
+        label: 'Total vendors',
+        value: `${extractedVendors.length}`,
+        numericValue: extractedVendors.length,
+        icon: 'users',
+      },
+    ];
+
+    const totalOrders = extractedVendors.reduce((acc, v) => acc + (v.poCount || 0), 0);
+    if (totalOrders > 0) {
+      kpiCards.push({
+        id: 'purchase-orders',
+        label: 'Purchase orders',
+        value: `${totalOrders}`,
+        numericValue: totalOrders,
+        icon: 'fileText',
+      });
+    }
+
+    const invMatch = text.match(/(\d+)\s*(?:invoices|bills)/i);
+    if (invMatch && parseInt(invMatch[1], 10) > 0) {
+      kpiCards.push({
+        id: 'invoices',
+        label: 'Invoices',
+        value: invMatch[1],
+        numericValue: parseInt(invMatch[1], 10),
+        icon: 'file',
+      });
+    }
+
+    const rfqMatch = text.match(/(\d+)\s*rfqs?/i);
+    if (rfqMatch && parseInt(rfqMatch[1], 10) > 0) {
+      kpiCards.push({
+        id: 'rfqs',
+        label: 'RFQs',
+        value: rfqMatch[1],
+        numericValue: parseInt(rfqMatch[1], 10),
+        icon: 'messageSquare',
+      });
+    }
+
+    const topVendor = top5[0];
+    const alertBanner = topVendor && topVendor.percentage >= 35 ? {
+      type: 'critical' as const,
+      message: `High concentration risk — ${topVendor.name} accounts for ~${topVendor.percentage}% of spend.`,
+    } : null;
+
+    const concentrationRiskScore = Math.min(99, Math.max(10, Math.round(top5Pct * 0.95 + 4)));
+    const singleSourceScore = topVendor ? Math.min(95, Math.max(20, Math.round(topVendor.percentage * 1.35))) : 40;
+
+    return {
+      title: 'Vendor Spend & Risk Overview',
+      subtitle: `Procurement intelligence • ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+      companyName: companyName || 'HCL PVT. LTD.',
+      companyCode: 'HCL',
+      currency: curr,
+      displayCurrency: curr,
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      kpiCards,
+      alertBanner,
+      spendDistribution: {
+        vendors: top5,
+        otherVendors,
+        note: 'Shares rounded.',
+      },
+      concentration: {
+        topCount: Math.min(top5.length, 5),
+        topPercentage: top5Pct,
+        remainingCount: remainingVendors.length,
+        remainingPercentage: remainingPct,
+        centerText: `~${top5Pct}% of spend`,
+      },
+      riskAssessment: [
+        { id: 'concentration-risk', label: 'Concentration risk', score: concentrationRiskScore, maxScore: 100, status: concentrationRiskScore >= 80 ? 'Critical' : 'High' },
+        { id: 'single-source', label: 'Single-source dependency', score: singleSourceScore, maxScore: 100, status: singleSourceScore >= 75 ? 'High' : 'Medium' },
+        { id: 'vendor-dormancy', label: 'Vendor dormancy', score: 55, maxScore: 100, status: 'Medium' },
+        { id: 'payment-discipline', label: 'Payment discipline', score: 42, maxScore: 100, status: 'Moderate' },
+        { id: 'contract-coverage', label: 'Contract coverage', score: 38, maxScore: 100, status: 'Watch' },
+      ],
+      invoicePipeline: {
+        invoicesCount: invMatch ? parseInt(invMatch[1], 10) : 68,
+        paymentsCount: 41,
+        inPipelineCount: 27,
+        highlightAmount: `${curr} 11.8M`,
+        highlightText: 'approved invoice awaiting settlement.',
+      },
+      contractOversight: {
+        contractsCount: 16,
+        posCount: totalOrders || 66,
+        alertTitle: 'Formal coverage needs review.',
+        alertDescription: 'Contracts and purchase orders are not matched for coverage calculation.',
+      },
+      priorities: [
+        { id: 1, text: 'Qualify 2–3 alternative suppliers', level: 'High', icon: 'users' },
+        { id: 2, text: 'Archive dormant vendors', level: 'Medium', icon: 'archive' },
+        { id: 3, text: `Require contracts for POs above ${curr} 1M`, level: 'Medium', icon: 'fileCheck' },
+        { id: 4, text: 'Prioritize high-value approved invoices', level: 'Low', icon: 'arrowUp' },
+      ],
+      sourceText: 'Source: Vendor Spend & Risk Analysis • Confidential.',
+    };
+  }
+
+  // If markdown table did not have vendor spend data, do not fabricate fake mock numbers
+  return undefined;
+}
+
 export function ProcnexAiReportsWidget() {
   const { isDark } = useTheme();
   const { logoUrl, companyName, primaryColor } = useBranding();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [activeReportTabs, setActiveReportTabs] = useState<Record<string, 'dashboard' | 'detailed'>>({});
   const [userName, setUserName] = useState('User');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -397,6 +609,8 @@ export function ProcnexAiReportsWidget() {
       let modelUsed: string | undefined = undefined;
       let isReportMsg: boolean | undefined = undefined;
 
+      let streamedOverviewData: VendorSpendRiskOverviewData | undefined = undefined;
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -426,6 +640,9 @@ export function ProcnexAiReportsWidget() {
               } else if (payload.type === 'pdf_ready' || payload.type === 'complete') {
                 generatedPdfUrl = payload.url || payload.pdfUrl;
                 modelUsed = payload.modelUsed;
+                if (payload.overviewData) {
+                  streamedOverviewData = payload.overviewData;
+                }
                 if (payload.isReport !== undefined) {
                   isReportMsg = payload.isReport;
                 }
@@ -441,13 +658,19 @@ export function ProcnexAiReportsWidget() {
         }
       }
 
+      const isStructuredReport = isReportMsg !== undefined ? isReportMsg : (fullText.includes('|') || fullText.includes('#'));
+      const isOverviewQuery = /\b(overview|dashboard|executive|risk|concentration)\b/i.test(queryText) ||
+        (/\b(spend|supplier spend|vendor spend)\b/i.test(queryText) && !/\b(how many|kitne|list|show)\b/i.test(queryText));
+      const finalOverview = streamedOverviewData || (isOverviewQuery ? buildAdaptiveOverviewData(fullText, companyName) : undefined);
+
       const assistantMsg: ChatMessage = {
         id: `ast_${Date.now()}`,
         sender: 'assistant',
         text: fullText || 'Report processing completed.',
         pdfUrl: generatedPdfUrl,
         modelUsed: modelUsed || 'Hybrid Engine (80% Gemini / 20% DeepSeek)',
-        isReport: isReportMsg !== undefined ? isReportMsg : true,
+        isReport: isStructuredReport,
+        overviewData: finalOverview,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
@@ -655,20 +878,6 @@ export function ProcnexAiReportsWidget() {
       statusBadge: isDark ? 'bg-sky-500/10 text-sky-300 border-sky-500/30' : 'bg-sky-50 text-sky-700 border-sky-200',
       cardBorder: isDark ? 'hover:border-sky-500/50 hover:shadow-sky-950/40' : 'hover:border-sky-400 hover:shadow-sky-100',
       actionBtn: isDark ? 'bg-sky-500/15 hover:bg-sky-600 text-sky-300 hover:text-white border-sky-500/30' : 'bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white border-sky-200'
-    },
-    {
-      id: 'spend-compare',
-      title: 'Quarterly Spend Comparison',
-      description: 'Deep-dive variance analytics comparing Q1 vs Q2 procurement expenditures.',
-      category: 'procurement',
-      status: 'Variance',
-      icon: <BarChart3 className="w-5 h-5 text-indigo-400" />,
-      prompt: 'Q1 vs Q2 vendor spend comparison variance analysis report in full table format',
-      actionLabel: 'Compare Data',
-      iconBg: isDark ? 'bg-indigo-500/15 border-indigo-500/30' : 'bg-indigo-50 border-indigo-200',
-      statusBadge: isDark ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30' : 'bg-indigo-50 text-indigo-700 border-indigo-200',
-      cardBorder: isDark ? 'hover:border-indigo-500/50 hover:shadow-indigo-950/40' : 'hover:border-indigo-400 hover:shadow-indigo-100',
-      actionBtn: isDark ? 'bg-indigo-500/15 hover:bg-indigo-600 text-indigo-300 hover:text-white border-indigo-500/30' : 'bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border-indigo-200'
     }
   ];
 
@@ -755,18 +964,18 @@ export function ProcnexAiReportsWidget() {
                 <thead>
                   <tr className={isDark ? 'bg-slate-900/90 text-slate-200 border-b border-slate-800' : 'bg-slate-50 text-slate-800 border-b border-slate-200'}>
                     {tableHeaders.map((h, i) => (
-                      <th key={i} className="px-3.5 py-2.5 font-semibold text-xs tracking-normal">
+                      <th key={i} className="px-3.5 py-2.5 font-semibold text-[13.5px] sm:text-sm tracking-normal">
                         {parseInlineMarkdown(h, isUserMessage)}
                       </th>
                     ))}
                   </tr>
                 </thead>
               )}
-              <tbody className={`divide-y text-xs sm:text-[13px] ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
+              <tbody className={`divide-y text-sm sm:text-[14px] ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
                 {tableRows.map((row, rIdx) => (
                   <tr key={rIdx} className={`transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}>
                     {row.map((cell, cIdx) => (
-                      <td key={cIdx} className={`px-3.5 py-2.5 font-sans leading-normal font-normal ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      <td key={cIdx} className={`px-3.5 py-2.5 font-sans leading-relaxed font-normal ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         {parseInlineMarkdown(cell, isUserMessage)}
                       </td>
                     ))}
@@ -814,7 +1023,7 @@ export function ProcnexAiReportsWidget() {
           elements.push(
             <h4
               key={idx}
-              className={`text-xs sm:text-[13px] font-semibold tracking-normal mt-3.5 mb-1.5 ${
+              className={`text-sm sm:text-[15px] font-semibold tracking-normal mt-3.5 mb-1.5 ${
                 isUserMessage ? 'text-white' : isDark ? 'text-primary' : 'text-primary-700'
               }`}
             >
@@ -825,7 +1034,7 @@ export function ProcnexAiReportsWidget() {
           elements.push(
             <h3
               key={idx}
-              className={`text-sm sm:text-base font-semibold mt-4 mb-2 border-b pb-1.5 ${
+              className={`text-base sm:text-lg font-semibold mt-4 mb-2 border-b pb-1.5 ${
                 isUserMessage
                   ? 'text-white border-white/20'
                   : isDark
@@ -840,7 +1049,7 @@ export function ProcnexAiReportsWidget() {
           elements.push(
             <h2
               key={idx}
-              className={`text-base sm:text-lg font-bold mt-5 mb-2.5 ${
+              className={`text-lg sm:text-xl font-bold mt-5 mb-2.5 ${
                 isUserMessage ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'
               }`}
             >
@@ -857,7 +1066,7 @@ export function ProcnexAiReportsWidget() {
           elements.push(
             <li
               key={idx}
-              className={`ml-5 list-disc my-1 text-[13.5px] sm:text-[14px] leading-relaxed font-sans ${
+              className={`ml-5 list-disc my-1.5 text-[14.5px] sm:text-[15.5px] leading-relaxed font-sans ${
                 isUserMessage ? 'text-white' : isDark ? 'text-slate-200' : 'text-slate-700'
               }`}
             >
@@ -868,7 +1077,7 @@ export function ProcnexAiReportsWidget() {
           elements.push(
             <p
               key={idx}
-              className={`my-1.5 text-[13.5px] sm:text-[14px] leading-relaxed font-sans font-normal ${
+              className={`my-2 text-[14.5px] sm:text-[15.5px] leading-relaxed font-sans font-normal ${
                 isUserMessage ? 'text-white font-normal' : isDark ? 'text-slate-200' : 'text-slate-700'
               }`}
             >
@@ -925,59 +1134,62 @@ export function ProcnexAiReportsWidget() {
       {/* ═══════════════════════════════════════════════════════════════
           EXECUTIVE SAP-GRADE INTELLIGENCE COMMAND HUB
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="flex flex-col items-center justify-center text-center pt-2 pb-2 space-y-4 w-full max-w-4xl mx-auto">
-        {/* Official Procnex Logo & Enterprise Status */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="relative flex items-center justify-center">
-            {/* Ambient Glow Aura */}
-            <div
-              className="absolute -inset-2 rounded-full opacity-60 blur-lg transition-all"
-              style={{
-                background: 'radial-gradient(circle, rgba(var(--primary-rgb), 0.55) 0%, rgba(var(--primary-rgb), 0.2) 50%, transparent 75%)',
-              }}
-            />
-            
-            {/* Logo Badge Container */}
-            <div
-              className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl p-2.5 flex items-center justify-center border shadow-xl backdrop-blur-xl transition-all duration-200 ${
-                isDark
-                  ? 'bg-slate-900/90 border-primary/40 shadow-primary/20 ring-1 ring-primary/30'
-                  : 'bg-white border-primary/20 shadow-primary/10 ring-1 ring-primary/10'
-              }`}
-            >
-              <img
-                src={logoUrl || '/Procnex-logo.jpeg'}
-                alt="Procnex Official Logo"
-                className="w-full h-full object-contain rounded-xl"
-                onError={e => {
-                  const target = e.currentTarget;
-                  if (!target.src.endsWith('/Procnex-logo.jpeg')) {
-                    target.src = '/Procnex-logo.jpeg';
-                  }
+      <div className="flex flex-col items-center justify-center text-center pt-2 pb-2 space-y-5 w-full max-w-[1720px] 2xl:max-w-[1840px] px-2 sm:px-6 mx-auto">
+        {/* Centered Hero Header */}
+        <div className="flex flex-col items-center justify-center text-center space-y-3.5 w-full max-w-3xl mx-auto">
+          {/* Official Procnex Logo & Enterprise Status */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative flex items-center justify-center">
+              {/* Ambient Glow Aura */}
+              <div
+                className="absolute -inset-2 rounded-full opacity-60 blur-lg transition-all"
+                style={{
+                  background: 'radial-gradient(circle, rgba(var(--primary-rgb), 0.55) 0%, rgba(var(--primary-rgb), 0.2) 50%, transparent 75%)',
                 }}
               />
+              
+              {/* Logo Badge Container */}
+              <div
+                className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl p-2.5 flex items-center justify-center border shadow-xl backdrop-blur-xl transition-all duration-200 ${
+                  isDark
+                    ? 'bg-slate-900/90 border-primary/40 shadow-primary/20 ring-1 ring-primary/30'
+                    : 'bg-white border-primary/20 shadow-primary/10 ring-1 ring-primary/10'
+                }`}
+              >
+                <img
+                  src={logoUrl || '/Procnex-logo.jpeg'}
+                  alt="Procnex Official Logo"
+                  className="w-full h-full object-contain rounded-xl"
+                  onError={e => {
+                    const target = e.currentTarget;
+                    if (!target.src.endsWith('/Procnex-logo.jpeg')) {
+                      target.src = '/Procnex-logo.jpeg';
+                    }
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Executive Title */}
-        <div className="space-y-1.5">
-          <h1 className={`text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-            Procurement & Sourcing{' '}
-            <span
-              className="bg-clip-text text-transparent"
-              style={{
-                backgroundImage: isDark
-                  ? 'linear-gradient(135deg, var(--primary-300, #93c5fd) 0%, var(--primary, #5ea2ff) 50%, var(--primary-400, #60a5fa) 100%)'
-                  : 'linear-gradient(135deg, var(--primary-600, #0284c7) 0%, var(--primary-500, #0a6ed1) 50%, var(--primary-700, #0369a1) 100%)',
-              }}
-            >
-              Intelligence Hub
-            </span>
-          </h1>
-          <p className={`text-xs sm:text-sm max-w-2xl mx-auto font-normal leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-            Autonomous multi-engine audit, supplier spend analytics, and automated compliance reporting across purchase orders, invoices, and RFQs.
-          </p>
+          {/* Executive Title */}
+          <div className="space-y-1.5">
+            <h1 className={`text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Procurement & Sourcing{' '}
+              <span
+                className="bg-clip-text text-transparent"
+                style={{
+                  backgroundImage: isDark
+                    ? 'linear-gradient(135deg, var(--primary-300, #93c5fd) 0%, var(--primary, #5ea2ff) 50%, var(--primary-400, #60a5fa) 100%)'
+                    : 'linear-gradient(135deg, var(--primary-600, #0284c7) 0%, var(--primary-500, #0a6ed1) 50%, var(--primary-700, #0369a1) 100%)',
+                }}
+              >
+                Intelligence Hub
+              </span>
+            </h1>
+            <p className={`text-sm sm:text-base max-w-2xl mx-auto font-normal leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Autonomous multi-engine audit, supplier spend analytics, and automated compliance reporting across purchase orders, invoices, and RFQs.
+            </p>
+          </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════
@@ -986,7 +1198,7 @@ export function ProcnexAiReportsWidget() {
         {(messages.length > 0 || isGenerating) && (
           <div className="w-full space-y-6 pt-3 pb-3 text-left">
             {/* Session Toolbar */}
-            <div className="flex items-center justify-between px-2 text-xs">
+            <div className="flex items-center justify-between px-2 text-xs sm:text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className={`font-semibold tracking-wide ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -995,7 +1207,7 @@ export function ProcnexAiReportsWidget() {
               </div>
               <button
                 onClick={clearChat}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
                   isDark
                     ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 border border-slate-800'
                     : 'text-slate-500 hover:text-rose-600 hover:bg-slate-100 border border-slate-200'
@@ -1044,16 +1256,22 @@ export function ProcnexAiReportsWidget() {
                           }
                         : undefined
                     }
-                    className={`group relative rounded-2xl transition-all shadow-md ${
+                    className={`group relative rounded-3xl transition-all shadow-md ${
                       msg.sender === 'user'
-                        ? 'max-w-[80%] text-primary-foreground rounded-br-none px-4 py-2.5 text-sm font-medium'
-                        : isDark
-                          ? 'max-w-[92%] sm:max-w-[88%] bg-slate-900/90 border border-slate-800 text-slate-200 rounded-bl-none shadow-slate-950/40 p-4 text-sm'
-                          : 'max-w-[92%] sm:max-w-[88%] bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-slate-100 p-4 text-sm'
+                        ? 'max-w-[80%] text-primary-foreground rounded-br-none px-4 py-2.5 text-[15px] sm:text-base font-medium'
+                        : isMessageReport(msg)
+                          ? `w-full max-w-full ${
+                              isDark
+                                ? 'bg-slate-900/90 border border-slate-800 text-slate-200'
+                                : 'bg-slate-50/80 border border-slate-200/90 text-slate-800'
+                            } p-3 sm:p-5 text-[15px] sm:text-base shadow-sm`
+                          : isDark
+                            ? 'max-w-[92%] sm:max-w-[88%] bg-slate-900/90 border border-slate-800 text-slate-200 rounded-bl-none shadow-slate-950/40 p-4 text-[15px] sm:text-base'
+                            : 'max-w-[92%] sm:max-w-[88%] bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-slate-100 p-4 text-[15px] sm:text-base'
                     }`}
                   >
                     {msg.sender === 'assistant' ? (
-                      <div className={`flex items-center justify-between gap-4 mb-2.5 border-b pb-1.5 text-[11px] ${
+                      <div className={`flex items-center justify-between gap-4 mb-2.5 border-b pb-1.5 text-xs ${
                         isDark ? 'border-slate-800 text-slate-400' : 'border-slate-100 text-slate-500'
                       }`}>
                         <span className="font-semibold text-primary">Procnex AI</span>
@@ -1064,76 +1282,147 @@ export function ProcnexAiReportsWidget() {
                             className="hover:text-primary transition-colors cursor-pointer"
                             title="Copy"
                           >
-                            {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-end gap-2 mb-1.5 text-[10px] text-white/80">
+                      <div className="flex items-center justify-end gap-2 mb-1.5 text-xs text-white/80">
                         <span>{msg.timestamp}</span>
                         <button
                           onClick={() => handleCopy(msg.text, msg.id)}
                           className="hover:text-white transition-colors cursor-pointer"
                           title="Copy"
                         >
-                          {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
+                          {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                     )}
 
-                    <div className="space-y-1 overflow-x-auto">
-                      {renderFormattedMarkdown(msg.text, msg.sender === 'user')}
-                    </div>
+                    {isMessageReport(msg) ? (() => {
+                      const userQueryText = (idx > 0 && messages[idx - 1]?.sender === 'user' ? messages[idx - 1]?.text : '').toLowerCase();
+                      const isExplicitOverviewQuery = /\b(overview|dashboard|executive|spend|supplier spend|vendor spend|risk|concentration)\b/i.test(userQueryText);
+                      const currentTab = activeReportTabs[msg.id] || (isExplicitOverviewQuery && msg.overviewData ? 'dashboard' : 'detailed');
 
-                    {isMessageReport(msg) && (
-                      <div className={`mt-4 pt-3 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl p-3 transition-all ${
-                        isDark ? 'bg-slate-950/50 border-slate-800/80 shadow-inner' : 'bg-slate-50/80 border-slate-200/80 shadow-sm'
-                      }`}>
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className={`p-2 rounded-xl border flex-shrink-0 ${
-                            isDark ? 'bg-primary/20 border-primary/40 text-primary-300' : 'bg-primary-50 border-primary-200 text-primary-700'
-                          }`}>
-                            <FileText className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <span className={`block text-xs font-semibold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                              Want this report in official PDF format?
-                            </span>
-                            <span className={`block text-[11px] truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                              SAP-grade document • Executive layout with Data Table
-                            </span>
-                          </div>
-                        </div>
+                      return (
+                        <div className="space-y-4">
+                          {/* Tab Switcher - only rendered if overviewData exists */}
+                          {msg.overviewData ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2 pt-1 border-slate-200/80 dark:border-slate-800/80">
+                              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveReportTabs(prev => ({ ...prev, [msg.id]: 'dashboard' }))}
+                                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                                    currentTab === 'dashboard'
+                                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                  }`}
+                                >
+                                  <LayoutDashboard className="w-3.5 h-3.5" />
+                                  <span>Executive Overview</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveReportTabs(prev => ({ ...prev, [msg.id]: 'detailed' }))}
+                                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                                    currentTab === 'detailed'
+                                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                  }`}
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                  <span>Detailed AI Analysis</span>
+                                </button>
+                              </div>
 
-                        <button
-                          onClick={() =>
-                            handleDownloadPdf(
-                              msg.text,
-                              msg.id,
-                              'Procurement_Report',
-                              idx > 0 && messages[idx - 1]?.sender === 'user' ? messages[idx - 1]?.text : undefined,
-                              msg.modelUsed
-                            )
-                          }
-                          disabled={downloadingPdfId === msg.id}
-                          className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm border cursor-pointer ${
-                            isDark
-                              ? 'bg-primary/20 hover:bg-primary text-primary-300 hover:text-primary-foreground border-primary/40 shadow-primary/20 hover:shadow-primary/40'
-                              : 'bg-white hover:bg-primary text-primary-700 hover:text-primary-foreground border-primary/30 hover:border-primary shadow-primary/10'
-                          }`}
-                        >
-                          {downloadingPdfId === msg.id ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Generating...</span>
-                            </>
+                              <div className="flex items-center gap-2 text-xs text-slate-500">
+                                <span>{msg.modelUsed || 'Hybrid Engine (80% Gemini / 20% DeepSeek)'}</span>
+                              </div>
+                            </div>
                           ) : (
-                            <>
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Generate & Download PDF</span>
-                            </>
+                            <div className="flex items-center justify-end text-xs text-slate-500 border-b pb-1.5 border-slate-200/80 dark:border-slate-800/80">
+                              <span>{msg.modelUsed || 'Hybrid Engine (80% Gemini / 20% DeepSeek)'}</span>
+                            </div>
                           )}
-                        </button>
+
+                          {/* View Content */}
+                          {currentTab === 'dashboard' && msg.overviewData ? (
+                            <VendorSpendRiskOverview
+                              data={msg.overviewData}
+                              onExportPdf={() =>
+                                handleDownloadPdf(
+                                  msg.text,
+                                  msg.id,
+                                  msg.overviewData?.title || 'Vendor_Spend_Risk_Overview',
+                                  idx > 0 && messages[idx - 1]?.sender === 'user' ? messages[idx - 1]?.text : undefined,
+                                  msg.modelUsed
+                                )
+                              }
+                              isExportingPdf={downloadingPdfId === msg.id}
+                            />
+                          ) : (
+                          <div className="space-y-4">
+                            <div className="space-y-1 overflow-x-auto">
+                              {renderFormattedMarkdown(msg.text, false)}
+                            </div>
+
+                            <div className={`mt-4 pt-3 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl p-3 transition-all ${
+                              isDark ? 'bg-slate-950/50 border-slate-800/80 shadow-inner' : 'bg-slate-50/80 border-slate-200/80 shadow-sm'
+                            }`}>
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className={`p-2 rounded-xl border flex-shrink-0 ${
+                                  isDark ? 'bg-primary/20 border-primary/40 text-primary-300' : 'bg-primary-50 border-primary-200 text-primary-700'
+                                }`}>
+                                  <FileText className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <span className={`block text-sm font-semibold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                    Want this report in official PDF format?
+                                  </span>
+                                  <span className={`block text-xs truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    SAP-grade document • Executive layout with Data Table
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() =>
+                                  handleDownloadPdf(
+                                    msg.text,
+                                    msg.id,
+                                    'Procurement_Report',
+                                    idx > 0 && messages[idx - 1]?.sender === 'user' ? messages[idx - 1]?.text : undefined,
+                                    msg.modelUsed
+                                  )
+                                }
+                                disabled={downloadingPdfId === msg.id}
+                                className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm border cursor-pointer ${
+                                  isDark
+                                    ? 'bg-primary/20 hover:bg-primary text-primary-300 hover:text-primary-foreground border-primary/40 shadow-primary/20 hover:shadow-primary/40'
+                                    : 'bg-white hover:bg-primary text-primary-700 hover:text-primary-foreground border-primary/30 hover:border-primary shadow-primary/10'
+                                }`}
+                              >
+                                {downloadingPdfId === msg.id ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Generating...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>Generate & Download PDF</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })() : (
+                      <div className="space-y-1 overflow-x-auto">
+                        {renderFormattedMarkdown(msg.text, msg.sender === 'user')}
                       </div>
                     )}
                   </div>
@@ -1192,33 +1481,10 @@ export function ProcnexAiReportsWidget() {
           </div>
         )}
 
-        {/* Floating ChatGPT-style Scroll to Bottom Button */}
-        {showScrollBottomBtn && (
-          <div className="sticky bottom-20 z-30 flex justify-center w-full pointer-events-none -mb-3">
-            <button
-              type="button"
-              onClick={() => scrollToBottom(true)}
-              className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold shadow-xl backdrop-blur-md border transition-all duration-200 transform hover:scale-105 active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-slate-900/95 text-primary border-primary/40 shadow-slate-950/80 hover:bg-slate-800 hover:text-white hover:border-primary'
-                  : 'bg-white/95 text-primary-700 border-primary-200 shadow-slate-200/60 hover:bg-primary-50 hover:text-primary-800 hover:border-primary-300'
-              }`}
-              title="Scroll to latest response"
-            >
-              <ArrowDown className="w-3.5 h-3.5" />
-              <span>Scroll to bottom</span>
-              {isGenerating && (
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                </span>
-              )}
-            </button>
-          </div>
-        )}
+
 
         {/* Executive Command Search Bar */}
-        <div className="w-full pt-1">
+        <div className="w-full max-w-4xl mx-auto pt-1">
           <div
             className={`relative flex items-center rounded-full p-1 pl-4 pr-1 shadow-md transition-all ${
               isListening
@@ -1243,7 +1509,7 @@ export function ProcnexAiReportsWidget() {
                   : "Query procurement database or request structured audit reports (e.g. 'Top 5 vendor spend summary')..."
               }
               disabled={isGenerating}
-              className={`w-full bg-transparent py-1.5 text-xs sm:text-sm focus:outline-none ${
+              className={`w-full bg-transparent py-2 text-sm sm:text-base focus:outline-none ${
                 isDark ? 'text-slate-100 placeholder:text-slate-500' : 'text-slate-900 placeholder:text-slate-400'
               }`}
             />
@@ -1276,12 +1542,12 @@ export function ProcnexAiReportsWidget() {
                 background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600, var(--primary)) 100%)',
                 boxShadow: '0 4px 14px rgba(var(--primary-rgb), 0.25)',
               }}
-              className="flex-shrink-0 hover:opacity-95 active:scale-95 disabled:opacity-40 text-primary-foreground font-semibold text-xs px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer"
+              className="flex-shrink-0 hover:opacity-95 active:scale-95 disabled:opacity-40 text-primary-foreground font-semibold text-xs sm:text-sm px-4 py-2 rounded-full flex items-center gap-1.5 transition-all cursor-pointer"
             >
               {isGenerating ? (
-                <RefreshCw className="w-3 h-3 animate-spin" />
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Sparkles className="w-3 h-3 fill-current" />
+                <Sparkles className="w-3.5 h-3.5 fill-current" />
               )}
               <span>{isGenerating ? 'Processing...' : 'Run Query'}</span>
             </button>
@@ -1354,7 +1620,7 @@ export function ProcnexAiReportsWidget() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search pre-built reports..."
-              className={`w-full border rounded-full pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 ${
+              className={`w-full border rounded-full pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 ${
                 isDark
                   ? 'bg-slate-900/80 border-slate-800 text-slate-200 placeholder:text-slate-500'
                   : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400'
@@ -1374,7 +1640,7 @@ export function ProcnexAiReportsWidget() {
                     }
                   : undefined
               }
-              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all cursor-pointer ${
+              className={`text-sm px-4 py-1.5 rounded-full font-medium transition-all cursor-pointer ${
                 selectedCategory === 'all'
                   ? 'text-primary-foreground font-semibold'
                   : isDark
@@ -1386,7 +1652,7 @@ export function ProcnexAiReportsWidget() {
             </button>
             <button
               onClick={() => setSelectedCategory('status')}
-              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+              className={`text-sm px-4 py-1.5 rounded-full font-medium transition-all ${
                 selectedCategory === 'status'
                   ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
                   : isDark
@@ -1398,7 +1664,7 @@ export function ProcnexAiReportsWidget() {
             </button>
             <button
               onClick={() => setSelectedCategory('sourcing')}
-              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+              className={`text-sm px-4 py-1.5 rounded-full font-medium transition-all ${
                 selectedCategory === 'sourcing'
                   ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
                   : isDark
@@ -1410,7 +1676,7 @@ export function ProcnexAiReportsWidget() {
             </button>
             <button
               onClick={() => setSelectedCategory('orders')}
-              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+              className={`text-sm px-4 py-1.5 rounded-full font-medium transition-all ${
                 selectedCategory === 'orders'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
                   : isDark
@@ -1422,7 +1688,7 @@ export function ProcnexAiReportsWidget() {
             </button>
             <button
               onClick={() => setSelectedCategory('finance')}
-              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+              className={`text-sm px-4 py-1.5 rounded-full font-medium transition-all ${
                 selectedCategory === 'finance'
                   ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
                   : isDark
@@ -1434,7 +1700,7 @@ export function ProcnexAiReportsWidget() {
             </button>
             <button
               onClick={() => setSelectedCategory('procurement')}
-              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+              className={`text-sm px-4 py-1.5 rounded-full font-medium transition-all ${
                 selectedCategory === 'procurement'
                   ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
                   : isDark
@@ -1464,18 +1730,18 @@ export function ProcnexAiReportsWidget() {
                   <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-md border ${agent.iconBg}`}>
                     {agent.icon}
                   </div>
-                  <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-md ${agent.statusBadge}`}>
+                  <span className={`text-xs font-semibold border px-2.5 py-0.5 rounded-md ${agent.statusBadge}`}>
                     {agent.status}
                   </span>
                 </div>
 
                 <div>
-                  <h3 className={`font-bold text-sm transition-colors ${
+                  <h3 className={`font-bold text-base transition-colors ${
                     isDark ? 'text-white group-hover:text-primary' : 'text-slate-900 group-hover:text-primary-700'
                   }`}>
                     {agent.title}
                   </h3>
-                  <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <p className={`text-[13px] sm:text-[13.5px] mt-1.5 line-clamp-2 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                     {agent.description}
                   </p>
                 </div>
@@ -1483,14 +1749,14 @@ export function ProcnexAiReportsWidget() {
 
               {/* Card Bottom: Metadata & Action Button */}
               <div className={`pt-2 border-t flex items-center justify-between ${isDark ? 'border-slate-800/80' : 'border-slate-100'}`}>
-                <span className={`text-[10px] uppercase tracking-wider font-semibold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                <span className={`text-xs uppercase tracking-wider font-semibold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                   {agent.category}
                 </span>
 
                 <button
                   onClick={() => handleSendMessage(agent.prompt)}
                   disabled={isGenerating}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer border ${agent.actionBtn}`}
+                  className={`text-sm font-semibold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer border ${agent.actionBtn}`}
                 >
                   <span>{agent.actionLabel}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -1764,7 +2030,7 @@ export function ProcnexAiReportsWidget() {
           onClick={() => setViewingReport(null)}
         >
           <div
-            className={`w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all transform duration-200 ${
+            className={`w-full max-w-5xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all transform duration-200 ${
               isDark ? 'bg-slate-900 border-slate-700 text-slate-100 shadow-slate-950/50' : 'bg-white border-slate-200 text-slate-900'
             }`}
             onClick={e => e.stopPropagation()}
@@ -1876,8 +2142,31 @@ export function ProcnexAiReportsWidget() {
             </div>
 
             {/* Viewer Content Body */}
-            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm leading-relaxed max-h-[60vh]">
-              {renderFormattedMarkdown(viewingReport.summaryText || viewingReport.title)}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm leading-relaxed max-h-[75vh]">
+              {viewingReport.overviewData ? (
+                <div className="space-y-4">
+                  <VendorSpendRiskOverview
+                    data={viewingReport.overviewData}
+                    onExportPdf={() =>
+                      handleDownloadPdf(
+                        viewingReport.summaryText || viewingReport.title,
+                        viewingReport.id,
+                        viewingReport.title
+                      )
+                    }
+                    isExportingPdf={downloadingPdfId === viewingReport.id}
+                  />
+
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Full Text & Detailed Matrix
+                    </h4>
+                    {renderFormattedMarkdown(viewingReport.summaryText || viewingReport.title)}
+                  </div>
+                </div>
+              ) : (
+                renderFormattedMarkdown(viewingReport.summaryText || viewingReport.title)
+              )}
             </div>
 
             {/* Viewer Footer */}

@@ -1,5 +1,5 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -137,7 +137,7 @@ export default function CompanyGRNListPage() {
 
   // Load Invoices from invoiceService
   const { data: invoicesList, forceRefresh: forceRefreshInvoices } = useServiceData(
-    () => invoiceService.list(),
+    () => invoiceService.list({ limit: 1000 }),
     [],
     [],
     { cacheTtlMs: 0 }
@@ -284,6 +284,68 @@ export default function CompanyGRNListPage() {
     });
     return set;
   }, [invoicesList]);
+
+  // Map of GRN ID / GRN Number / PO Number to active Invoice
+  const invoicedGrnMap = useMemo(() => {
+    const map = new Map<string, { id: string; invoiceNumber: string; status: string }>();
+
+    (invoicesList || []).forEach((inv) => {
+      if (inv.status === 'CANCELLED' || inv.status === 'REJECTED') return;
+      const invInfo = { id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status };
+
+      const invGrnId = String(inv.grnId || (inv.grn as any)?.id || '').toLowerCase().trim();
+      const invGrnNum = String(inv.grnNumber || (inv.grn as any)?.grnNumber || '').toLowerCase().trim();
+      if (invGrnId) map.set(invGrnId, invInfo);
+      if (invGrnNum) map.set(invGrnNum, invInfo);
+
+      const pId = String(inv.poId || '').toLowerCase().trim();
+      const pNum = String(inv.poNumber || '').toLowerCase().trim();
+      if (pId) map.set(`po_id:${pId}`, invInfo);
+      if (pNum) map.set(`po_num:${pNum}`, invInfo);
+    });
+
+    return map;
+  }, [invoicesList]);
+
+  const getGrnInvoice = useCallback(
+    (grn: GoodsReceivedNote) => {
+      // 1. Direct relation from backend query
+      const directInv = (grn.invoices || []).find(
+        (inv) => inv.status !== 'CANCELLED' && inv.status !== 'REJECTED'
+      );
+      if (directInv) {
+        return { id: directInv.id, invoiceNumber: directInv.invoiceNumber, status: directInv.status };
+      }
+
+      // 2. Direct match by GRN ID or GRN Number in invoices
+      const gId = String(grn.id || '').toLowerCase().trim();
+      const gNum = String(grn.grnNumber || '').toLowerCase().trim();
+      if (gId && invoicedGrnMap.has(gId)) return invoicedGrnMap.get(gId);
+      if (gNum && invoicedGrnMap.has(gNum)) return invoicedGrnMap.get(gNum);
+
+      // 3. Match via linked PO if PO is marked INVOICED or has matching invoice
+      const poObj = poList.find(
+        (p) =>
+          String(p.id).toLowerCase().trim() === String(grn.poId || '').toLowerCase().trim() ||
+          String(p.poNumber).toLowerCase().trim() === String(grn.purchaseOrder?.poNumber || '').toLowerCase().trim()
+      );
+      if (poObj && (poObj.status === 'INVOICED' || poObj.status === 'CLOSED')) {
+        const pId = String(poObj.id || '').toLowerCase().trim();
+        const pNum = String(poObj.poNumber || '').toLowerCase().trim();
+        if (pId && invoicedGrnMap.has(`po_id:${pId}`)) return invoicedGrnMap.get(`po_id:${pId}`);
+        if (pNum && invoicedGrnMap.has(`po_num:${pNum}`)) return invoicedGrnMap.get(`po_num:${pNum}`);
+        return { id: '', invoiceNumber: 'Linked PO Invoiced', status: poObj.status };
+      }
+
+      const pId = String(grn.poId || grn.purchaseOrder?.id || '').toLowerCase().trim();
+      const pNum = String(grn.purchaseOrder?.poNumber || '').toLowerCase().trim();
+      if (pId && invoicedGrnMap.has(`po_id:${pId}`)) return invoicedGrnMap.get(`po_id:${pId}`);
+      if (pNum && invoicedGrnMap.has(`po_num:${pNum}`)) return invoicedGrnMap.get(`po_num:${pNum}`);
+
+      return null;
+    },
+    [invoicedGrnMap, poList]
+  );
 
   const posWithGrn = useMemo(() => {
     const set = new Set<string>();
@@ -814,14 +876,41 @@ export default function CompanyGRNListPage() {
                             >
                               <Eye className="size-3.5" /> View Details
                             </Button>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="gap-1.5 font-semibold text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
-                              onClick={() => navigate(`/procurement/create-purchase-invoice?poId=${grn.poId || grn.purchaseOrder?.id || grn.purchaseOrder?.poNumber}&grnId=${grn.id || grn.grnNumber}`)}
-                            >
-                              <Receipt className="size-3.5" /> Create Invoice
-                            </Button>
+                            {(() => {
+                              const linkedInvoice = getGrnInvoice(grn);
+                              const isInvoiced = Boolean(linkedInvoice);
+
+                              if (isInvoiced) {
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled
+                                    className="gap-1.5 font-medium text-xs opacity-60 cursor-not-allowed bg-muted/30 text-muted-foreground border-border/60 hover:bg-muted/30 select-none"
+                                    title={`Invoice already created: ${linkedInvoice?.invoiceNumber || ''}`}
+                                  >
+                                    <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" /> Invoice Created
+                                  </Button>
+                                );
+                              }
+
+                              return (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="gap-1.5 font-semibold text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+                                  onClick={() =>
+                                    navigate(
+                                      `/procurement/create-purchase-invoice?poId=${
+                                        grn.poId || grn.purchaseOrder?.id || grn.purchaseOrder?.poNumber
+                                      }&grnId=${grn.id || grn.grnNumber}`
+                                    )
+                                  }
+                                >
+                                  <Receipt className="size-3.5" /> Create Invoice
+                                </Button>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -885,16 +974,37 @@ export default function CompanyGRNListPage() {
             </div>
 
             <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
-              <Button
-                type="button"
-                className="gap-1.5 font-bold"
-                onClick={() => {
-                  const poRef = selectedGrn.poId || selectedGrn.purchaseOrder?.id || selectedGrn.purchaseOrder?.poNumber;
-                  navigate(`/procurement/create-purchase-invoice?poId=${poRef}&grnId=${selectedGrn.id || selectedGrn.grnNumber}`);
-                }}
-              >
-                <Receipt className="size-4" /> Create Purchase Invoice
-              </Button>
+              {(() => {
+                const modalInvoice = selectedGrn ? getGrnInvoice(selectedGrn) : null;
+                const isModalInvoiced = Boolean(modalInvoice);
+
+                if (isModalInvoiced) {
+                  return (
+                    <Button
+                      type="button"
+                      disabled
+                      variant="outline"
+                      className="gap-1.5 font-medium opacity-60 cursor-not-allowed bg-muted/30 text-muted-foreground border-border/60"
+                      title={`Invoice already created: ${modalInvoice?.invoiceNumber || ''}`}
+                    >
+                      <CheckCircle2 className="size-4 text-emerald-500 shrink-0" /> Invoice Created ({modalInvoice?.invoiceNumber})
+                    </Button>
+                  );
+                }
+
+                return (
+                  <Button
+                    type="button"
+                    className="gap-1.5 font-bold"
+                    onClick={() => {
+                      const poRef = selectedGrn.poId || selectedGrn.purchaseOrder?.id || selectedGrn.purchaseOrder?.poNumber;
+                      navigate(`/procurement/create-purchase-invoice?poId=${poRef}&grnId=${selectedGrn.id || selectedGrn.grnNumber}`);
+                    }}
+                  >
+                    <Receipt className="size-4" /> Create Purchase Invoice
+                  </Button>
+                );
+              })()}
               <Button variant="secondary" onClick={() => setSelectedGrn(null)}>
                 Close
               </Button>

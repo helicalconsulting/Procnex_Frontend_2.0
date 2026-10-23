@@ -1,7 +1,7 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, FileText, Plus, Receipt, Search, Truck, XCircle, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, FileText, Plus, Receipt, Search, Truck, XCircle, ArrowRight, Printer, Eye } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
 import { TablePagination } from '@/components/shared/TablePagination';
@@ -16,6 +16,7 @@ import { vendorPortalService } from '../../services/vendorPortalService';
 import { dispatchNoteService, type DispatchNote } from '../../services/dispatchNoteService';
 import { getVendorPath } from '../../utils/tenantResolver';
 import { TableSkeleton } from '@/components/shared/Skeleton';
+import { PrintDispatchNoteModal } from '../../components/dispatch-notes/PrintDispatchNoteModal';
 
 export default function VendorInvoicesPage() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function VendorInvoicesPage() {
 
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
+  const [selectedDispatchForPrint, setSelectedDispatchForPrint] = useState<DispatchNote | null>(null);
   const { data: invoices, loading: invLoading, error: invError, forceRefresh: forceRefreshInvoices } = useServiceData(
     () => vendorPortalService.listInvoices(),
     [] as VendorInvoiceMock[],
@@ -196,7 +198,10 @@ export default function VendorInvoicesPage() {
     return filteredDispatches.slice(start, start + itemsPerPage);
   }, [filteredDispatches, currentPage, itemsPerPage]);
 
-  const amount = (value: number, fromCurrency?: string) => formatAmount(convert(value, fromCurrency || companyDefaultCurrency, displayCurrency), displayCurrency);
+  const amount = (value: number, fromCurrency?: string) => {
+    const v = Number(value || 0);
+    return formatAmount(convert(v, fromCurrency || companyDefaultCurrency, displayCurrency), displayCurrency);
+  };
   const formatDate = (date: string) => {
     if (!date) return '—';
     const d = new Date(date);
@@ -466,14 +471,25 @@ export default function VendorInvoicesPage() {
                             )}
                           </td>
                           <td className="px-4 py-3.5">
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
-                              className="gap-1 text-xs"
-                            >
-                              <Plus className="size-3" /> Invoice <ArrowRight className="size-3" />
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => setSelectedDispatchForPrint(dn)}
+                                className="gap-1 text-xs"
+                                title="View / Print Delivery Challan"
+                              >
+                                <Printer className="size-3 text-sky-600" /> Challan
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
+                                className="gap-1 text-xs"
+                              >
+                                <Plus className="size-3" /> Invoice <ArrowRight className="size-3" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -512,7 +528,15 @@ export default function VendorInvoicesPage() {
                       <div><dt className="text-muted-foreground">Dispatched Date</dt><dd className="mt-1 font-medium">{formatDate(dn.dispatchDate)}</dd></div>
                       <div><dt className="text-muted-foreground">Packages</dt><dd className="mt-1 font-medium">{dn.totalPackages || 1} pkg</dd></div>
                     </dl>
-                    <div className="mt-3 pt-3 border-t border-border/60 flex justify-end">
+                    <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedDispatchForPrint(dn)}
+                        className="gap-1 text-xs"
+                      >
+                        <Printer className="size-3 text-sky-600" /> View Challan
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -537,6 +561,13 @@ export default function VendorInvoicesPage() {
             />
           </>
         )
+      )}
+
+      {selectedDispatchForPrint && (
+        <PrintDispatchNoteModal
+          data={selectedDispatchForPrint}
+          onClose={() => setSelectedDispatchForPrint(null)}
+        />
       )}
     </PageFrame>
   );

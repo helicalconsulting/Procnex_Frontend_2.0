@@ -1154,22 +1154,71 @@ img {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Global Table Column Vertical Dividers
+   Document & Form Items Table Column Dividers
    ═══════════════════════════════════════════════════════════ */
-table {
+.po-doc__items-table,
+.ppi-table,
+.print-dispatch__table,
+.print-grn__table,
+.bpv-items-table,
+.table-bordered,
+.table-divided,
+.items-table {
   border-collapse: collapse;
 }
 
-table th:not(:last-child),
-table td:not(:last-child) {
-  border-right: 1px solid var(--border, #d6e0eb) !important;
+.po-doc__items-table th:not(:last-child),
+.po-doc__items-table td:not(:last-child),
+.ppi-table th:not(:last-child),
+.ppi-table td:not(:last-child),
+.print-dispatch__table th:not(:last-child),
+.print-dispatch__table td:not(:last-child),
+.print-grn__table th:not(:last-child),
+.print-grn__table td:not(:last-child),
+.bpv-items-table th:not(:last-child),
+.bpv-items-table td:not(:last-child),
+.table-bordered th:not(:last-child),
+.table-bordered td:not(:last-child),
+.table-divided th:not(:last-child),
+.table-divided td:not(:last-child),
+.items-table th:not(:last-child),
+.items-table td:not(:last-child) {
+  border-right: 1px solid var(--border, #d6e0eb);
 }
 
-[data-theme="dark"] table th:not(:last-child),
-[data-theme="dark"] table td:not(:last-child),
-.dark table th:not(:last-child),
-.dark table td:not(:last-child) {
-  border-right: 1px solid var(--border, #283548) !important;
+[data-theme="dark"] .po-doc__items-table th:not(:last-child),
+[data-theme="dark"] .po-doc__items-table td:not(:last-child),
+[data-theme="dark"] .ppi-table th:not(:last-child),
+[data-theme="dark"] .ppi-table td:not(:last-child),
+[data-theme="dark"] .print-dispatch__table th:not(:last-child),
+[data-theme="dark"] .print-dispatch__table td:not(:last-child),
+[data-theme="dark"] .print-grn__table th:not(:last-child),
+[data-theme="dark"] .print-grn__table td:not(:last-child),
+[data-theme="dark"] .bpv-items-table th:not(:last-child),
+[data-theme="dark"] .bpv-items-table td:not(:last-child),
+[data-theme="dark"] .table-bordered th:not(:last-child),
+[data-theme="dark"] .table-bordered td:not(:last-child),
+[data-theme="dark"] .table-divided th:not(:last-child),
+[data-theme="dark"] .table-divided td:not(:last-child),
+[data-theme="dark"] .items-table th:not(:last-child),
+[data-theme="dark"] .items-table td:not(:last-child),
+.dark .po-doc__items-table th:not(:last-child),
+.dark .po-doc__items-table td:not(:last-child),
+.dark .ppi-table th:not(:last-child),
+.dark .ppi-table td:not(:last-child),
+.dark .print-dispatch__table th:not(:last-child),
+.dark .print-dispatch__table td:not(:last-child),
+.dark .print-grn__table th:not(:last-child),
+.dark .print-grn__table td:not(:last-child),
+.dark .bpv-items-table th:not(:last-child),
+.dark .bpv-items-table td:not(:last-child),
+.dark .table-bordered th:not(:last-child),
+.dark .table-bordered td:not(:last-child),
+.dark .table-divided th:not(:last-child),
+.dark .table-divided td:not(:last-child),
+.dark .items-table th:not(:last-child),
+.dark .items-table td:not(:last-child) {
+  border-right: 1px solid var(--border, #283548);
 }
 
 /* ═══════════════════════════════════════════════════════════

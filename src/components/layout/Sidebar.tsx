@@ -333,7 +333,10 @@ export default function Sidebar({
         )}
       >
         <div
-          className="flex h-16 shrink-0 cursor-pointer items-center gap-3 border-b border-[var(--shell-border)] px-5"
+          className={cn(
+            'flex h-16 shrink-0 cursor-pointer items-center gap-3 border-b border-[var(--shell-border)] px-5 transition-[padding] duration-200',
+            collapsed && 'lg:justify-center lg:px-0',
+          )}
           onClick={() => {
             navigate(dashboardPath);
             onMobileClose();
@@ -357,7 +360,7 @@ export default function Sidebar({
           <span
             className={cn(
               'min-w-0 truncate text-[18px] font-semibold tracking-[-0.03em] text-[var(--shell-text)] transition-opacity',
-              collapsed && 'lg:pointer-events-none lg:opacity-0',
+              collapsed && 'lg:hidden lg:pointer-events-none lg:opacity-0',
             )}
           >
             {companyName}

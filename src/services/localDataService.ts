@@ -280,28 +280,33 @@ export const localDataService = {
     try {
       const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments?limit=1000');
       if (data.payments && Array.isArray(data.payments)) {
-        const mappedList = data.payments.map((p, idx) => ({
-          id: p.id || idx + 1,
-          paymentId: p.paymentNumber || p.paymentId || `PAY-${p.id}`,
-          vendor: p.vendorName || p.vendor || '—',
-          invoiceRef: p.invoiceRef || '—',
-          invoiceIds: p.invoiceIds || undefined,
-          invoices: p.invoices || undefined,
-          amount: Number(p.amount || 0),
-          method: p.method || 'NEFT',
-          status: p.status || 'PENDING',
-          paidAt: String(p.paidAt || p.scheduledAt || p.createdAt || '').slice(0, 10),
-          approvedBy: p.approvedBy || 'Pending Approval (Payments Workflow)',
-          remarks: p.remarks || p.comments || '',
-          bankName: p.bankName,
-          accountNumber: p.accountNumber,
-          ifscCode: p.ifscCode,
-          beneficiaryName: p.beneficiaryName,
-          purpose: p.purpose,
-          grossAmount: p.grossAmount ? Number(p.grossAmount) : undefined,
-          tdsAmount: p.tdsAmount ? Number(p.tdsAmount) : undefined,
-          items: p.items || undefined,
-        })) as Payment[];
+        const mappedList = data.payments.map((p, idx) => {
+          let amt = Number(p.amount || 0);
+          let gross = p.grossAmount ? Number(p.grossAmount) : undefined;
+
+          return {
+            id: p.id || idx + 1,
+            paymentId: p.paymentNumber || p.paymentId || `PAY-${p.id}`,
+            vendor: p.vendorName || p.vendor || '—',
+            invoiceRef: p.invoiceRef || '—',
+            invoiceIds: p.invoiceIds || undefined,
+            invoices: p.invoices || undefined,
+            amount: amt,
+            method: p.method || 'NEFT',
+            status: p.status || 'PENDING',
+            paidAt: String(p.paidAt || p.scheduledAt || p.createdAt || '').slice(0, 10),
+            approvedBy: p.approvedBy || 'Pending Approval (Payments Workflow)',
+            remarks: p.remarks || p.comments || '',
+            bankName: p.bankName,
+            accountNumber: p.accountNumber,
+            ifscCode: p.ifscCode,
+            beneficiaryName: p.beneficiaryName,
+            purpose: p.purpose,
+            grossAmount: gross,
+            tdsAmount: p.tdsAmount ? Number(p.tdsAmount) : undefined,
+            items: p.items || undefined,
+          };
+        }) as Payment[];
 
         // Deduplicate items to prevent double rendering if identical payments exist
         const seen = new Set<string>();

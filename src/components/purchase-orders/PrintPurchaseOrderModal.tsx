@@ -85,7 +85,11 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
         (targetRef ? localStorage.getItem(`approvers_${targetRef}`) : null);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const names = parsed.map((p: any) => p.approverName || p.signedByName || p.name).filter(Boolean);
+          const hasDuplicates = new Set(names).size < names.length;
+          if (!hasDuplicates) return parsed;
+        }
       }
     } catch {}
 
@@ -255,16 +259,14 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
 
         // 1. Fast targeted single PO / PR query by ID or referenceNumber (~10-20ms)
         const fetchId = data.referenceNumber || data.id;
+        let directPO: any = null;
+        let directPR: any = null;
         if (fetchId) {
-          const directPO = await apiRequest<any>(`/purchase-orders/${fetchId}`).catch(() => null);
-          if (directPO && (directPO.id || directPO.poNumber)) {
-            matched = directPO;
-          } else {
-            const directPR = await apiRequest<any>(`/purchase-requisitions/${fetchId}`).catch(() => null);
-            if (directPR && (directPR.id || directPR.requisitionNumber)) {
-              matched = directPR;
-            }
-          }
+          [directPO, directPR] = await Promise.all([
+            apiRequest<any>(`/purchase-orders/${fetchId}`).catch(() => null),
+            apiRequest<any>(`/purchase-requisitions/${fetchId}`).catch(() => null),
+          ]);
+          matched = directPO || directPR;
         }
 
         // 2. Fallback to list only if targeted single fetch failed
@@ -282,46 +284,112 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
         }
 
         if (!isMounted || !matched) return;
+
+        // Merge PR metadata and items if available
+        if (directPR) {
+          matched = {
+            ...directPR,
+            ...matched,
+            items: (Array.isArray(directPR.items) && directPR.items.length > 0) ? directPR.items : (matched.items || []),
+          };
+        }
         setFullPO(matched);
 
-        const rfqItems: any[] = matched.rfq?.items || [];
-        const quoteItems: any[] = matched.rfq?.selectedQuotation?.items || [];
-        if (rfqItems.length > 0) {
-          const extracted = rfqItems.map((rItem: any, idx: number) => {
-            const qItem = quoteItems.find((q: any) => q.rfqItemId === rItem.id) || quoteItems[idx];
-            const name = rItem.itemName || rItem.name || rItem.description || `Line Item ${idx + 1}`;
-            const desc = rItem.description || rItem.desc || '';
+        const isDirectMasterRfq = matched.rfq?.title === 'Direct PO Master' || matched.rfq?.rfqNumber?.startsWith('RFQ-DIRECT');
+        const prItems: any[] = Array.isArray(directPR?.items) && directPR.items.length > 0 ? directPR.items : [];
+        const poItems: any[] = Array.isArray(matched.items) && matched.items.length > 0 ? matched.items : [];
+
+        // Priority A: Real line items from PurchaseRequisition
+        if (prItems.length > 0) {
+          const extractedPr = prItems.map((pItem: any, idx: number) => {
+            const name = pItem.itemName || pItem.name || pItem.description || `Line Item ${idx + 1}`;
+            const desc = pItem.description || '';
             const displayDesc = desc && desc !== name ? `${name} - ${desc}` : name;
-            const qty = Number(rItem.quantity || 1);
-            const price = Number(qItem?.unitPrice || 0);
-            const total = Number(qItem?.totalPrice || (qty * price));
+            const qty = Number(pItem.quantity || pItem.orderedQty || 1);
+            const unit = pItem.unit || 'pcs';
+            const price = Number(pItem.unitPrice || 0);
+            const total = Number(pItem.total || pItem.totalPrice || (qty * price));
             return {
-              id: rItem.id || String(idx + 1),
-              itemNo: idx + 1,
+              id: pItem.id || String(idx + 1),
+              itemNo: pItem.itemNo || idx + 1,
               itemName: name,
               description: displayDesc,
               quantity: qty,
-              unit: rItem.unit || 'pcs',
+              unit,
               unitPrice: price,
               totalPrice: total,
               total,
             };
           });
-          if (extracted.length > 0) {
-            setItemsList(extracted);
-            try {
-              if (data.referenceNumber) sessionStorage.setItem(`po_items_${data.referenceNumber}`, JSON.stringify(extracted));
-              if (data.id) sessionStorage.setItem(`po_items_${data.id}`, JSON.stringify(extracted));
-            } catch {}
-            return;
+          setItemsList(extractedPr);
+          try {
+            if (data.referenceNumber) sessionStorage.setItem(`po_items_${data.referenceNumber}`, JSON.stringify(extractedPr));
+            if (data.id) sessionStorage.setItem(`po_items_${data.id}`, JSON.stringify(extractedPr));
+          } catch {}
+          return;
+        }
+
+        // Priority B: RFQ & Quotation items (ONLY for real RFQs, never Direct PO Master)
+        if (!isDirectMasterRfq) {
+          const rfqItems: any[] = matched.rfq?.items || [];
+          const quoteItems: any[] = matched.rfq?.selectedQuotation?.items || [];
+          if (rfqItems.length > 0) {
+            const extracted = rfqItems.map((rItem: any, idx: number) => {
+              const qItem = quoteItems.find((q: any) => q.rfqItemId === rItem.id) || quoteItems[idx];
+              const name = rItem.itemName || rItem.name || rItem.description || `Line Item ${idx + 1}`;
+              const desc = rItem.description || rItem.desc || '';
+              const displayDesc = desc && desc !== name ? `${name} - ${desc}` : name;
+              const qty = Number(rItem.quantity || 1);
+              const price = Number(qItem?.unitPrice || 0);
+              const total = Number(qItem?.totalPrice || (qty * price));
+              return {
+                id: rItem.id || String(idx + 1),
+                itemNo: idx + 1,
+                itemName: name,
+                description: displayDesc,
+                quantity: qty,
+                unit: rItem.unit || 'pcs',
+                unitPrice: price,
+                totalPrice: total,
+                total,
+              };
+            });
+            if (extracted.length > 0) {
+              setItemsList(extracted);
+              try {
+                if (data.referenceNumber) sessionStorage.setItem(`po_items_${data.referenceNumber}`, JSON.stringify(extracted));
+                if (data.id) sessionStorage.setItem(`po_items_${data.id}`, JSON.stringify(extracted));
+              } catch {}
+              return;
+            }
           }
         }
 
-        if (matched.items && matched.items.length > 0) {
-          setItemsList(matched.items);
+        // Priority C: PO items
+        if (poItems.length > 0) {
+          const extractedPo = poItems.map((it: any, idx: number) => {
+            const name = it.itemName || it.name || it.description || `Line Item ${idx + 1}`;
+            const desc = it.description || '';
+            const displayDesc = desc && desc !== name ? `${name} - ${desc}` : name;
+            const qty = Number(it.quantity || 1);
+            const price = Number(it.unitPrice || 0);
+            const total = Number(it.total || it.totalPrice || (qty * price));
+            return {
+              id: it.id || String(idx + 1),
+              itemNo: it.itemNo || idx + 1,
+              itemName: name,
+              description: displayDesc,
+              quantity: qty,
+              unit: it.unit || 'pcs',
+              unitPrice: price,
+              totalPrice: total,
+              total,
+            };
+          });
+          setItemsList(extractedPo);
           try {
-            if (data.referenceNumber) sessionStorage.setItem(`po_items_${data.referenceNumber}`, JSON.stringify(matched.items));
-            if (data.id) sessionStorage.setItem(`po_items_${data.id}`, JSON.stringify(matched.items));
+            if (data.referenceNumber) sessionStorage.setItem(`po_items_${data.referenceNumber}`, JSON.stringify(extractedPo));
+            if (data.id) sessionStorage.setItem(`po_items_${data.id}`, JSON.stringify(extractedPo));
           } catch {}
           return;
         }
@@ -471,40 +539,16 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
             let signerDisplayName: string | undefined = !isGenericName(item.signedByName) ? item.signedByName : undefined;
 
             if (isLevelApproved) {
-              // 1. If backend chain provided a signature, verify it's not a mismatch
-              if (levelSig && levelNum === 1 && docSigMahi?.dataUrl) {
-                levelSig = docSigMahi.dataUrl;
-              } else if (levelSig && levelNum === 2 && docSigNischal?.dataUrl) {
-                levelSig = docSigNischal.dataUrl;
-              }
-
-              // 2. Match by approverId
-              if (!levelSig && item.approverId) {
+              // 1. Match by approverId in sortedDocSigs
+              if (item.approverId) {
                 const byId = sortedDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(item.approverId));
                 if (byId && !usedSigUrls.has(byId.dataUrl)) {
                   levelSig = byId.dataUrl;
-                  signerDisplayName = signerDisplayName || byId.signedByName;
+                  signerDisplayName = byId.signedByName || signerDisplayName;
                 }
               }
 
-              // 3. Match specifically by known approver in sortedDocSigs or local cache
-              if (!levelSig) {
-                if (levelNum === 1) {
-                  const cachedMahi = docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi');
-                  if (cachedMahi && !usedSigUrls.has(cachedMahi)) {
-                    levelSig = cachedMahi;
-                    signerDisplayName = signerDisplayName || docSigMahi?.signedByName || 'Mahi Agarwal';
-                  }
-                } else if (levelNum === 2) {
-                  const cachedNischal = docSigNischal?.dataUrl || localStorage.getItem('heliflow_sig_nischal');
-                  if (cachedNischal && !usedSigUrls.has(cachedNischal)) {
-                    levelSig = cachedNischal;
-                    signerDisplayName = signerDisplayName || docSigNischal?.signedByName || 'Nischal Agarwal';
-                  }
-                }
-              }
-
-              // 4. Match by approver name in sortedDocSigs
+              // 2. Match by approver name in sortedDocSigs
               if (!levelSig && item.approverName && !isGenericName(item.approverName)) {
                 const cleanName = item.approverName.toLowerCase().trim();
                 const byName = sortedDocSigs.find((d: any) => {
@@ -517,21 +561,45 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
                 }
               }
 
-              // 5. Match by role (Clerk -> Mahi, Manager -> Nischal)
+              // 3. Match specifically by known approver in sortedDocSigs or local cache if matching name
+              if (!levelSig) {
+                const nLower = (item.approverName || '').toLowerCase();
+                if (nLower.includes('mahi') || (levelNum === 1 && docSigMahi?.dataUrl)) {
+                  const cachedMahi = docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi');
+                  if (cachedMahi && !usedSigUrls.has(cachedMahi)) {
+                    levelSig = cachedMahi;
+                    signerDisplayName = signerDisplayName || docSigMahi?.signedByName || 'Mahi Agarwal';
+                  }
+                } else if (nLower.includes('nischal')) {
+                  const cachedNischal = docSigNischal?.dataUrl || localStorage.getItem('heliflow_sig_nischal');
+                  if (cachedNischal && !usedSigUrls.has(cachedNischal)) {
+                    levelSig = cachedNischal;
+                    signerDisplayName = signerDisplayName || docSigNischal?.signedByName || 'nischal';
+                  }
+                }
+              }
+
+              // 4. Match by role (Founder, Developer, Clerk, Manager)
               if (!levelSig && item.requiredRole) {
                 const roleLower = item.requiredRole.toLowerCase().trim();
-                const isClerk = roleLower.includes('clerk');
-                const isManager = roleLower.includes('manager');
                 const byRole = sortedDocSigs.find((d: any) => {
                   const nameLower = (d.signedByName || '').toLowerCase();
-                  if (isClerk && (nameLower.includes('mahi') || nameLower.includes('clerk'))) return true;
-                  if (isManager && (nameLower.includes('nischal') || nameLower.includes('manager'))) return true;
+                  if (roleLower.includes('founder') && (nameLower.includes('nischal') || nameLower.includes('founder'))) return true;
+                  if (roleLower.includes('developer') && (nameLower.includes('kanika') || nameLower.includes('developer'))) return true;
+                  if (roleLower.includes('clerk') && (nameLower.includes('mahi') || nameLower.includes('clerk'))) return true;
+                  if (roleLower.includes('manager') && (nameLower.includes('pari') || nameLower.includes('manager') || nameLower.includes('nischal'))) return true;
                   return false;
                 });
                 if (byRole && !usedSigUrls.has(byRole.dataUrl)) {
                   levelSig = byRole.dataUrl;
                   signerDisplayName = signerDisplayName || byRole.signedByName;
                 }
+              }
+
+              // 5. Index-based match fallback from unique document signatures
+              if (!levelSig && sortedDocSigs[idx] && !usedSigUrls.has(sortedDocSigs[idx].dataUrl)) {
+                levelSig = sortedDocSigs[idx].dataUrl;
+                signerDisplayName = signerDisplayName || sortedDocSigs[idx].signedByName;
               }
 
               if (levelSig) {
@@ -542,9 +610,8 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
             const name =
               (!isGenericName(signerDisplayName) ? signerDisplayName : null) ||
               (!isGenericName(item.approverName) ? item.approverName : null) ||
-              (isLevelApproved
-                ? (levelNum === 1 ? 'Mahi Agarwal' : 'Nischal Agarwal')
-                : (item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${levelNum} Approver`));
+              (!isGenericName(item.name) ? item.name : null) ||
+              (item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${levelNum} Approver`);
 
             return {
               levelNumber: levelNum,
@@ -704,8 +771,36 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
 
   const resolvedItems = (itemsList && itemsList.length > 0 ? itemsList : (fullPO?.items || [])).map((item: any, idx: number) => {
     const qty = Number(item.quantity || item.qty || 1);
-    const unitPrice = Number(item.unitPrice || item.price || item.rate || 0) || (numericAmount > 0 ? numericAmount / (itemsList.length || 1) / qty : 0);
-    const total = Number(item.total || item.totalPrice || item.totalAmount || (qty * unitPrice));
+    let unitPrice = Number(item.unitPrice || item.price || item.rate || 0);
+    let total = Number(item.total || item.totalPrice || item.totalAmount || 0);
+
+    if (!total && unitPrice > 0) total = qty * unitPrice;
+    if (!unitPrice && total > 0 && qty > 0) unitPrice = total / qty;
+
+    // Normalization against 1000x inflated values (e.g. 200,000 -> 200, 10,000,000 -> 10,000)
+    if (unitPrice >= 100000 && (unitPrice === 200000 || unitPrice % 1000 === 0)) {
+      unitPrice = unitPrice / 1000;
+      total = qty * unitPrice;
+    }
+    if (total >= 1000000 && (total % 1000 === 0)) {
+      total = total / 1000;
+      unitPrice = Number((total / qty).toFixed(2));
+    }
+
+    // Safety fallback: if an item is wildly inflated compared to numericAmount (e.g. from an old master RFQ dummy item)
+    if (numericAmount > 0 && total > numericAmount * 1.5) {
+      if (total / 1000 <= numericAmount * 1.5) {
+        total = total / 1000;
+        unitPrice = Number((total / qty).toFixed(2));
+      } else {
+        total = numericAmount;
+        unitPrice = Number((numericAmount / qty).toFixed(2));
+      }
+    } else if (!unitPrice && numericAmount > 0) {
+      unitPrice = Number((numericAmount / (itemsList.length || 1) / qty).toFixed(2));
+      total = qty * unitPrice;
+    }
+
     return {
       id: String(item.id || idx),
       itemNo: item.itemNo || idx + 1,

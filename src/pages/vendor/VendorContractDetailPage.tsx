@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { contractService, type Contract } from '../../services/contractService';
@@ -86,6 +86,18 @@ export default function VendorContractDetailPage() {
     { cacheKey: `vendor:contract:${id}`, cacheTtlMs: 30000 }
   );
 
+  // Auto-fill signer name from vendor contact person or name if empty or phone number
+  useEffect(() => {
+    const v = (data?.contract as any)?.vendor;
+    const isPhone = (s?: string) => !!s && /^\+?[0-9\s-]{7,15}$/.test(s.trim());
+    if (!signerName || isPhone(signerName)) {
+      const preferredName = (!isPhone(user?.fullName) ? user?.fullName : '') || v?.contactPerson || v?.name || '';
+      if (preferredName) {
+        setSignerName(preferredName);
+      }
+    }
+  }, [data?.contract, user?.fullName, signerName]);
+
   // Compute contract balance from purchase orders
   const contractBalance = useMemo(() => {
     const c = data?.contract;
@@ -129,63 +141,145 @@ export default function VendorContractDetailPage() {
     };
   }, [id, reload]);
 
-  // Init canvas
-  useEffect(() => {
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Setup HiDPI Canvas with smooth rendering
+  const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    // Use actual device pixel ratio (at least 2 for crisp ink)
+    const dpr = Math.max(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+
+    ctx.scale(dpr, dpr);
     ctx.strokeStyle = penColor;
-    ctx.lineWidth = 2.5;
+    ctx.fillStyle = penColor;
+    ctx.lineWidth = 1.8; // Fine, elegant luxury pen tip
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, [mode, activeTab, penColor]);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  }, [penColor]);
+
+  useEffect(() => {
+    if (mode === 'draw' && activeTab === 'signature') {
+      const timer = setTimeout(setupCanvas, 40);
+      window.addEventListener('resize', setupCanvas);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('resize', setupCanvas);
+      };
+    }
+  }, [mode, activeTab, setupCanvas]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = penColor;
+      ctx.fillStyle = penColor;
+      ctx.lineWidth = 1.8;
+    }
+  }, [penColor]);
 
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    if ('touches' in e) {
-      return {
-        x: (e.touches[0].clientX - rect.left) * (canvas.width / rect.width),
-        y: (e.touches[0].clientY - rect.top) * (canvas.height / rect.height),
-      };
-    }
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     return {
-      x: (e.clientX - rect.left) * (canvas.width / rect.width),
-      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+      x: clientX - rect.left,
+      y: clientY - rect.top,
     };
   };
 
   const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(window.devicePixelRatio || 1, 2);
+    if (canvas.width !== Math.round(rect.width * dpr)) {
+      setupCanvas();
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     setIsDrawing(true);
     setHasDrawn(true);
-    const ctx = canvasRef.current?.getContext('2d');
-    if (ctx) {
-      ctx.strokeStyle = penColor;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-    }
+
+    ctx.strokeStyle = penColor;
+    ctx.fillStyle = penColor;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
     const pos = getCanvasPos(e);
-    if (ctx) { ctx.beginPath(); ctx.moveTo(pos.x, pos.y); }
+    lastPointRef.current = pos;
+
+    // Draw an initial smooth ink dot on click/tap
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
-    const ctx = canvasRef.current?.getContext('2d');
-    const pos = getCanvasPos(e);
-    if (ctx) { ctx.lineTo(pos.x, pos.y); ctx.stroke(); }
+    if (!isDrawing || !lastPointRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const currentPos = getCanvasPos(e);
+    const prevPos = lastPointRef.current;
+
+    // Smooth midpoint quadratic curve for natural fluid handwriting
+    const midX = (prevPos.x + currentPos.x) / 2;
+    const midY = (prevPos.y + currentPos.y) / 2;
+
+    ctx.strokeStyle = penColor;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.quadraticCurveTo(prevPos.x, prevPos.y, midX, midY);
+    ctx.stroke();
+
+    lastPointRef.current = currentPos;
   };
 
-  const stopDraw = () => setIsDrawing(false);
+  const stopDraw = () => {
+    setIsDrawing(false);
+    lastPointRef.current = null;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (ctx) ctx.beginPath();
+  };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!ctx) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
     setHasDrawn(false);
     setUploadedImage(null);
+    lastPointRef.current = null;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -774,8 +868,6 @@ export default function VendorContractDetailPage() {
                       <canvas
                         ref={canvasRef}
                         className="w-full h-40 cursor-crosshair touch-none bg-white block"
-                        width={480}
-                        height={160}
                         onMouseDown={startDraw}
                         onMouseMove={draw}
                         onMouseUp={stopDraw}

@@ -38,6 +38,7 @@ import {
 import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import TablePagination from '../../components/shared/TablePagination';
+import { PrintGRNModal } from '../../components/grn/PrintGRNModal';
 import { cn } from '../../lib/utils';
 
 function isFrom16SeptOnwards(dateVal?: string): boolean {
@@ -90,6 +91,7 @@ export default function GRNListPage() {
   const [kpiFilter, setKpiFilter] = useState<'ALL' | 'PENDING' | 'GRN'>('ALL');
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
   const [selectedInvoiceModal, setSelectedInvoiceModal] = useState<any>(null);
+  const [grnToPrint, setGrnToPrint] = useState<any | null>(null);
 
   const handleViewInvoice = (po: any) => {
     const targetPoId = String(po?.id || '').toLowerCase();
@@ -809,6 +811,15 @@ export default function GRNListPage() {
                               <Eye className="size-3.5" /> View Details
                             </Button>
                             <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs font-medium gap-1.5 px-2.5 rounded-lg border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                              onClick={() => setGrnToPrint(grn)}
+                              title="Print GRN Document"
+                            >
+                              <Printer className="size-3.5" /> Print
+                            </Button>
+                            <Button
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -909,7 +920,15 @@ export default function GRNListPage() {
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                onClick={() => setGrnToPrint(selectedGrn)}
+              >
+                <Printer className="size-3.5" /> Print GRN
+              </Button>
               <Button variant="secondary" onClick={() => setSelectedGrn(null)}>
                 Close
               </Button>
@@ -1056,6 +1075,39 @@ export default function GRNListPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {grnToPrint && (
+        <PrintGRNModal
+          data={{
+            grnNumber: grnToPrint.grnNumber || grnToPrint.id,
+            poNumber: grnToPrint.purchaseOrder?.poNumber || grnToPrint.poId || '—',
+            vendorDispatchNoteNumber: grnToPrint.dispatchNoteNumber || grnToPrint.vendorDispatchNoteNumber,
+            receivedDate: grnToPrint.receivedDate,
+            warehouse: grnToPrint.warehouse || grnToPrint.warehouseLocation || 'Central Receiving Store',
+            vendorName: grnToPrint.purchaseOrder?.vendor?.name || 'Authorized Supplier',
+            vendorAddress: grnToPrint.purchaseOrder?.vendor?.address,
+            vendorGstVat: grnToPrint.purchaseOrder?.vendor?.gstNumber || grnToPrint.purchaseOrder?.vendor?.taxId,
+            notes: grnToPrint.notes,
+            status: grnToPrint.status || 'VERIFIED & RECEIVED',
+            items: (grnToPrint.items || []).map((it: any, idx: number) => ({
+              id: it.id || idx + 1,
+              itemCode: it.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+              itemName: it.itemName || it.name || it.description || `Item ${idx + 1}`,
+              description: it.description,
+              orderedQty: Number(it.orderedQty || it.quantity || 0),
+              receivedQty: Number(it.receivedQty || it.quantity || it.orderedQty || 0),
+              acceptedQty: Number(it.acceptedQty || it.receivedQty || it.quantity || it.orderedQty || 0),
+              rejectedQty: Number(it.rejectedQty || 0),
+              unitPrice: Number(it.unitPrice || 0),
+              totalPrice: Number(it.totalPrice || 0),
+              remarks: it.remarks,
+            })),
+            purchaseOrder: grnToPrint.purchaseOrder,
+          }}
+          po={grnToPrint.purchaseOrder}
+          onClose={() => setGrnToPrint(null)}
+        />
+      )}
     </PageFrame>
   );
 }

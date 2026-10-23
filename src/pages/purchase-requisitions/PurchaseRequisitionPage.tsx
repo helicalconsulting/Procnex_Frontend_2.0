@@ -382,6 +382,7 @@ export default function PurchaseRequisitionPage() {
             }
             setPr({
               ...existing,
+              vendorFulfillmentAllowed: (existing as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE',
               items,
               subtotal,
               taxTotal: 0,
@@ -600,6 +601,7 @@ export default function PurchaseRequisitionPage() {
           paymentPlanSnapshot: (quotation as any)?.paymentPlanSnapshot || null,
           deliveryDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
           shippingTerms: contract?.deliveryTerms || contract?.freightTerms || 'FOB Destination',
+          vendorFulfillmentAllowed: (contract as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE',
           items: items.length > 0 ? items : [
             { itemNo: 1, description: '', quantity: 1, unit: 'Pcs', unitPrice: 0, taxPercent: 0, discount: 0, total: 0 },
           ],
@@ -642,7 +644,7 @@ export default function PurchaseRequisitionPage() {
     const unsubStatus = sseClient.on('po_status_changed', () => {
       // Re-fetch the PR to get latest status from backend
       purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
-        if (existing) setPr({ ...existing, items: sanitizePrItems(existing.items) });
+        if (existing) setPr({ ...existing, vendorFulfillmentAllowed: (existing as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE', items: sanitizePrItems(existing.items) });
       }).catch(() => {});
     });
 
@@ -651,7 +653,7 @@ export default function PurchaseRequisitionPage() {
       // Only refresh if the PO's rfqId matches our PR's rfqId
       if (event?.rfqId && event.rfqId !== rfqId) return;
       purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
-        if (existing) setPr({ ...existing, items: sanitizePrItems(existing.items) });
+        if (existing) setPr({ ...existing, vendorFulfillmentAllowed: (existing as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE', items: sanitizePrItems(existing.items) });
       }).catch(() => {});
     });
 
@@ -2047,6 +2049,18 @@ export default function PurchaseRequisitionPage() {
                 <option>CIF</option>
                 <option>CIP</option>
                 <option>DDP</option>
+              </select>
+            </div>
+            <div className="pr-field">
+              <label>Vendor Fulfillment Permission</label>
+              <select
+                value={pr.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE'}
+                disabled={isReadOnly}
+                onChange={e => updateField('vendorFulfillmentAllowed', e.target.value as any)}
+              >
+                <option value="DISPATCH_AND_INVOICE">🚚 Dispatch Note + 🧾 Invoice (Standard)</option>
+                <option value="DISPATCH_ONLY">🚚 Dispatch Note Only (Invoice created internally after GRN)</option>
+                <option value="INVOICE_ONLY">🧾 Vendor Invoice Only (Direct Invoicing)</option>
               </select>
             </div>
           </div>

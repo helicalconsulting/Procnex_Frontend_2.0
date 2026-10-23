@@ -23,6 +23,7 @@ import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { Button } from '../../components/ui/button';
+import DocumentQRCode from '../../components/common/DocumentQRCode';
 import { Card } from '../../components/ui/card';
 import { Input, Select, Textarea } from '../../components/ui/input';
 import { PageFrame, PageLead } from '../../components/ui/product';
@@ -1011,26 +1012,38 @@ export default function VendorCreateInvoicePage() {
             </div>
           </div>
           <div className="po-doc__header-right">
-            <div className="po-doc__title-block">
-              <span className="po-doc__title-label" style={{ color: '#0a2342' }}>TAX INVOICE</span>
-              <span className="po-doc__title-po-num">{invoiceNumber}</span>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+              <div>
+                <div className="po-doc__title-block">
+                  <span className="po-doc__title-label" style={{ color: '#0a2342' }}>TAX INVOICE</span>
+                  <span className="po-doc__title-po-num">{invoiceNumber}</span>
+                </div>
+                <table className="po-doc__meta-table">
+                  <tbody>
+                    <tr>
+                      <td className="po-doc__meta-label">Invoice Date</td>
+                      <td className="po-doc__meta-value">{invoiceDate}</td>
+                    </tr>
+                    <tr>
+                      <td className="po-doc__meta-label">Due Date</td>
+                      <td className="po-doc__meta-value">{dueDate}</td>
+                    </tr>
+                    <tr>
+                      <td className="po-doc__meta-label">PO Number</td>
+                      <td className="po-doc__meta-value">{displayPoNumber}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <DocumentQRCode
+                docType="INVOICE"
+                docNumber={invoiceNumber}
+                amount={calculations.grandTotal}
+                currency={currency}
+                vendorName={user?.fullName || selectedPO?.vendor?.name || selectedPO?.vendorName}
+                size={76}
+              />
             </div>
-            <table className="po-doc__meta-table">
-              <tbody>
-                <tr>
-                  <td className="po-doc__meta-label">Invoice Date</td>
-                  <td className="po-doc__meta-value">{invoiceDate}</td>
-                </tr>
-                <tr>
-                  <td className="po-doc__meta-label">Due Date</td>
-                  <td className="po-doc__meta-value">{dueDate}</td>
-                </tr>
-                <tr>
-                  <td className="po-doc__meta-label">PO Number</td>
-                  <td className="po-doc__meta-value">{displayPoNumber}</td>
-                </tr>
-              </tbody>
-            </table>
           </div>
         </div>
 

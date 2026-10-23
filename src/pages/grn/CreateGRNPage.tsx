@@ -40,6 +40,7 @@ import { Card } from '../../components/ui/card';
 import { Input, Textarea } from '../../components/ui/input';
 import { PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
+import { PrintGRNModal } from '../../components/grn/PrintGRNModal';
 
 interface LineItemState {
   id: string;
@@ -243,6 +244,7 @@ export default function CreateGRNPage() {
   const [notes, setNotes] = useState<string>('');
   const [currency] = useState<string>(companyDefaultCurrency);
   const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
+  const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
 
   // Load Warehouses from Company Settings
   useEffect(() => {
@@ -546,12 +548,25 @@ export default function CreateGRNPage() {
     if (entryMode === 'AUTO_FILL') {
       // 1. Prioritize line items from Dispatch Note if selected
       if (selectedDispatchNote && selectedDispatchNote.items && selectedDispatchNote.items.length > 0) {
+        const poTotalAmount = Number(selectedPO.totalAmount || selectedPO.grandTotal || 0);
         setLineItems(
           selectedDispatchNote.items.map((item: any, idx: number) => {
             const name = safeStr(item.itemName || item.name || item.description || `Dispatched Item ${idx + 1}`);
-            const ordQty = Number(item.orderedQty || item.quantity || 1);
-            const dispQty = Number(item.dispatchedQty || ordQty);
-            const price = Number(item.unitPrice || 0);
+            let ordQty = Math.max(1, Number(item.poQty || item.orderedQty || item.quantity || item.qty || 1));
+            let dispQty = Math.max(0, Number(item.dispatchedQty || item.invoicedQty || item.receivedQty || ordQty));
+            let price = Number(item.unitPrice || item.price || item.rate || 0);
+            const lineTotal = Number(item.total || item.totalPrice || item.amount || 0);
+
+            if (!price && lineTotal > 0 && ordQty > 0) {
+              price = Number((lineTotal / ordQty).toFixed(2));
+            }
+            if (price > 0 && lineTotal > 0 && ordQty === 1 && Math.round(lineTotal / price) > 1) {
+              ordQty = Math.round(lineTotal / price);
+              dispQty = ordQty;
+            }
+            if (price === 0 && poTotalAmount > 0 && ordQty > 0) {
+              price = Number((poTotalAmount / (selectedDispatchNote.items.length || 1) / ordQty).toFixed(2));
+            }
 
             return {
               id: `dn_item_${idx}_${Date.now()}`,
@@ -561,12 +576,13 @@ export default function CreateGRNPage() {
               acceptedQty: dispQty,
               rejectedQty: 0,
               unitPrice: price,
-              unit: safeStr(item.unit || 'Units'),
+              unit: safeStr(item.unit || item.uom || 'Units'),
               remarks: 'Inspected - Dispatched items verified',
             };
           })
         );
       } else {
+        const isDirectMasterRfq = selectedPO.rfq?.title === 'Direct PO Master' || selectedPO.rfq?.rfqNumber?.startsWith('RFQ-DIRECT');
         const rawItems: any[] =
           (selectedInvoice?.items && selectedInvoice.items.length > 0 && selectedInvoice.items) ||
           (selectedInvoice?.lineItems && selectedInvoice.lineItems.length > 0 && selectedInvoice.lineItems) ||
@@ -574,10 +590,12 @@ export default function CreateGRNPage() {
           (selectedPO.lineItems && selectedPO.lineItems.length > 0 && selectedPO.lineItems) ||
           (selectedPO.products && selectedPO.products.length > 0 && selectedPO.products) ||
           (selectedPO.materials && selectedPO.materials.length > 0 && selectedPO.materials) ||
-          (selectedPO.rfq?.selectedQuotation?.items && selectedPO.rfq.selectedQuotation.items.length > 0 && selectedPO.rfq.selectedQuotation.items) ||
-          (selectedPO.rfq?.items && selectedPO.rfq.items.length > 0 && selectedPO.rfq.items) ||
+          (!isDirectMasterRfq && selectedPO.rfq?.selectedQuotation?.items && selectedPO.rfq.selectedQuotation.items.length > 0 && selectedPO.rfq.selectedQuotation.items) ||
+          (!isDirectMasterRfq && selectedPO.rfq?.items && selectedPO.rfq.items.length > 0 && selectedPO.rfq.items) ||
           (selectedPO.requisition?.items && selectedPO.requisition.items.length > 0 && selectedPO.requisition.items) ||
           [];
+
+        const poTotalAmount = Number(selectedPO.totalAmount || selectedPO.grandTotal || 0);
 
         if (rawItems.length > 0) {
           setLineItems(
@@ -588,20 +606,35 @@ export default function CreateGRNPage() {
                 item.description ||
                 item.itemDescription ||
                 item.title ||
-                (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
+                (!isDirectMasterRfq && selectedPO.rfq?.title ? selectedPO.rfq.title : '') ||
                 selectedPO.title ||
                 selectedPO.poNumber ||
                 'Purchase Order Material/Services'
               );
-              const qty = Number(item.quantity || item.orderedQty || item.qty || 1);
-              const price = Number(item.unitPrice || item.price || item.rate || 0);
+              let qty = Math.max(1, Number(item.poQty || item.quantity || item.orderedQty || item.qty || item.invoicedQty || 1));
+              let recQty = Math.max(0, Number(item.invoicedQty || item.dispatchedQty || item.receivedQty || item.poQty || item.quantity || qty));
+              let price = Number(item.unitPrice || item.price || item.rate || 0);
+              const lineTotal = Number(item.total || item.totalPrice || item.amount || 0);
+
+              if (!price && lineTotal > 0 && qty > 0) {
+                price = Number((lineTotal / qty).toFixed(2));
+              }
+              if (price > 0 && lineTotal > 0 && qty === 1 && Math.round(lineTotal / price) > 1) {
+                qty = Math.round(lineTotal / price);
+                recQty = qty;
+              }
+              if (price === 0 && poTotalAmount > 0 && qty > 0) {
+                price = Number((poTotalAmount / (rawItems.length || 1) / qty).toFixed(2));
+              } else if (poTotalAmount > 0 && price * qty > poTotalAmount * 1.5) {
+                price = Number((poTotalAmount / (rawItems.length || 1) / qty).toFixed(2));
+              }
 
               return {
                 id: `item_${idx}_${Date.now()}`,
                 itemName: name || 'Purchase Order Material/Services',
                 orderedQty: qty,
-                receivedQty: qty,
-                acceptedQty: qty,
+                receivedQty: recQty,
+                acceptedQty: recQty,
                 rejectedQty: 0,
                 unitPrice: price,
                 unit: safeStr(item.unit || item.uom || 'Units'),
@@ -896,10 +929,10 @@ export default function CreateGRNPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.print()}
+            onClick={() => setShowPrintModal(true)}
             className="gap-2"
           >
-            <Printer className="size-4" /> Print
+            <Printer className="size-4" /> Print GRN Document
           </Button>
         </div>
       </div>
@@ -1435,6 +1468,38 @@ export default function CreateGRNPage() {
         currency={companyDefaultCurrency}
         mode="approval"
       />
+
+      {showPrintModal && (
+        <PrintGRNModal
+          data={{
+            grnNumber: grnNumber || 'GRN-DRAFT',
+            poNumber: selectedPO?.poNumber || selectedPoId || '—',
+            vendorDispatchNoteNumber: vendorDispatchNoteNumber || selectedDispatchNote?.dispatchNoteNumber,
+            receivedDate: receivedDate || new Date().toISOString(),
+            warehouse: warehouseLocation || 'Central Receiving Store',
+            vendorName: selectedPO?.vendor?.name || selectedDispatchNote?.vendorName || selectedInvoice?.vendorName || 'Authorized Supplier',
+            vendorAddress: selectedPO?.vendor?.address,
+            vendorGstVat: selectedPO?.vendor?.gstNumber || selectedPO?.vendor?.taxId,
+            notes,
+            status: isSelectedPoAlreadyReceived ? 'RECEIVED' : 'VERIFIED & RECORDED',
+            items: lineItems.map((li, idx) => ({
+              id: li.id || idx + 1,
+              itemCode: (li as any).itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+              itemName: li.itemName,
+              orderedQty: Number(li.orderedQty || 0),
+              receivedQty: Number(li.receivedQty !== '' ? li.receivedQty : li.orderedQty),
+              acceptedQty: Number(li.acceptedQty !== '' ? li.acceptedQty : (li.receivedQty !== '' ? li.receivedQty : li.orderedQty)),
+              rejectedQty: Number(li.rejectedQty !== '' ? li.rejectedQty : 0),
+              unitPrice: Number(li.unitPrice || 0),
+              totalPrice: Number(li.totalPrice || 0),
+              remarks: li.remarks,
+            })),
+            purchaseOrder: selectedPO,
+          }}
+          po={selectedPO}
+          onClose={() => setShowPrintModal(false)}
+        />
+      )}
     </PageFrame>
   );
 }

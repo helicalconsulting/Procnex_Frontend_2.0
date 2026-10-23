@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { companySettingsService, type ContractTemplate, type VendorOption } from '../../services/companySettingsService';
@@ -6,7 +6,7 @@ import { contractService } from '../../services/contractService';
 import { useBranding } from '../../context/BrandingContext';
 import { useCurrency, CurrencySelector } from '../shared/CurrencyMaster';
 import { MessageStrip } from '../shared/MessageStrip';
-import RichTextEditor from '../shared/RichTextEditor';
+import RichTextEditor, { type RichTextEditorRef } from '../shared/RichTextEditor';
 import { ALL_PLACEHOLDERS, PLACEHOLDER_CATEGORIES, resolvePlaceholders } from '../../utils/placeholderResolver';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import { apiRequest } from '../../api/client';
@@ -72,6 +72,7 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
   const [selectedPlaceholderCategory, setSelectedPlaceholderCategory] = useState('all');
   const [insertedNotice, setInsertedNotice] = useState<string | null>(null);
+  const builderEditorRef = useRef<RichTextEditorRef>(null);
 
   // System State
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -132,10 +133,14 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
 
   // Insert tag into editor
   const handleInsertTag = (tagCode: string) => {
-    setContentHtml((prev) => {
-      const space = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
-      return `${prev}${space}${tagCode} `;
-    });
+    if (builderEditorRef.current) {
+      builderEditorRef.current.insertText(tagCode);
+    } else {
+      setContentHtml((prev) => {
+        const space = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
+        return `${prev}${space}${tagCode} `;
+      });
+    }
     setInsertedNotice(tagCode);
     setTimeout(() => setInsertedNotice(null), 2500);
   };
@@ -196,6 +201,7 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
         expirationDate: expiryDate,
         paymentTerms,
         deliveryTerms,
+        contentSnapshot: contentHtml,
       });
 
       setMsg({ text: `Contract "${docTitle}" created successfully!`, type: 'success' });
@@ -427,6 +433,7 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
                           className={`cdbm-ph-tab ${
                             selectedPlaceholderCategory === cat.id ? 'cdbm-ph-tab--active' : ''
                           }`}
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => setSelectedPlaceholderCategory(cat.id)}
                         >
                           {cat.label}
@@ -444,6 +451,7 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
                           key={ph.code}
                           type="button"
                           className="cdbm-ph-chip"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertTag(ph.code)}
                           title={`Insert ${ph.code} (${ph.description})`}
                         >
@@ -458,6 +466,7 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
                   {/* Rich Text Editor */}
                   <div className="cdbm-editor-area">
                     <RichTextEditor
+                      ref={builderEditorRef}
                       value={contentHtml}
                       onChange={setContentHtml}
                       placeholder="Type contract clauses or insert dynamic placeholder tags..."

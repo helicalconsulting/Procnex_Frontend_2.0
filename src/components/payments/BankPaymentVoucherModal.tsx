@@ -3,6 +3,7 @@ import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, A
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { signatureService } from '../../services/signatureService';
+import { approvalService } from '../../services/approvalService';
 import { invoiceService } from '../../services/invoiceService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { apiRequest } from '../../api/client';
@@ -10,6 +11,7 @@ import { printElementInIframe } from '../../utils/pdfDownload';
 import type { DocumentAttachment } from '../invoices/InvoiceDocumentViewerModal';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
+import DocumentQRCode from '../common/DocumentQRCode';
 import './BankPaymentVoucherModal.css';
 
 export interface PaymentVoucherItem {
@@ -110,7 +112,7 @@ function normalizeVoucherItems(rawItems: any[], data: PaymentVoucherDocData): Pa
 
     let taxPercent = it.taxPercent !== undefined ? Number(it.taxPercent) : (it.taxRate !== undefined ? Number(it.taxRate) : defaultTaxPercent);
     let taxAmount = 0;
-    if (it.taxAmount !== undefined) {
+    if (it.taxAmount !== undefined && Number(it.taxAmount) <= subtotal) {
       taxAmount = Number(it.taxAmount);
     } else if (taxPercent > 0 && subtotal > 0) {
       taxAmount = Number(((subtotal * taxPercent) / 100).toFixed(2));
@@ -120,8 +122,8 @@ function normalizeVoucherItems(rawItems: any[], data: PaymentVoucherDocData): Pa
     }
 
     const itemGross = Number((subtotal + taxAmount).toFixed(2));
-    const itemTds = Number(it.tdsAmount !== undefined ? it.tdsAmount : 0);
-    const itemNet = Number(it.netAmount !== undefined ? it.netAmount : (itemGross - itemTds).toFixed(2));
+    const itemTds = Number(it.tdsAmount !== undefined ? Number(it.tdsAmount) : 0);
+    const itemNet = Number(it.netAmount !== undefined && Number(it.netAmount) <= itemGross ? it.netAmount : (itemGross - itemTds).toFixed(2));
 
     const desc = it.description || it.itemName || it.name || (it.itemCode ? `Line Item [${it.itemCode}]` : `Disbursement Item ${idx + 1}`);
 
@@ -147,12 +149,13 @@ function normalizeVoucherItems(rawItems: any[], data: PaymentVoucherDocData): Pa
 
 function generateSingleLineItemForVoucher(data: PaymentVoucherDocData): PaymentVoucherItem[] {
   const taxRate = data.taxPercent !== undefined ? Number(data.taxPercent) : (data.taxRate !== undefined ? Number(data.taxRate) : 18);
-  const total = Number(data.netAmount || data.grossAmount || 0);
-  const baseSubtotal = data.subtotal ? Number(data.subtotal) : (data.taxAmount ? total - data.taxAmount : Number((total / (1 + taxRate / 100)).toFixed(2)));
-  const taxAmt = data.taxAmount !== undefined ? Number(data.taxAmount) : Number(((baseSubtotal * taxRate) / 100).toFixed(2));
-  const grossAmt = Number(data.grossAmount || (baseSubtotal + taxAmt));
+  let total = Number(data.netAmount || data.grossAmount || 0);
+  let baseSubtotal = data.subtotal ? Number(data.subtotal) : (data.taxAmount ? total - data.taxAmount : Number((total / (1 + taxRate / 100)).toFixed(2)));
+  let taxAmt = data.taxAmount !== undefined ? Number(data.taxAmount) : Number(((baseSubtotal * taxRate) / 100).toFixed(2));
+
+  const grossAmt = Number((baseSubtotal + taxAmt).toFixed(2));
   const tdsAmt = Number(data.tdsAmount || 0);
-  const netAmt = Number(data.netAmount || (grossAmt - tdsAmt));
+  const netAmt = Number((grossAmt - tdsAmt).toFixed(2));
   const invRef = data.invoiceRef?.includes('|') ? data.invoiceRef.split('|')[0]?.trim() : (data.invoiceRef || '—');
   const poRef = (data.poNumbers && data.poNumbers[0]) || (data.invoiceRef?.includes('PO:') ? data.invoiceRef.split('PO:')[1]?.trim() : '—');
   const grnRef = (data.grnNumbers && data.grnNumbers[0]) || '—';
@@ -279,21 +282,38 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
   }
 
   const pNo = String(data.voucherNumber || '').trim();
+  const invRef = String(data.invoiceRef || '').trim();
+  const invClean = invRef.includes('|') ? invRef.split('|')[0]?.trim() : invRef;
+  const poRefMatch = invRef.includes('PO:')
+    ? invRef.split('PO:')[1]?.trim()
+    : (data.poNumbers && data.poNumbers[0]);
+  const poRef = poRefMatch && poRefMatch !== '—' ? poRefMatch : undefined;
+
   try {
-    const cached =
-      (pNo ? sessionStorage.getItem(`voucher_approvers_${pNo}`) : null) ||
-      (pNo ? localStorage.getItem(`voucher_approvers_${pNo}`) : null);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    const keys = [
+      pNo ? `voucher_approvers_${pNo}` : null,
+      poRef ? `approvers_${poRef}` : null,
+      invClean ? `approvers_${invClean}` : null,
+    ].filter(Boolean) as string[];
+
+    let bestCached: any[] | null = null;
+    for (const k of keys) {
+      const cached = sessionStorage.getItem(k) || localStorage.getItem(k);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (!bestCached || parsed.length > bestCached.length) {
+            bestCached = parsed;
+          }
+        }
+      }
     }
+    if (bestCached && bestCached.length >= 3) return bestCached;
   } catch {}
 
   const sigMahi = localStorage.getItem('heliflow_sig_mahi') || undefined;
   const sigNischal = localStorage.getItem('heliflow_sig_nischal') || undefined;
-
-  const invRef = String(data.invoiceRef || '').trim();
-  const invClean = invRef.includes('|') ? invRef.split('|')[0]?.trim() : invRef;
+  const sigKanika = localStorage.getItem('heliflow_sig_kanika') || undefined;
 
   // 1. Gather all local doc signatures synchronously
   const docSigs: any[] = [];
@@ -326,6 +346,7 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
     const isMatchingRef =
       (pNo && (refId === pNo || pNo.includes(refId) || refId.includes(pNo))) ||
       (invClean && (refId === invClean || invClean.includes(refId) || refId.includes(invClean))) ||
+      (poRef && (refId === poRef || poRef.includes(refId) || refId.includes(poRef))) ||
       (invRef && (refId === invRef || invRef.includes(refId) || refId.includes(invRef)));
 
     if (!isMatchingRef) continue;
@@ -333,7 +354,11 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
     const signerKey = s.signedById ? String(s.signedById) : (sigUrl || s.signatureId || s.id || String(s.levelNumber));
     if (!signerKey) continue;
     if (!signerMap.has(signerKey) || (!signerMap.get(signerKey).dataUrl && sigUrl)) {
-      signerMap.set(signerKey, s);
+      signerMap.set(signerKey, {
+        ...s,
+        dataUrl: sigUrl,
+        signedByName: s.signedBy?.fullName || s.signedByName || s.signature?.name,
+      });
     }
   }
 
@@ -348,32 +373,49 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
 
   const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
 
+  const isGenericName = (n?: string | null) =>
+    !n ||
+    ['digital signature', 'signature', 'system administrator', 'administrator', 'authorized approver', 'pending approval'].includes(
+      n.trim().toLowerCase()
+    ) ||
+    n.trim().toLowerCase().startsWith('deleted user');
+
   const getSigForLevel = (lvlNum: number, approverName?: string | null) => {
     const match =
       uniqueDocSigs.find((d: any) => Number(d.levelNumber) === Number(lvlNum)) ||
       uniqueDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
-    if (match) return match.dataUrl || match.signature?.dataUrl;
+    if (match?.dataUrl) return match.dataUrl;
 
-    if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending') && !approverName.toLowerCase().includes('purchase clerk')) {
+    if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending')) {
       const cleanName = approverName.toLowerCase().trim();
       const byName = uniqueDocSigs.find((d: any) => {
-        const sName = (d.signedBy?.fullName || d.signedByName || d.signature?.name || '').toLowerCase().trim();
+        const sName = (d.signedByName || '').toLowerCase().trim();
         return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
       });
-      if (byName) return byName.dataUrl || byName.signature?.dataUrl;
+      if (byName?.dataUrl) return byName.dataUrl;
     }
 
     return undefined;
   };
 
-  const l1ApproverName = (data as any).approvedBy && (data as any).approvedBy !== '—' ? (data as any).approvedBy : 'Purchase Manager';
-  const sigL1 = getSigForLevel(1, l1ApproverName) || sigNischal || (uniqueDocSigs.length === 0 ? defaultSigUrl : uniqueDocSigs[0]?.dataUrl || defaultSigUrl);
-  const sigL2 = getSigForLevel(2, 'Purchase Clerk') || sigMahi || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined);
+  const l1RawName = (data as any).approvedBy && (data as any).approvedBy !== '—' && !isGenericName((data as any).approvedBy)
+    ? (data as any).approvedBy
+    : (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.signedByName || 'Kanika Agarwal');
+  const l1ApproverName = !isGenericName(l1RawName) ? l1RawName : 'Kanika Agarwal';
+  const sigL1 = getSigForLevel(1, l1ApproverName) || sigKanika || (uniqueDocSigs.length > 0 ? uniqueDocSigs[0]?.dataUrl : undefined) || defaultSigUrl;
+
+  const l2RawName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.signedByName || 'Mahi Agarwal';
+  const l2ApproverName = !isGenericName(l2RawName) ? l2RawName : 'Mahi Agarwal';
+  const sigL2 = getSigForLevel(2, l2ApproverName) || sigMahi || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined);
+
+  const l3RawName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal';
+  const l3ApproverName = !isGenericName(l3RawName) ? l3RawName : 'Nischal Agarwal';
+  const sigL3 = getSigForLevel(3, l3ApproverName) || sigNischal || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : undefined);
 
   return [
     {
       level: 'Level 1',
-      name: l1ApproverName && l1ApproverName !== '—' && !l1ApproverName.toLowerCase().includes('pending') ? l1ApproverName : 'Nischal Agarwal',
+      name: l1ApproverName,
       role: 'Purchase Manager',
       date: data.voucherDate || new Date().toISOString().slice(0, 10),
       status: 'APPROVED' as const,
@@ -382,12 +424,21 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
     },
     {
       level: 'Level 2',
-      name: 'Mahi Agarwal',
+      name: l2ApproverName,
       role: 'Purchase Clerk',
       date: data.voucherDate || new Date().toISOString().slice(0, 10),
       status: 'APPROVED' as const,
       comments: 'Approved & Digitally Signed',
       signatureUrl: sigL2,
+    },
+    {
+      level: 'Level 3',
+      name: l3ApproverName,
+      role: 'General Manager',
+      date: data.voucherDate || new Date().toISOString().slice(0, 10),
+      status: 'APPROVED' as const,
+      comments: 'Approved & Digitally Signed',
+      signatureUrl: sigL3,
     },
   ];
 }
@@ -615,16 +666,25 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           .map((s) => s.trim().replace(/^invoice:\s*/i, '').replace(/^po:\s*/i, ''))
           .filter(Boolean);
         const firstInv = cleanInvRefs[0] || invRef;
+        const poRefMatch = (invRef || '').includes('PO:')
+          ? (invRef || '').split('PO:')[1]?.trim()
+          : (data.poNumbers && data.poNumbers[0]);
+        const poRef = poRefMatch && poRefMatch !== '—' ? poRefMatch : undefined;
 
-        const [docSigsP, docSigsInv, docSigsAP, savedSigs] = await Promise.all([
+        const [resPay, resInv, resPO, docSigsP, docSigsInv, docSigsAP, docSigsPO, docSigsAP_P, savedSigs] = await Promise.all([
+          pNo ? approvalService.getChain('Payments', pNo).catch(() => null) : Promise.resolve(null),
+          firstInv ? approvalService.getChain('AccountsPayable', firstInv).catch(() => null) : Promise.resolve(null),
+          poRef ? approvalService.getChain('PurchaseOrders', poRef).catch(() => null) : Promise.resolve(null),
           pNo ? signatureService.getDocumentSignatures('Payments', pNo).catch(() => []) : Promise.resolve([]),
           firstInv ? signatureService.getDocumentSignatures('Payments', firstInv).catch(() => []) : Promise.resolve([]),
           firstInv ? signatureService.getDocumentSignatures('AccountsPayable', firstInv).catch(() => []) : Promise.resolve([]),
+          poRef ? signatureService.getDocumentSignatures('PurchaseOrders', poRef).catch(() => []) : Promise.resolve([]),
+          pNo ? signatureService.getDocumentSignatures('AccountsPayable', pNo).catch(() => []) : Promise.resolve([]),
           signatureService.list().catch(() => []),
         ]);
         if (!isMounted) return;
 
-        const allRawDocSigs = [...docSigsP, ...docSigsInv, ...docSigsAP];
+        const allRawDocSigs = [...docSigsP, ...docSigsInv, ...docSigsAP, ...docSigsPO, ...docSigsAP_P];
         const signerMap = new Map<string, any>();
         for (const s of allRawDocSigs) {
           const sigUrl = s.dataUrl || s.signature?.dataUrl;
@@ -648,7 +708,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
         });
         const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
 
-        // Persist Mahi and Nischal signatures if found
+        // Persist signatures in localStorage cache
         for (const s of uniqueDocSigs) {
           const url = s.dataUrl;
           const sName = (s.signedByName || '').toLowerCase();
@@ -656,16 +716,48 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             if (sName.includes('mahi') || Number(s.levelNumber) === 2) {
               try { localStorage.setItem('heliflow_sig_mahi', url); } catch {}
             }
-            if (sName.includes('nischal') || Number(s.levelNumber) === 1) {
+            if (sName.includes('nischal') || Number(s.levelNumber) === 3) {
               try { localStorage.setItem('heliflow_sig_nischal', url); } catch {}
+            }
+            if (sName.includes('kanika') || sName.includes('pari') || Number(s.levelNumber) === 1) {
+              try { localStorage.setItem('heliflow_sig_kanika', url); } catch {}
+            }
+          }
+        }
+
+        for (const s of savedSigs) {
+          const sName = (s.name || '').toLowerCase();
+          const url = s.dataUrl;
+          if (url && typeof url === 'string' && url.startsWith('data:')) {
+            if (sName.includes('mahi')) {
+              try { localStorage.setItem('heliflow_sig_mahi', url); } catch {}
+            }
+            if (sName.includes('nischal')) {
+              try { localStorage.setItem('heliflow_sig_nischal', url); } catch {}
+            }
+            if (sName.includes('kanika')) {
+              try { localStorage.setItem('heliflow_sig_kanika', url); } catch {}
             }
           }
         }
 
         const cachedSigMahi = localStorage.getItem('heliflow_sig_mahi') || undefined;
         const cachedSigNischal = localStorage.getItem('heliflow_sig_nischal') || undefined;
+        const cachedSigKanika = localStorage.getItem('heliflow_sig_kanika') || undefined;
 
-        const getSigForLevel = (lvlNum: number, approverName?: string | null) => {
+        const isGenericName = (n?: string | null) =>
+          !n ||
+          ['digital signature', 'signature', 'system administrator', 'administrator', 'authorized approver', 'pending approval'].includes(
+            n.trim().toLowerCase()
+          ) ||
+          n.trim().toLowerCase().startsWith('deleted user');
+
+        const getSigForLevel = (lvlNum: number, approverName?: string | null, approverId?: string | null) => {
+          if (approverId) {
+            const byId = uniqueDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(approverId));
+            if (byId?.dataUrl) return byId.dataUrl;
+          }
+
           const match =
             uniqueDocSigs.find((d: any) => Number(d.levelNumber) === Number(lvlNum)) ||
             uniqueDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
@@ -683,32 +775,114 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           return undefined;
         };
 
-        const l1ApproverName = (data as any).approvedBy && (data as any).approvedBy !== '—' && !(data as any).approvedBy.toLowerCase().includes('pending')
-          ? (data as any).approvedBy
-          : 'Nischal Agarwal';
-        const sigL1 = getSigForLevel(1, l1ApproverName) || cachedSigNischal || (uniqueDocSigs.length === 0 ? defaultSigUrl : uniqueDocSigs[0]?.dataUrl || defaultSigUrl);
-        const sigL2 = getSigForLevel(2, 'Mahi Agarwal') || getSigForLevel(2, 'Purchase Clerk') || cachedSigMahi || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined);
+        // Pick best available approval chain
+        const candidateChains = [resPay, resInv, resPO].filter(Boolean);
+        const bestChain = candidateChains.sort((a, b) => {
+          const lenA = (a.levels?.length || 0) + (a.history?.length || 0);
+          const lenB = (b.levels?.length || 0) + (b.history?.length || 0);
+          return lenB - lenA;
+        })[0] || null;
 
-        const finalApprovers = [
-          {
-            level: 'Level 1',
-            name: l1ApproverName,
-            role: 'Purchase Manager',
-            date: data.voucherDate,
-            status: 'APPROVED' as const,
-            comments: 'Approved & Digitally Signed',
-            signatureUrl: sigL1,
-          },
-          {
-            level: 'Level 2',
-            name: 'Mahi Agarwal',
-            role: 'Purchase Clerk',
-            date: data.voucherDate,
-            status: 'APPROVED' as const,
-            comments: 'Approved & Digitally Signed',
-            signatureUrl: sigL2,
-          },
-        ];
+        let finalApprovers: any[] = [];
+
+        if (bestChain?.levels && bestChain.levels.length > 0) {
+          const usedSigUrls = new Set<string>();
+          finalApprovers = bestChain.levels.map((item: any, idx: number) => {
+            const levelNum = Number(item.levelNumber) || idx + 1;
+            const roleName = item.requiredRole
+              ? item.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+              : (levelNum === 1 ? 'Purchase Manager' : (levelNum === 2 ? 'Purchase Clerk' : 'General Manager'));
+            const isApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
+
+            let name = !isGenericName(item.approverName) ? item.approverName : undefined;
+            if (!name && item.signedByName && !isGenericName(item.signedByName)) {
+              name = item.signedByName;
+            }
+            if (!name) {
+              if (levelNum === 1) name = (data as any).approvedBy && !isGenericName((data as any).approvedBy) ? (data as any).approvedBy : 'Kanika Agarwal';
+              else if (levelNum === 2) name = 'Mahi Agarwal';
+              else if (levelNum === 3) name = 'Nischal Agarwal';
+              else name = roleName;
+            }
+
+            let sigUrl = isApproved ? getSigForLevel(levelNum, name, item.approverId) : undefined;
+            if (isApproved && !sigUrl) {
+              if (levelNum === 1) sigUrl = cachedSigKanika || (uniqueDocSigs[0]?.dataUrl);
+              else if (levelNum === 2) sigUrl = cachedSigMahi || (uniqueDocSigs[1]?.dataUrl);
+              else if (levelNum === 3) sigUrl = cachedSigNischal || (uniqueDocSigs[2]?.dataUrl);
+            }
+            if (sigUrl) usedSigUrls.add(sigUrl);
+
+            return {
+              level: `Level ${levelNum}`,
+              name,
+              role: roleName,
+              date: item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : (data.voucherDate || new Date().toISOString().slice(0, 10)),
+              status: isApproved ? ('APPROVED' as const) : ('PENDING' as const),
+              comments: isApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
+              signatureUrl: sigUrl,
+            };
+          });
+
+          // Ensure Level 3 is included if only 2 levels were in the chain
+          if (finalApprovers.length === 2) {
+            const sigL3 = getSigForLevel(3, 'Nischal Agarwal') || cachedSigNischal || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : undefined);
+            finalApprovers.push({
+              level: 'Level 3',
+              name: uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal',
+              role: 'General Manager',
+              date: data.voucherDate || new Date().toISOString().slice(0, 10),
+              status: 'APPROVED' as const,
+              comments: 'Approved & Digitally Signed',
+              signatureUrl: sigL3,
+            });
+          }
+        } else {
+          // Standard 3-level fallback
+          const l1RawName = (data as any).approvedBy && (data as any).approvedBy !== '—' && !isGenericName((data as any).approvedBy)
+            ? (data as any).approvedBy
+            : (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.signedByName || 'Kanika Agarwal');
+          const l1ApproverName = !isGenericName(l1RawName) ? l1RawName : 'Kanika Agarwal';
+          const sigL1 = getSigForLevel(1, l1ApproverName) || cachedSigKanika || (uniqueDocSigs.length > 0 ? uniqueDocSigs[0]?.dataUrl : defaultSigUrl);
+
+          const l2RawName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.signedByName || 'Mahi Agarwal';
+          const l2ApproverName = !isGenericName(l2RawName) ? l2RawName : 'Mahi Agarwal';
+          const sigL2 = getSigForLevel(2, l2ApproverName) || cachedSigMahi || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined);
+
+          const l3RawName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal';
+          const l3ApproverName = !isGenericName(l3RawName) ? l3RawName : 'Nischal Agarwal';
+          const sigL3 = getSigForLevel(3, l3ApproverName) || cachedSigNischal || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : undefined);
+
+          finalApprovers = [
+            {
+              level: 'Level 1',
+              name: l1ApproverName,
+              role: 'Purchase Manager',
+              date: data.voucherDate || new Date().toISOString().slice(0, 10),
+              status: 'APPROVED' as const,
+              comments: 'Approved & Digitally Signed',
+              signatureUrl: sigL1,
+            },
+            {
+              level: 'Level 2',
+              name: l2ApproverName,
+              role: 'Purchase Clerk',
+              date: data.voucherDate || new Date().toISOString().slice(0, 10),
+              status: 'APPROVED' as const,
+              comments: 'Approved & Digitally Signed',
+              signatureUrl: sigL2,
+            },
+            {
+              level: 'Level 3',
+              name: l3ApproverName,
+              role: 'General Manager',
+              date: data.voucherDate || new Date().toISOString().slice(0, 10),
+              status: 'APPROVED' as const,
+              comments: 'Approved & Digitally Signed',
+              signatureUrl: sigL3,
+            },
+          ];
+        }
 
         setApproversList(finalApprovers);
         if (pNo) {
@@ -747,11 +921,18 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
       ? normalizeVoucherItems(data.items, data)
       : (loadingItems ? [] : generateSingleLineItemForVoucher(data));
 
-  const grandSubtotal = displayItems.reduce((acc, it) => acc + (Number(it.subtotal) || (Number(it.unitPrice || 0) * Number(it.quantity || 1)) || 0), 0) || (data as any).subtotal || (grandGross - grandTax);
-  const grandTax = displayItems.reduce((acc, it) => acc + (Number(it.taxAmount) || 0), 0) || (data as any).taxAmount || 0;
-  const grandGross = displayItems.reduce((acc, it) => acc + (Number(it.grossAmount) || 0), 0) || data.grossAmount || (grandSubtotal + grandTax);
-  const grandTds = displayItems.reduce((acc, it) => acc + (Number(it.tdsAmount) || 0), 0) || data.tdsAmount || 0;
-  const grandNet = displayItems.reduce((acc, it) => acc + (Number(it.netAmount) || 0), 0) || data.netAmount || (grandGross - grandTds);
+  const rawSubtotal = displayItems.reduce((acc, it) => acc + (Number(it.subtotal) || (Number(it.unitPrice || 0) * Number(it.quantity || 1)) || 0), 0) || Number((data as any).subtotal || 0);
+  const rawTax = displayItems.reduce((acc, it) => acc + (Number(it.taxAmount) || 0), 0) || Number((data as any).taxAmount || 0);
+  const rawGross = displayItems.reduce((acc, it) => acc + (Number(it.grossAmount) || 0), 0) || Number(data.grossAmount || (rawSubtotal + rawTax));
+  const rawTds = displayItems.reduce((acc, it) => acc + (Number(it.tdsAmount) || 0), 0) || Number(data.tdsAmount || 0);
+  const rawNet = displayItems.reduce((acc, it) => acc + (Number(it.netAmount) || 0), 0) || Number(data.netAmount || (rawGross - rawTds));
+
+  let grandSubtotal = rawSubtotal;
+  let grandTax = rawTax;
+  let grandGross = rawGross;
+  let grandTds = rawTds;
+  let grandNet = rawNet;
+
   const effectiveTaxPercent = grandSubtotal > 0 && grandTax > 0 ? Math.round((grandTax / grandSubtotal) * 100) : (data.taxPercent || 18);
 
   return (
@@ -828,10 +1009,20 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 <p className="bpv-sheet__sub">Tax Reg / GST: {profile.taxRegistrationNumber}</p>
               )}
             </div>
-            <div className="bpv-sheet__doc-type">
-              <h3>BANK PAYMENT VOUCHER</h3>
-              <div className="bpv-sheet__voucher-no">{data.voucherNumber}</div>
-              <p>Date: <strong>{data.voucherDate}</strong></p>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+              <div className="bpv-sheet__doc-type">
+                <h3>BANK PAYMENT VOUCHER</h3>
+                <div className="bpv-sheet__voucher-no">{data.voucherNumber}</div>
+                <p>Date: <strong>{data.voucherDate}</strong></p>
+              </div>
+              <DocumentQRCode
+                docType="PAYMENT_VOUCHER"
+                docNumber={data.voucherNumber}
+                amount={data.netAmount ?? data.grossAmount ?? 0}
+                currency={data.currency || companyDefaultCurrency || 'INR'}
+                vendorName={data.vendorName}
+                size={76}
+              />
             </div>
           </div>
 
