@@ -194,36 +194,36 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
         <table className="po-doc__items-table">
           <colgroup>
             <col style={{ width: '5%' }} />
-            <col style={{ width: '36%' }} />
-            <col style={{ width: '9%' }} />
+            <col style={{ width: '41%' }} />
+            <col style={{ width: '10%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '21%' }} />
-            <col style={{ width: '21%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '18%' }} />
           </colgroup>
           <thead>
             <tr>
-              <th className="po-doc__th--no">#</th>
-              <th className="po-doc__th--desc">Description</th>
-              <th className="po-doc__th--qty">Quantity</th>
-              <th className="po-doc__th--unit">Unit</th>
-              <th className="po-doc__th--price">Unit Price</th>
-              <th className="po-doc__th--total">Total</th>
+              <th className="po-doc__th--no" style={{ textAlign: 'center' }}>#</th>
+              <th className="po-doc__th--desc" style={{ textAlign: 'left' }}>Description</th>
+              <th className="po-doc__th--qty" style={{ textAlign: 'center' }}>Quantity</th>
+              <th className="po-doc__th--unit" style={{ textAlign: 'center' }}>Unit</th>
+              <th className="po-doc__th--price" style={{ textAlign: 'right' }}>Unit Price</th>
+              <th className="po-doc__th--total" style={{ textAlign: 'right' }}>Total</th>
             </tr>
           </thead>
           <tbody>
             {pr.items.map((item) => (
               <tr key={item.itemNo}>
-                <td className="po-doc__td--no">{item.itemNo}</td>
-                <td className="po-doc__td--desc">
+                <td className="po-doc__td--no" style={{ textAlign: 'center' }}>{item.itemNo}</td>
+                <td className="po-doc__td--desc" style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 600 }}>{val(item.itemName || item.description)}</div>
                   {item.description && item.itemName && item.description !== item.itemName && (
                     <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{item.description}</div>
                   )}
                 </td>
-                <td className="po-doc__td--qty">{item.quantity}</td>
-                <td className="po-doc__td--unit">{val(item.unit)}</td>
-                <td className="po-doc__td--price">{formatCurrency(item.unitPrice, pr.currency)}</td>
-                <td className="po-doc__td--total">{formatCurrency(item.total, pr.currency)}</td>
+                <td className="po-doc__td--qty" style={{ textAlign: 'center' }}>{item.quantity}</td>
+                <td className="po-doc__td--unit" style={{ textAlign: 'center' }}>{val(item.unit)}</td>
+                <td className="po-doc__td--price" style={{ textAlign: 'right' }}>{formatCurrency(item.unitPrice, pr.currency)}</td>
+                <td className="po-doc__td--total" style={{ textAlign: 'right' }}>{formatCurrency(item.total, pr.currency)}</td>
               </tr>
             ))}
           </tbody>
@@ -240,35 +240,6 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
         </div>
       </div>
 
-      {/* ── Payment Schedule Breakdown if Custom Plan ── */}
-      {Array.isArray((pr as any).paymentPlanSnapshot) && (pr as any).paymentPlanSnapshot.length > 0 && (
-        <div style={{ margin: '20px 0' }}>
-          <div className="po-doc__divider" style={{ marginBottom: 12 }} />
-          <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, color: '#333' }}>
-            Payment Milestone Schedule ({val(pr.paymentTerms)})
-          </h4>
-          <table className="po-doc__items-table" style={{ width: '100%', fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th style={{ width: '8%', textAlign: 'center' }}>#</th>
-                <th style={{ width: '52%', textAlign: 'left' }}>Milestone / Condition</th>
-                <th style={{ width: '18%', textAlign: 'right' }}>Allocation %</th>
-                <th style={{ width: '22%', textAlign: 'right' }}>Milestone Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {((pr as any).paymentPlanSnapshot as Array<{ title: string; percentage: number }>).map((m, idx) => (
-                <tr key={idx}>
-                  <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                  <td>{m.title}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{m.percentage}%</td>
-                  <td style={{ textAlign: 'right' }}>{formatCurrency((pr.grandTotal * Number(m.percentage)) / 100, pr.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {/* ── Notes ── */}
       <div className="po-doc__divider" />

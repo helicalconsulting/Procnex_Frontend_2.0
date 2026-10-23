@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { ShieldCheck, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Download } from 'lucide-react';
 import './DocumentQRCode.css';
 
 export interface DocumentQRCodeProps {
@@ -9,6 +9,9 @@ export interface DocumentQRCodeProps {
   amount?: number | string;
   currency?: string;
   vendorName?: string;
+  companyCode?: string;
+  companyName?: string;
+  companyLogoUrl?: string;
   token?: string;
   size?: number;
   showCaption?: boolean;
@@ -31,6 +34,8 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
   showFallbackCode = true,
   className = '',
 }) => {
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
   // Generate human-readable fallback verification code
   const fallbackCode = useMemo(() => {
     const raw = `${docType}|${docNumber}|${amount}|${currency}`;
@@ -43,7 +48,7 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
     return `VER-${hex.substring(0, 4)}-${hex.substring(4, 8)}`;
   }, [docType, docNumber, amount, currency]);
 
-  // Construct target verification URL
+  // Construct compact, high-speed verification URL (kept short for low QR density & instant scanning)
   const verifyUrl = useMemo(() => {
     const origin =
       (typeof localStorage !== 'undefined' ? localStorage.getItem('heliflow_verify_host') : null) ||
@@ -57,9 +62,6 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
     const cleanCur = encodeURIComponent(String(currency || 'INR'));
     const cleanCC = encodeURIComponent((companyCode || '').trim());
     const cleanCN = encodeURIComponent((companyName || '').trim());
-    // Include logo parameter if it is an HTTP/S URL or relative path (avoid bulky data URLs)
-    const validLogo = companyLogoUrl && !companyLogoUrl.startsWith('data:') ? companyLogoUrl.trim() : '';
-    const cleanLogo = validLogo ? encodeURIComponent(validLogo) : '';
 
     if (token) {
       return `${cleanOrigin}/verify?t=${encodeURIComponent(token)}`;
@@ -67,17 +69,44 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
     let url = `${cleanOrigin}/verify?type=${docType}&doc=${cleanDocNum}&amt=${cleanAmt}&cur=${cleanCur}&fb=${fallbackCode}`;
     if (cleanCC) url += `&cc=${cleanCC}`;
     if (cleanCN) url += `&cn=${cleanCN}`;
-    if (cleanLogo) url += `&logo=${cleanLogo}`;
     return url;
-  }, [docType, docNumber, amount, currency, companyCode, companyName, companyLogoUrl, token, fallbackCode]);
+  }, [docType, docNumber, amount, currency, companyCode, companyName, token, fallbackCode]);
 
-  // Synchronous, zero-delay SVG generation using industry-standard QRCode engine
+  // Generate high-resolution 300+ DPI PNG Data URL for guaranteed PDF printing and downloading
+  useEffect(() => {
+    if (!verifyUrl) {
+      setQrDataUrl('');
+      return;
+    }
+    let isCurrent = true;
+    QRCode.toDataURL(verifyUrl, {
+      width: Math.max(300, size * 3),
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#000000',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => {
+        if (isCurrent) setQrDataUrl(url);
+      })
+      .catch((err) => {
+        console.warn('QR data URL generation error:', err);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [verifyUrl, size]);
+
+  // Synchronous SVG fallback while PNG Data URL loads
   const qrSvgData = useMemo(() => {
     if (!verifyUrl) return null;
     try {
       const qr = QRCode.create(verifyUrl, { errorCorrectionLevel: 'M' });
       const numModules = qr.modules.size;
-      const margin = 3; // 3-module quiet zone ensures phone cameras lock on instantly
+      const margin = 2;
       const total = numModules + margin * 2;
       let path = '';
       for (let r = 0; r < numModules; r++) {
@@ -89,10 +118,21 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
       }
       return { total, path };
     } catch (e) {
-      console.warn('QR code creation error:', e);
       return null;
     }
   }, [verifyUrl]);
+
+  const handleDownloadQr = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = `QR_${docType}_${docNumber}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   if (!docNumber) return null;
 
@@ -106,7 +146,16 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
         title="Click to test verification URL or scan with smartphone"
       >
         <div className="doc-qr-box" style={{ width: size, height: size }}>
-          {qrSvgData ? (
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt={`QR Verification Code for ${docNumber}`}
+              width={size}
+              height={size}
+              className="doc-qr-img"
+              style={{ display: 'block', width: size, height: size, objectFit: 'contain' }}
+            />
+          ) : qrSvgData ? (
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox={`0 0 ${qrSvgData.total} ${qrSvgData.total}`}
@@ -136,6 +185,19 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
           {showFallbackCode && (
             <div className="doc-qr-code-pill" title="Verification Fingerprint">
               {fallbackCode}
+            </div>
+          )}
+          {qrDataUrl && (
+            <div className="doc-qr-actions no-print">
+              <button
+                type="button"
+                onClick={handleDownloadQr}
+                className="doc-qr-download-btn"
+                title="Download QR code image (PNG)"
+              >
+                <Download size={10} />
+                <span>Save QR</span>
+              </button>
             </div>
           )}
         </div>

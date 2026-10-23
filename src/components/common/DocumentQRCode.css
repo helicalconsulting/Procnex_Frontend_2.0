@@ -105,6 +105,34 @@
   margin-top: 2px;
 }
 
+.doc-qr-actions {
+  margin-top: 4px;
+  display: flex;
+  justify-content: center;
+}
+
+.doc-qr-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: #0f766e;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.doc-qr-download-btn:hover {
+  background: #0f766e;
+  color: #ffffff;
+  border-color: #0f766e;
+}
+
 /* ── Print Specific Styles ────────────────────────────────────────────── */
 @media print {
   .doc-qr-container {
@@ -117,5 +145,9 @@
   .doc-qr-code-pill {
     background: #f8fafc !important;
     border: 1px solid #94a3b8 !important;
+  }
+  .doc-qr-actions,
+  .no-print {
+    display: none !important;
   }
 }

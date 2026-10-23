@@ -307,21 +307,33 @@
 
 /* ── Column Alignments ───────────────────────────────────── */
 
+/* Specific header alignments (overriding .po-doc__items-table thead th text-align: left) */
+.po-doc__items-table thead th.po-doc__th--no { text-align: center !important; }
+.po-doc__items-table thead th.po-doc__th--desc { text-align: left !important; }
+.po-doc__items-table thead th.po-doc__th--qty { text-align: center !important; }
+.po-doc__items-table thead th.po-doc__th--unit { text-align: center !important; }
+.po-doc__items-table thead th.po-doc__th--price { text-align: right !important; }
+.po-doc__items-table thead th.po-doc__th--tax { text-align: center !important; }
+.po-doc__items-table thead th.po-doc__th--disc { text-align: center !important; }
+.po-doc__items-table thead th.po-doc__th--total { text-align: right !important; }
+
 /* # — center */
 .po-doc__th--no,
 .po-doc__td--no {
-  text-align: center;
+  text-align: center !important;
   font-weight: 600;
-  color: #6b7280;
   font-size: 11px;
   white-space: nowrap;
   padding: 8px 4px !important;
+}
+.po-doc__td--no {
+  color: #6b7280;
 }
 
 /* Description — left aligned, wraps */
 .po-doc__th--desc,
 .po-doc__td--desc {
-  text-align: left;
+  text-align: left !important;
   font-weight: 500;
   color: #111827;
   font-size: 11px;
@@ -333,7 +345,7 @@
 /* Quantity — center */
 .po-doc__th--qty,
 .po-doc__td--qty {
-  text-align: center;
+  text-align: center !important;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: #111827;
@@ -344,7 +356,7 @@
 /* Unit — center */
 .po-doc__th--unit,
 .po-doc__td--unit {
-  text-align: center;
+  text-align: center !important;
   font-weight: 500;
   color: #6b7280;
   font-size: 11px;
@@ -354,7 +366,7 @@
 /* Unit Price — right aligned (currency) */
 .po-doc__th--price,
 .po-doc__td--price {
-  text-align: right;
+  text-align: right !important;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: #111827;
@@ -368,7 +380,7 @@
 /* Tax % — center */
 .po-doc__th--tax,
 .po-doc__td--tax {
-  text-align: center;
+  text-align: center !important;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   color: #6b7280;
@@ -379,7 +391,7 @@
 /* Disc % — center */
 .po-doc__th--disc,
 .po-doc__td--disc {
-  text-align: center;
+  text-align: center !important;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   color: #6b7280;
@@ -390,7 +402,7 @@
 /* Total — right aligned (currency, bold) */
 .po-doc__th--total,
 .po-doc__td--total {
-  text-align: right;
+  text-align: right !important;
   font-weight: 700;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   color: #0a2342;

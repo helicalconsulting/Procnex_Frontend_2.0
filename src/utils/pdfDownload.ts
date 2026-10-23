@@ -125,19 +125,26 @@ export function printElementInIframe(element: HTMLElement, title = 'Document'): 
   const triggerPrint = () => {
     if (printTriggered) return;
     printTriggered = true;
+
     setTimeout(() => {
+      const cleanup = () => {
+        try {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        } catch {}
+      };
+
       try {
+        iframe.contentWindow?.addEventListener('afterprint', cleanup);
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
       } catch (err) {
         console.warn('Iframe print error, falling back to window.print():', err);
         window.print();
       } finally {
-        setTimeout(() => {
-          if (iframe.parentNode) {
-            document.body.removeChild(iframe);
-          }
-        }, 1500);
+        // Keep iframe alive for up to 2 minutes so browser print preview and save PDF can finish
+        setTimeout(cleanup, 120000);
       }
     }, 250);
   };
