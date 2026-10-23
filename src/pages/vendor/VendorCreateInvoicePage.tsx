@@ -1041,7 +1041,7 @@ export default function VendorCreateInvoicePage() {
                 amount={calculations.grandTotal}
                 currency={currency}
                 vendorName={user?.fullName || selectedPO?.vendor?.name || selectedPO?.vendorName}
-                size={76}
+                size={100}
               />
             </div>
           </div>

@@ -1021,7 +1021,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 amount={data.netAmount ?? data.grossAmount ?? 0}
                 currency={data.currency || companyDefaultCurrency || 'INR'}
                 vendorName={data.vendorName}
-                size={76}
+                size={100}
               />
             </div>
           </div>

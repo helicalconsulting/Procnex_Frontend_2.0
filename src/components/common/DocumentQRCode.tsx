@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { generateQRCode } from '../../utils/qrCodeGenerator';
-import { ShieldCheck } from 'lucide-react';
+import QRCode from 'qrcode';
+import { ShieldCheck, ExternalLink } from 'lucide-react';
 import './DocumentQRCode.css';
 
 export interface DocumentQRCodeProps {
@@ -23,12 +23,12 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
   currency = 'INR',
   vendorName = '',
   token,
-  size = 86,
+  size = 105,
   showCaption = true,
   showFallbackCode = true,
   className = '',
 }) => {
-  // Generate a fallback verification code for human eye comparison if camera fails
+  // Generate human-readable fallback verification code
   const fallbackCode = useMemo(() => {
     const raw = `${docType}|${docNumber}|${amount}|${currency}`;
     let hash = 0;
@@ -42,45 +42,77 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
 
   // Construct target verification URL
   const verifyUrl = useMemo(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.procnex.com';
+    const origin =
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('heliflow_verify_host') : null) ||
+      import.meta.env.VITE_PUBLIC_APP_URL ||
+      import.meta.env.VITE_APP_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'https://app.procnex.com');
+
+    const cleanOrigin = origin.replace(/\/+$/, '');
     const cleanDocNum = encodeURIComponent((docNumber || '').trim());
     const cleanAmt = encodeURIComponent(String(amount || 0));
     const cleanCur = encodeURIComponent(String(currency || 'INR'));
 
     if (token) {
-      return `${origin}/verify?t=${encodeURIComponent(token)}`;
+      return `${cleanOrigin}/verify?t=${encodeURIComponent(token)}`;
     }
-    return `${origin}/verify?type=${docType}&doc=${cleanDocNum}&amt=${cleanAmt}&cur=${cleanCur}&fb=${fallbackCode}`;
+    return `${cleanOrigin}/verify?type=${docType}&doc=${cleanDocNum}&amt=${cleanAmt}&cur=${cleanCur}&fb=${fallbackCode}`;
   }, [docType, docNumber, amount, currency, token, fallbackCode]);
 
-  // Generate QR Code SVG matrix
-  const qrSvg = useMemo(() => {
+  // Synchronous, zero-delay SVG generation using industry-standard QRCode engine
+  const qrSvgData = useMemo(() => {
+    if (!verifyUrl) return null;
     try {
-      const qr = generateQRCode(verifyUrl);
-      return qr.toSvg({ size, foreground: '#0f172a', background: '#ffffff', margin: 1 });
+      const qr = QRCode.create(verifyUrl, { errorCorrectionLevel: 'M' });
+      const numModules = qr.modules.size;
+      const margin = 3; // 3-module quiet zone ensures phone cameras lock on instantly
+      const total = numModules + margin * 2;
+      let path = '';
+      for (let r = 0; r < numModules; r++) {
+        for (let c = 0; c < numModules; c++) {
+          if (qr.modules.get(r, c)) {
+            path += `M${c + margin},${r + margin}h1v1h-1z `;
+          }
+        }
+      }
+      return { total, path };
     } catch (e) {
-      console.warn('QR code generation error:', e);
+      console.warn('QR code creation error:', e);
       return null;
     }
-  }, [verifyUrl, size]);
+  }, [verifyUrl]);
 
   if (!docNumber) return null;
 
   return (
     <div className={`doc-qr-container ${className}`}>
-      <div className="doc-qr-box">
-        {qrSvg ? (
-          <div
-            className="doc-qr-svg-wrapper"
-            style={{ width: size, height: size }}
-            dangerouslySetInnerHTML={{ __html: qrSvg }}
-          />
-        ) : (
-          <div className="doc-qr-fallback-box" style={{ width: size, height: size }}>
-            <ShieldCheck className="w-8 h-8 text-slate-400" />
-          </div>
-        )}
-      </div>
+      <a
+        href={verifyUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="doc-qr-link"
+        title="Click to test verification URL or scan with smartphone"
+      >
+        <div className="doc-qr-box" style={{ width: size, height: size }}>
+          {qrSvgData ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox={`0 0 ${qrSvgData.total} ${qrSvgData.total}`}
+              width={size}
+              height={size}
+              className="doc-qr-svg"
+              shapeRendering="crispEdges"
+            >
+              <rect width={qrSvgData.total} height={qrSvgData.total} fill="#ffffff" />
+              <path d={qrSvgData.path} fill="#000000" />
+            </svg>
+          ) : (
+            <div className="doc-qr-fallback-box" style={{ width: size, height: size }}>
+              <ShieldCheck className="w-8 h-8 text-slate-400" />
+            </div>
+          )}
+        </div>
+      </a>
 
       {showCaption && (
         <div className="doc-qr-caption">

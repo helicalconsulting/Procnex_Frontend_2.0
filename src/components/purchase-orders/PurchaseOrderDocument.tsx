@@ -126,7 +126,7 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
               amount={pr.totalAmount || pr.estimatedTotal || 0}
               currency={pr.currency || 'INR'}
               vendorName={pr.vendorName}
-              size={76}
+              size={100}
             />
           </div>
         </div>

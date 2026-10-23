@@ -748,7 +748,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                 amount={data.amount || 0}
                 currency={companyDefaultCurrency || 'INR'}
                 vendorName={data.vendorName}
-                size={76}
+                size={100}
               />
             </div>
           </div>
