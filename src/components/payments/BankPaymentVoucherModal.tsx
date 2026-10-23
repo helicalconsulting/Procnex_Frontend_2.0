@@ -1023,7 +1023,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 vendorName={data.vendorName}
                 companyCode={profile?.companyCode || (data as any).companyCode}
                 companyName={displayCompanyName}
-                companyLogoUrl={profile?.logoUrl || companyLogoUrl}
+                companyLogoUrl={finalLogoUrl || ''}
                 size={100}
               />
             </div>

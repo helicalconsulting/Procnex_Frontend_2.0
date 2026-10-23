@@ -1043,7 +1043,7 @@ export default function VendorCreateInvoicePage() {
                 vendorName={user?.fullName || selectedPO?.vendor?.name || selectedPO?.vendorName}
                 companyCode={profile?.companyCode || selectedPO?.companyCode}
                 companyName={finalCompanyName}
-                companyLogoUrl={profile?.logoUrl}
+                companyLogoUrl={finalLogoUrl || profile?.logoUrl || ''}
                 size={100}
               />
             </div>

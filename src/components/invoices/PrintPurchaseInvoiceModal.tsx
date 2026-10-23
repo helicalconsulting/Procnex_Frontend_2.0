@@ -750,7 +750,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                 vendorName={data.vendorName}
                 companyCode={profile?.companyCode || (data as any).companyCode}
                 companyName={displayCompanyName}
-                companyLogoUrl={profile?.logoUrl || companyLogoUrl}
+                companyLogoUrl={finalLogoUrl || ''}
                 size={100}
               />
             </div>
