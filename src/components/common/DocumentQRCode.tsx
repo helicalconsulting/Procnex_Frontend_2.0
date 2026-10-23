@@ -57,6 +57,9 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
     const cleanCur = encodeURIComponent(String(currency || 'INR'));
     const cleanCC = encodeURIComponent((companyCode || '').trim());
     const cleanCN = encodeURIComponent((companyName || '').trim());
+    // Include logo parameter if it is an HTTP/S URL or relative path (avoid bulky data URLs)
+    const validLogo = companyLogoUrl && !companyLogoUrl.startsWith('data:') ? companyLogoUrl.trim() : '';
+    const cleanLogo = validLogo ? encodeURIComponent(validLogo) : '';
 
     if (token) {
       return `${cleanOrigin}/verify?t=${encodeURIComponent(token)}`;
@@ -64,8 +67,9 @@ export const DocumentQRCode: React.FC<DocumentQRCodeProps> = ({
     let url = `${cleanOrigin}/verify?type=${docType}&doc=${cleanDocNum}&amt=${cleanAmt}&cur=${cleanCur}&fb=${fallbackCode}`;
     if (cleanCC) url += `&cc=${cleanCC}`;
     if (cleanCN) url += `&cn=${cleanCN}`;
+    if (cleanLogo) url += `&logo=${cleanLogo}`;
     return url;
-  }, [docType, docNumber, amount, currency, companyCode, companyName, token, fallbackCode]);
+  }, [docType, docNumber, amount, currency, companyCode, companyName, companyLogoUrl, token, fallbackCode]);
 
   // Synchronous, zero-delay SVG generation using industry-standard QRCode engine
   const qrSvgData = useMemo(() => {

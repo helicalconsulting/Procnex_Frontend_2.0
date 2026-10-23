@@ -56,15 +56,29 @@ export default function DocumentVerificationPage() {
   const paramFb = searchParams.get('fb') || '';
   const paramCc = searchParams.get('cc') || searchParams.get('companyCode') || '';
   const paramCn = searchParams.get('cn') || searchParams.get('companyName') || '';
+  const paramLogo = searchParams.get('logo') || searchParams.get('companyLogoUrl') || '';
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<VerificationData | null>(null);
   const [scanIp, setScanIp] = useState<string>('');
+  const [logoLoadError, setLogoLoadError] = useState(false);
+
+  const getApiBaseUrl = () => {
+    // When opened from a real domain (e.g. srm-test.procnex.com), use window.location.origin/api
+    if (
+      typeof window !== 'undefined' &&
+      !window.location.hostname.includes('localhost') &&
+      !window.location.hostname.includes('127.0.0.1')
+    ) {
+      return `${window.location.origin}/api`;
+    }
+    return import.meta.env.VITE_API_URL || '/api';
+  };
 
   const fetchVerification = async () => {
     setLoading(true);
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || '/api';
+      const baseUrl = getApiBaseUrl();
       const query = new URLSearchParams();
       if (token) query.set('t', token);
       if (paramDoc) query.set('num', paramDoc);
@@ -104,7 +118,7 @@ export default function DocumentVerificationPage() {
         currency: paramCur,
         companyCode: paramCc || undefined,
         companyName: resolvedCompany,
-        companyLogoUrl: null,
+        companyLogoUrl: paramLogo || null,
         issueDate: new Date().toISOString(),
         lifecycleStatus: 'APPROVED',
         fingerprint: paramFb || `VER-${Math.random().toString(36).substring(2, 6).toUpperCase()}-PROCNEX`,
@@ -141,8 +155,9 @@ export default function DocumentVerificationPage() {
   };
 
   useEffect(() => {
+    setLogoLoadError(false);
     fetchVerification();
-  }, [token, paramDoc, paramType, paramCc, paramCn]);
+  }, [token, paramDoc, paramType, paramCc, paramCn, paramLogo]);
 
   const formatCurrency = (amt?: number, cur = 'INR') => {
     if (amt === undefined || amt === null) return '—';
@@ -171,20 +186,26 @@ export default function DocumentVerificationPage() {
   };
 
   const displayCompanyName = data?.companyName || paramCn || (paramCc ? paramCc.toUpperCase() : 'Company');
-  const displayLogo = data?.companyLogoUrl || null;
+  const rawLogo = data?.companyLogoUrl || paramLogo || null;
+  // If logo is a relative path like /uploads/..., resolve to full absolute URL
+  const displayLogo = rawLogo && !rawLogo.startsWith('http') && !rawLogo.startsWith('data:') && typeof window !== 'undefined'
+    ? `${window.location.origin}${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`
+    : rawLogo;
 
   return (
     <div className="verify-page-wrapper">
       {/* ── Top Bar with Tenant-Specific Branding ── */}
       <header className="verify-page-header">
         <div className="verify-header-brand">
-          {displayLogo ? (
+          {displayLogo && !logoLoadError ? (
             <img
               src={displayLogo}
               alt={displayCompanyName}
               className="verify-header-logo"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              onError={() => {
+                setLogoLoadError(true);
               }}
             />
           ) : (
