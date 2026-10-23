@@ -1106,6 +1106,7 @@ export default function CompanySettingsPage() {
   const [brandingCompanyState, setBrandingCompanyState] = useState('');
   const [brandingCompanyCountry, setBrandingCompanyCountry] = useState('');
   const [brandingBankName, setBrandingBankName] = useState('');
+  const [brandingShowValuesOnVerification, setBrandingShowValuesOnVerification] = useState(true);
   const [brandingSenderDisplayName, setBrandingSenderDisplayName] = useState('');
   const [brandingSenderEmail, setBrandingSenderEmail] = useState('');
   const [brandingReplyToEmail, setBrandingReplyToEmail] = useState('');
@@ -1144,6 +1145,7 @@ export default function CompanySettingsPage() {
       setBrandingCompanyState(profile.companyState || '');
       setBrandingCompanyCountry(profile.companyCountry || '');
       setBrandingBankName(profile.bankName || '');
+      setBrandingShowValuesOnVerification(profile.showValuesOnVerification !== false);
       setBrandingSenderDisplayName(profile.senderDisplayName || '');
       setBrandingSenderEmail(profile.senderEmail || '');
       setBrandingReplyToEmail(profile.replyToEmail || '');
@@ -1173,6 +1175,9 @@ export default function CompanySettingsPage() {
       if (brandingCompanyState !== (profile?.companyState || '')) payload.companyState = brandingCompanyState;
       if (brandingCompanyCountry !== (profile?.companyCountry || '')) payload.companyCountry = brandingCompanyCountry;
       if (brandingBankName !== (profile?.bankName || '')) payload.bankName = brandingBankName;
+      if (brandingShowValuesOnVerification !== (profile?.showValuesOnVerification !== false)) {
+        payload.showValuesOnVerification = brandingShowValuesOnVerification;
+      }
 
       if (Object.keys(payload).length === 0) {
         setPageMsg('No changes to save.');
@@ -1194,7 +1199,7 @@ export default function CompanySettingsPage() {
     canCreateSettings, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
     brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, brandingCompanyWebsite,
     brandingCompanyAddress, brandingCompanyCity, brandingCompanyState, brandingCompanyCountry,
-    brandingBankName, profile, applyBranding
+    brandingBankName, brandingShowValuesOnVerification, profile, applyBranding
   ]);
 
   const markBrandingDirty = useCallback(() => {
@@ -3754,6 +3759,41 @@ export default function CompanySettingsPage() {
                   <span className="cs-field-hint">Remitter bank name printed on Bank Payment Vouchers</span>
                 </SettingsField>
 
+                {/* Values To be Shown on QR (Yes / No) */}
+                <SettingsField className="company-settings__field cs-branding-field--full" style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                    <ShieldCheck size={16} className="text-blue-600" />
+                    Values To be Shown on QR (Document Verification)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="qrShowValues"
+                        value="yes"
+                        checked={brandingShowValuesOnVerification === true}
+                        onChange={() => { setBrandingShowValuesOnVerification(true); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>Yes</strong> — Show financial figures & amounts on QR scan landing page</span>
+                    </label>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="qrShowValues"
+                        value="no"
+                        checked={brandingShowValuesOnVerification === false}
+                        onChange={() => { setBrandingShowValuesOnVerification(false); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>No</strong> — Mask financial figures as Confidential (Hide from public scan)</span>
+                    </label>
+                  </div>
+                  <span className="cs-field-hint">
+                    Controls whether financial amounts (Total PO / Invoice / Payment Voucher amount) are displayed when external parties scan the printed document QR code. If set to <strong>No</strong>, ledger figures are masked while authenticity and approval signatures are still fully validated.
+                  </span>
+                </SettingsField>
+
                 {/* Save Button */}
                 {brandingDirty && (
                   <div className="cs-branding-actions">
@@ -3784,6 +3824,7 @@ export default function CompanySettingsPage() {
                           setBrandingCompanyState(profile.companyState || '');
                           setBrandingCompanyCountry(profile.companyCountry || '');
                           setBrandingBankName(profile.bankName || '');
+                          setBrandingShowValuesOnVerification(profile.showValuesOnVerification !== false);
                         }
                       }}
                     >

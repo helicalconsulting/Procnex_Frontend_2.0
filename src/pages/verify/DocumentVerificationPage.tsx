@@ -42,6 +42,7 @@ interface VerificationData {
   verifiedAt: string;
   internalPath: string;
   tamperDetails?: string[];
+  hideFinancialValues?: boolean;
 }
 
 export default function DocumentVerificationPage() {
@@ -301,10 +302,22 @@ export default function DocumentVerificationPage() {
                     <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Official Total Amount</span>
                   </div>
-                  <div className="verify-spec-value amount-text">
-                    {formatCurrency(data.amount, data.currency)}
-                  </div>
-                  <div className="verify-spec-sub">{displayCompanyName} Official Ledger</div>
+                  {data.hideFinancialValues || data.amount === undefined ? (
+                    <>
+                      <div className="verify-spec-value amount-text text-slate-500 flex items-center gap-1.5" style={{ fontSize: '1.05rem', color: '#64748b' }}>
+                        <Lock className="w-4 h-4 text-amber-600 inline-block flex-shrink-0" />
+                        <span>Confidential • Hidden</span>
+                      </div>
+                      <div className="verify-spec-sub">Protected by {displayCompanyName} policy</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="verify-spec-value amount-text">
+                        {formatCurrency(data.amount, data.currency)}
+                      </div>
+                      <div className="verify-spec-sub">{displayCompanyName} Official Ledger</div>
+                    </>
+                  )}
                 </div>
 
                 {/* Status */}

@@ -290,6 +290,7 @@ export interface CompanyProfile {
   domainStatus?: string | null;
   domainDnsRecords?: DnsRecord[] | null;
   domainVerifiedAt?: string | null;
+  showValuesOnVerification?: boolean;
 }
 
 export interface DnsRecord {
