@@ -56,7 +56,7 @@ export default function VendorCreateInvoicePage() {
 
   const { user } = useAuth();
   const { companyDefaultCurrency, formatAmount, convert } = useCurrency();
-  const { companyName, companyPhone, companyEmail, logoUrl } = useBranding();
+  const { companyName, companyPhone, companyEmail, logoUrl, profile } = useBranding();
 
   // Load Vendor's assigned Purchase Orders
   const { data: poData, loading: poLoading } = useServiceData(
@@ -123,6 +123,7 @@ export default function VendorCreateInvoicePage() {
   const isDispatchOnly = selectedPO?.vendorFulfillmentAllowed === 'DISPATCH_ONLY';
 
   const finalLogoUrl = selectedPO?.companyLogoUrl || logoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
+  const finalCompanyName = buyerName || selectedPO?.companyName || profile?.companyName || companyName || 'Company';
 
   // Human-readable PO Number formatter (never display raw 24-hex Mongo ID)
   const displayPoNumber = useMemo(() => {

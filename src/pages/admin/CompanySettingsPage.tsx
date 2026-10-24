@@ -1283,12 +1283,15 @@ export default function CompanySettingsPage() {
     try {
       const res = await companySettingsService.verifyCustomDomain();
       if (res.success) {
-        const refreshed = await companySettingsService.getCompanyProfile();
-        setProfile(refreshed);
         if (res.status === 'VERIFIED') {
+          setProfile((prev) => prev ? { ...prev, domainStatus: 'VERIFIED', domainDnsRecords: (res.records || prev.domainDnsRecords) as any } : prev);
           setPageMsg('✅ Domain DNS verified! Outgoing emails will now be sent directly from your custom domain.');
         } else {
           setPageMsg('DNS check completed. DNS records are still propagating. Please allow a few minutes and try again.');
+        }
+        const refreshed = await companySettingsService.getCompanyProfile(true);
+        if (refreshed) {
+          setProfile(refreshed);
         }
       } else {
         setPageMsg(res.error || 'Failed to verify domain');

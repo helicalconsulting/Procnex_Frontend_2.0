@@ -339,7 +339,7 @@ export interface UpdateBrandingPayload {
   replyToEmail?: string;
 }
 
-async function mockGetCompanyProfile(): Promise<CompanyProfile> {
+async function mockGetCompanyProfile(_forceRefresh = false): Promise<CompanyProfile> {
   await new Promise((r) => setTimeout(r, 200));
   return {
     id: '1', companyCode: 'HFL', defaultCurrency: 'KES',
@@ -355,7 +355,7 @@ async function mockGetCompanyProfile(): Promise<CompanyProfile> {
  * fall back to the public endpoint (no auth required).
  * Public branding follows the company in the current URL or saved session.
  */
-async function apiGetCompanyProfile(): Promise<CompanyProfile> {
+async function apiGetCompanyProfile(forceRefresh = false): Promise<CompanyProfile> {
   const isBrowser = typeof window !== 'undefined' && typeof window.location !== 'undefined';
   
   // If in browser and definitely no token, go straight to public endpoint
@@ -365,7 +365,7 @@ async function apiGetCompanyProfile(): Promise<CompanyProfile> {
   
   // Try authenticated endpoint first
   try {
-    const data = await apiRequest<{ profile: CompanyProfile }>('/company-settings/profile', { cacheTtlMs: 120000 });
+    const data = await apiRequest<{ profile: CompanyProfile }>('/company-settings/profile', { cacheTtlMs: forceRefresh ? 0 : 120000 });
     return data.profile;
   } catch (err) {
     // On 401 (stale token), use public endpoint instead
