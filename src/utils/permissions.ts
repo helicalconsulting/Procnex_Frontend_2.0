@@ -40,6 +40,7 @@ export function hasModulePermission(
   if (module === 'Documents' || module === 'Notifications') return true;
   if (!permissions || Object.keys(permissions).length === 0) return false;
   if (Boolean(permissions[module]?.[action])) return true;
+  if (action === 'canView' && Boolean(permissions[module]?.canCreate)) return true;
 
   const aliases: Record<string, string[]> = {
     'Dashboard': ['Dashboard'],
@@ -87,6 +88,7 @@ export function hasModulePermission(
   const list = aliases[module] || [module, `${module}s`, module.replace(/s$/, '')];
   for (const m of list) {
     if (permissions[m]?.[action]) return true;
+    if (action === 'canView' && permissions[m]?.canCreate) return true;
   }
 
   return false;

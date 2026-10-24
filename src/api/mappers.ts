@@ -102,6 +102,8 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     _isRejectedByMe: Boolean(rfq.isRejectedByMe || rfq.userAction === 'REJECTED'),
     _isReturnedForReReview: Boolean(isDocReReview || (rfq as any)._isReturnedForReReview),
     canUserAct: Boolean(rfq.canUserAct),
+    currentLevel: Number((rfq as any).currentLevel || (rfq as any).currentLevelNumber || 1),
+    approvalId: (rfq as any).approvalId ? String((rfq as any).approvalId) : undefined,
     createdAt: String(rfq.createdAt).slice(0, 10),
     creator: creator?.fullName || (typeof rfq.creator === 'string' ? rfq.creator : '') || 'Unknown',
     creatorInitials: initials(creator?.fullName || (typeof rfq.creator === 'string' ? rfq.creator : '') || 'Unknown'),

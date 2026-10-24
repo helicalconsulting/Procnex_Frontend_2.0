@@ -1426,71 +1426,85 @@ export default function AccountsPayablePage() {
                   </div>
                 </div>
 
-                {/* Return Destination (Only for Approver 2+; Approver 1 routes directly to Originator/Admin) */}
-                {actionModal.action === 'return' && (actionModal.invoice.currentLevel || 1) > 1 && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span>Return Destination</span>
-                      <span className="text-[11px] text-muted-foreground">Select recipient</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        className={cn(
-                          "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
-                          actionReturnTarget === 'ORIGINATOR'
-                            ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
-                            : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
-                        )}
-                        onClick={() => setActionReturnTarget('ORIGINATOR')}
-                      >
-                        <div className="flex items-center justify-between w-full mb-1">
-                          <span className="text-xs font-bold">Originator / Admin</span>
-                          <div className={cn(
-                            "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                {/* Return Destination (Options for Approver 2+; for Approver 1 shows clear Originator/Admin notice) */}
+                {actionModal.action === 'return' && (
+                  (actionModal.invoice.currentLevel || 1) > 1 ? (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                        <span>Return Destination</span>
+                        <span className="text-[11px] text-muted-foreground">Select recipient</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          className={cn(
+                            "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
                             actionReturnTarget === 'ORIGINATOR'
-                              ? "border-amber-500 bg-amber-500"
-                              : "border-muted-foreground/30 bg-transparent"
-                          )}>
-                            {actionReturnTarget === 'ORIGINATOR' && (
-                              <div className="size-1.5 rounded-full bg-white" />
-                            )}
+                              ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
+                              : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
+                          )}
+                          onClick={() => setActionReturnTarget('ORIGINATOR')}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className="text-xs font-bold">Originator / Admin</span>
+                            <div className={cn(
+                              "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                              actionReturnTarget === 'ORIGINATOR'
+                                ? "border-amber-500 bg-amber-500"
+                                : "border-muted-foreground/30 bg-transparent"
+                            )}>
+                              {actionReturnTarget === 'ORIGINATOR' && (
+                                <div className="size-1.5 rounded-full bg-white" />
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground leading-tight">
-                          Send back to creator for revision & edits
-                        </p>
-                      </button>
+                          <p className="text-[11px] text-muted-foreground leading-tight">
+                            Send back to creator for revision & edits
+                          </p>
+                        </button>
 
-                      <button
-                        type="button"
-                        className={cn(
-                          "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
-                          actionReturnTarget === 'LEVEL_1'
-                            ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
-                            : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
-                        )}
-                        onClick={() => setActionReturnTarget('LEVEL_1')}
-                      >
-                        <div className="flex items-center justify-between w-full mb-1">
-                          <span className="text-xs font-bold">Approver 1 (Level 1)</span>
-                          <div className={cn(
-                            "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                        <button
+                          type="button"
+                          className={cn(
+                            "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
                             actionReturnTarget === 'LEVEL_1'
-                              ? "border-amber-500 bg-amber-500"
-                              : "border-muted-foreground/30 bg-transparent"
-                          )}>
-                            {actionReturnTarget === 'LEVEL_1' && (
-                              <div className="size-1.5 rounded-full bg-white" />
-                            )}
+                              ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
+                              : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
+                          )}
+                          onClick={() => setActionReturnTarget('LEVEL_1')}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className="text-xs font-bold">Approver 1 (Level 1)</span>
+                            <div className={cn(
+                              "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                              actionReturnTarget === 'LEVEL_1'
+                                ? "border-amber-500 bg-amber-500"
+                                : "border-muted-foreground/30 bg-transparent"
+                            )}>
+                              {actionReturnTarget === 'LEVEL_1' && (
+                                <div className="size-1.5 rounded-full bg-white" />
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground leading-tight">
-                          Restart workflow at Level 1 Approver
-                        </p>
-                      </button>
+                          <p className="text-[11px] text-muted-foreground leading-tight">
+                            Restart workflow at Level 1 Approver
+                          </p>
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                      <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 text-xs">
+                        <div className="font-bold text-amber-900 dark:text-amber-200">
+                          Return Destination: Originator / Admin
+                        </div>
+                        <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                          As Level 1 Approver, returning this invoice will send it back to the <strong>Originator / Admin</strong> for modification and revision.
+                        </p>
+                      </div>
+                    </div>
+                  )
                 )}
 
                 {/* Comments Box */}

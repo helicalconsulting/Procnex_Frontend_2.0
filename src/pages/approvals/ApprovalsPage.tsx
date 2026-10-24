@@ -563,7 +563,19 @@ export default function ApprovalsPage() {
       setActionSendingState(null);
 
       if (res?.message) {
-        setActionSuccessData((prev) => (prev ? { ...prev, message: res.message } : null));
+        let msg: string = res.message;
+        const refNum = req.referenceNumber || res.referenceNumber;
+        if (refNum) {
+          if (req.referenceId) {
+            msg = msg.replace(`#${req.referenceId}`, refNum).replace(req.referenceId, refNum);
+          }
+          msg = msg.replace(/#[0-9a-fA-F]{24}/g, refNum);
+        }
+        msg = msg
+          .replace(/\bPurchaseOrders\b/g, 'Purchase Order')
+          .replace(/\bAccountsPayable\b/g, 'Purchase Invoice')
+          .replace(/\bPayments\b/g, 'Payment Voucher');
+        setActionSuccessData((prev) => (prev ? { ...prev, message: msg } : null));
       }
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       try {
@@ -969,42 +981,56 @@ export default function ApprovalsPage() {
               </div>
             </div>
 
-            {/* Return Destination (only show options for Approver 2+; for Approver 1 it returns directly to Vendor/Originator) */}
-            {actionModal.action === 'return' && (actionModal.request.currentLevel || 1) > 1 && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-foreground flex items-center justify-between">
-                  <span>Return Destination</span>
-                  <span className="text-[10px] text-muted-foreground font-normal">Select where this request goes back to</span>
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-xl border p-3 text-left transition-all relative",
-                      actionReturnTarget === 'ORIGINATOR' || actionReturnTarget === 'VENDOR'
-                        ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
-                        : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
-                    )}
-                    onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
-                  >
-                    <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Return to Vendor for Resubmission' : 'Return to Originator/Admin for Modification'}</div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Send back for revision</div>
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-xl border p-3 text-left transition-all relative",
-                      actionReturnTarget === 'LEVEL_1'
-                        ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
-                        : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
-                    )}
-                    onClick={() => setActionReturnTarget('LEVEL_1')}
-                  >
-                    <div className="text-xs font-bold">Return to Level 1 Approver</div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Restart chain at L1</div>
-                  </button>
+            {/* Return Destination (options for Approver 2+; for Approver 1 it shows clear Originator/Admin notice) */}
+            {actionModal.action === 'return' && (
+              (actionModal.request.currentLevel || 1) > 1 ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                    <span>Return Destination</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">Select where this request goes back to</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-xl border p-3 text-left transition-all relative",
+                        actionReturnTarget === 'ORIGINATOR' || actionReturnTarget === 'VENDOR'
+                          ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
+                          : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
+                      )}
+                      onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
+                    >
+                      <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Return to Vendor for Resubmission' : 'Return to Originator/Admin for Modification'}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Send back for revision</div>
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-xl border p-3 text-left transition-all relative",
+                        actionReturnTarget === 'LEVEL_1'
+                          ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
+                          : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
+                      )}
+                      onClick={() => setActionReturnTarget('LEVEL_1')}
+                    >
+                      <div className="text-xs font-bold">Return to Level 1 Approver</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Restart chain at L1</div>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                  <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 text-xs">
+                    <div className="font-bold text-amber-900 dark:text-amber-200">
+                      Return Destination: {(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor / Originator' : 'Originator / Admin'}
+                    </div>
+                    <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                      As Level 1 Approver, returning this request will send it back to the <strong>{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor / Originator' : 'Originator / Admin'}</strong> for modification and revision.
+                    </p>
+                  </div>
+                </div>
+              )
             )}
 
             {/* Comments Box */}

@@ -1002,25 +1002,35 @@ export default function RFQDetailModal({
               </div>
             {showCommentBox && (
               <div className="mt-3 border-t border-amber-500/20 pt-3">
-                {showCommentBox === 'return' && (
-                  <div className="mb-2.5 flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-foreground">Return to</label>
-                    {(pendingApproval?.levelNumber || 1) > 1 ? (
-                      <select
-                        className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs font-medium focus:ring-1 focus:ring-primary"
-                        value={actionReturnTarget}
-                        onChange={(e) => setActionReturnTarget(e.target.value as any)}
-                      >
-                        <option value="ORIGINATOR">Originator / Creator / Admin</option>
-                        <option value="LEVEL_1">Level 1 Approver</option>
-                      </select>
-                    ) : (
-                      <div className="flex h-8 items-center rounded-md border border-border/70 bg-muted/40 px-2 text-xs font-medium text-foreground">
-                        Originator / Creator / Admin
-                      </div>
-                    )}
-                  </div>
-                )}
+                {showCommentBox === 'return' && (() => {
+                  const currentLvl = pendingApproval?.currentLevel || pendingApproval?.levelNumber || (rfq as any)?.currentLevel || approvalChain?.currentLevel || 1;
+                  return (
+                    <div className="mb-2.5 flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-foreground">Return to</label>
+                      {currentLvl > 1 ? (
+                        <select
+                          className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs font-medium focus:ring-1 focus:ring-primary"
+                          value={actionReturnTarget}
+                          onChange={(e) => setActionReturnTarget(e.target.value as any)}
+                        >
+                          <option value="ORIGINATOR">Originator / Creator / Admin</option>
+                          <option value="LEVEL_1">Level 1 Approver</option>
+                        </select>
+                      ) : (
+                        <div className="flex h-8 items-center rounded-md border border-border/70 bg-muted/40 px-2 text-xs font-medium text-foreground">
+                          Originator / Creator / Admin
+                        </div>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">
+                        {currentLvl > 1
+                          ? actionReturnTarget === 'LEVEL_1'
+                            ? `Level ${currentLvl} return will send the RFQ back to Level 1 Approver to restart the chain.`
+                            : `Level ${currentLvl} return will send the RFQ back to the originator / creator / admin for revision.`
+                          : 'Level 1 return sends the RFQ back to the originator / creator / admin for revision.'}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <textarea
                   className="w-full rounded-md border border-input bg-card p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   rows={2}

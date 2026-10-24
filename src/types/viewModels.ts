@@ -66,6 +66,8 @@ export interface RFQTableRow {
   _isReturnedByMe?: boolean;
   _isRejectedByMe?: boolean;
   canUserAct?: boolean;
+  currentLevel?: number;
+  approvalId?: string;
 }
 
 /** Quotation row on RFQ detail (admin view) */

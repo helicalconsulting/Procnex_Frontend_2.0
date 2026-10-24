@@ -386,12 +386,26 @@ export default function RFQPage() {
     };
   }, [fetchPendingApprovals, forceRefresh]);
 
-  const openApprovalAction = useCallback((rfq: MockRFQ, action: 'approve' | 'reject' | 'return') => {
-    const found = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
-    const approvalId = found ? found.id : String(rfq.id);
-    const levelNumber = found?.currentLevel || (found?.level as any)?.levelNumber || 1;
+  const openApprovalAction = useCallback(async (rfq: MockRFQ, action: 'approve' | 'reject' | 'return') => {
+    const found = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber) || pendingApprovalsMap.get(String((rfq as any)._id));
+    let approvalId = found ? found.id : ((rfq as any).approvalId || String(rfq.id));
+    let levelNumber = (rfq as any).currentLevel || (rfq as any).currentLevelNumber || found?.currentLevel || (found?.level as any)?.levelNumber;
 
-    setApprovalActionModal({ rfq, action, approvalId, levelNumber });
+    if (!levelNumber || levelNumber <= 1) {
+      try {
+        const chain = await approvalService.getChain('RFQ', String(rfq.id) || rfq.rfqNumber).catch(() => null);
+        if (chain?.currentLevel && chain.currentLevel > 1) {
+          levelNumber = chain.currentLevel;
+        } else if (chain?.levels && Array.isArray(chain.levels)) {
+          const pendingL = chain.levels.find((l: any) => l.status === 'PENDING');
+          if (pendingL?.levelNumber && pendingL.levelNumber > 1) {
+            levelNumber = pendingL.levelNumber;
+          }
+        }
+      } catch {}
+    }
+
+    setApprovalActionModal({ rfq, action, approvalId, levelNumber: levelNumber || 1 });
     setApprovalComment('');
     setApprovalModalError(null);
     setActionReturnTarget('ORIGINATOR');
@@ -1354,11 +1368,13 @@ export default function RFQPage() {
                       Originator / Creator / Admin
                     </div>
                   )}
-                  {(approvalActionModal.levelNumber || 1) <= 1 && (
-                    <span className="text-[11px] text-muted-foreground">
-                      Level 1 return sends the RFQ back to the originator / creator / admin for revision.
-                    </span>
-                  )}
+                  <span className="text-[11px] text-muted-foreground">
+                    {(approvalActionModal.levelNumber || 1) > 1
+                      ? actionReturnTarget === 'LEVEL_1'
+                        ? `Level ${approvalActionModal.levelNumber} return will send the RFQ back to Level 1 Approver to restart the chain.`
+                        : `Level ${approvalActionModal.levelNumber} return will send the RFQ back to the originator / creator / admin for revision.`
+                      : 'Level 1 return sends the RFQ back to the originator / creator / admin for revision.'}
+                  </span>
                 </div>
               )}
 

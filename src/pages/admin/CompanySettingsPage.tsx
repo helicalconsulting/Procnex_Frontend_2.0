@@ -526,7 +526,9 @@ const EMBEDDED_STANDARD_UNITS: EmbeddedUnit[] = [
 
 export default function CompanySettingsPage() {
   const { hasPermission, user } = useAuth();
-  const canCreateSettings = hasPermission('Company Settings', 'canCreate') || hasPermission('Settings', 'canCreate');
+  const hasCreatePermission = hasPermission('Company Settings', 'canCreate') || hasPermission('Settings', 'canCreate');
+  const [viewOnlyBypass, setViewOnlyBypass] = useState(false);
+  const canCreateSettings = hasCreatePermission && !viewOnlyBypass;
   const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify company settings.";
   const disabledActionStyle = !canCreateSettings ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' as const } : undefined;
 
@@ -537,7 +539,8 @@ export default function CompanySettingsPage() {
   });
   const [checkingPasscodeStatus, setCheckingPasscodeStatus] = useState<boolean>(true);
 
-  const isDataFetchEnabled = isUnlocked || (!checkingPasscodeStatus && !isPasscodeProtected);
+  // Read-only users can always fetch and view data; edit users fetch when unlocked or open access
+  const isDataFetchEnabled = isUnlocked || (!checkingPasscodeStatus && !isPasscodeProtected) || !canCreateSettings;
 
   // Data
   const { data: departments, loading, reload } = useServiceData(
@@ -937,6 +940,7 @@ export default function CompanySettingsPage() {
       if (res.verified) {
         sessionStorage.setItem('heliflow_cs_unlocked', 'true');
         setIsUnlocked(true);
+        setViewOnlyBypass(false);
         setLockPasscode('');
       } else {
         setLockError('Incorrect Security Passcode. Access Denied.');
@@ -2990,7 +2994,9 @@ export default function CompanySettingsPage() {
 
 
   // ── Early Return for Passcode Protection Gate ──
-  if (checkingPasscodeStatus && !isUnlocked) {
+  // If user has Create permission and settings are passcode protected, prompt for passcode.
+  // View-only users directly view settings in read-only mode without being locked out.
+  if (checkingPasscodeStatus && !isUnlocked && hasCreatePermission && !viewOnlyBypass) {
     return (
       <div className="p-6 w-full">
         <PageSkeleton />
@@ -2998,7 +3004,7 @@ export default function CompanySettingsPage() {
     );
   }
 
-  if (isPasscodeProtected && !isUnlocked) {
+  if (isPasscodeProtected && !isUnlocked && hasCreatePermission && !viewOnlyBypass) {
     return (
       <div className="settings-workspace cs-lock-overlay">
         <div className="cs-lock-card">
@@ -3010,7 +3016,7 @@ export default function CompanySettingsPage() {
             Company Settings Security Lock
           </h2>
           <p className="cs-lock-subtitle">
-            Access to Company Settings is passcode protected by Super Admin. Please enter your passcode to unlock.
+            Access to modify Company Settings is passcode protected by Super Admin. Please enter your passcode to unlock editing.
           </p>
 
           {lockError && (
@@ -3062,6 +3068,17 @@ export default function CompanySettingsPage() {
                 </>
               )}
             </Button>
+
+            <Button
+              variant="outline"
+              size="default"
+              type="button"
+              onClick={() => setViewOnlyBypass(true)}
+              style={{ marginTop: 10, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+              <Eye size={16} />
+              <span>Continue in Read-Only Mode</span>
+            </Button>
           </form>
         </div>
       </div>
@@ -3084,9 +3101,56 @@ export default function CompanySettingsPage() {
 
       {/* ── Page Header ── */}
       <div className="cs-page-header">
-        <h1><Settings size={22} /> Company Settings</h1>
-        <p>Configure your organization's departments, categories, units, and payment terms</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1><Settings size={22} /> Company Settings</h1>
+            <p>Configure your organization's departments, categories, units, and payment terms</p>
+          </div>
+          {!canCreateSettings && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 12px',
+              borderRadius: 6,
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              color: '#2563eb',
+              fontSize: 13,
+              fontWeight: 600,
+            }}>
+              <Eye size={16} />
+              <span>Read-Only Mode</span>
+              {hasCreatePermission && viewOnlyBypass && isPasscodeProtected && (
+                <button
+                  type="button"
+                  onClick={() => setViewOnlyBypass(false)}
+                  style={{
+                    marginLeft: 8,
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#2563eb',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  Unlock
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {!canCreateSettings && (
+        <div style={{ marginBottom: 16 }}>
+          <MessageStrip type="info" compact>
+            You have read-only access to Company Settings. All configuration changes, additions, and deletions are disabled.
+          </MessageStrip>
+        </div>
+      )}
 
 
 
@@ -3147,7 +3211,11 @@ export default function CompanySettingsPage() {
                     <>
                       <Button className="settings-action" variant="outline" size="default"
                         type="button"
+                        disabled={!canCreateSettings}
+                        style={disabledActionStyle}
+                        title={!canCreateSettings ? noPermissionTitle : undefined}
                         onClick={() => {
+                          if (!canCreateSettings) return;
                           setPasscodeModalMode('change');
                           setPasscodeError(null);
                           setPasscodeCurrent('');
@@ -3162,7 +3230,11 @@ export default function CompanySettingsPage() {
                       </Button>
                       <Button className="settings-action" variant="destructive" size="default"
                         type="button"
+                        disabled={!canCreateSettings}
+                        style={disabledActionStyle}
+                        title={!canCreateSettings ? noPermissionTitle : undefined}
                         onClick={() => {
+                          if (!canCreateSettings) return;
                           setPasscodeModalMode('remove');
                           setPasscodeError(null);
                           setPasscodeCurrent('');
@@ -3177,7 +3249,11 @@ export default function CompanySettingsPage() {
                   ) : (
                     <Button className="settings-action" variant="default" size="default"
                       type="button"
+                      disabled={!canCreateSettings}
+                      style={disabledActionStyle}
+                      title={!canCreateSettings ? noPermissionTitle : undefined}
                       onClick={() => {
+                        if (!canCreateSettings) return;
                         setPasscodeModalMode('set');
                         setPasscodeError(null);
                         setPasscodeCurrent('');

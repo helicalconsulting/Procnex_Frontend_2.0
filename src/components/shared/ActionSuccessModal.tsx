@@ -60,6 +60,18 @@ export function ActionSuccessModal({ data, onClose }: ActionSuccessModalProps) {
     ? `The ${data.module} request has been rejected. Email notifications have been sent to relevant parties.`
     : `The ${data.module} request has been returned for revision. The originator/vendor has been notified via email.`;
 
+  const formattedMessage = React.useMemo(() => {
+    let msg = data.message || defaultMessage;
+    if (data.referenceNumber) {
+      msg = msg.replace(/#[0-9a-fA-F]{24}/g, data.referenceNumber);
+    }
+    msg = msg
+      .replace(/\bPurchaseOrders\b/g, 'Purchase Order')
+      .replace(/\bAccountsPayable\b/g, 'Purchase Invoice')
+      .replace(/\bPayments\b/g, 'Payment Voucher');
+    return msg;
+  }, [data.message, defaultMessage, data.referenceNumber]);
+
   const content = (
     <div className="action-success-backdrop" onClick={onClose} role="presentation">
       <div
@@ -85,7 +97,7 @@ export function ActionSuccessModal({ data, onClose }: ActionSuccessModalProps) {
             {badgeText}
           </span>
           <h2 className="action-success-modal__title">{displayActionTitle}</h2>
-          <p className="action-success-modal__message">{data.message || defaultMessage}</p>
+          <p className="action-success-modal__message">{formattedMessage}</p>
         </div>
 
         {/* Summary Details Card */}
