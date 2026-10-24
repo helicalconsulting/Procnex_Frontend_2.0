@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Clock,
 } from 'lucide-react';
+import { API_BASE } from '../../api/client';
 import './DocumentVerificationPage.css';
 
 interface VerificationData {
@@ -65,15 +66,19 @@ export default function DocumentVerificationPage() {
   const [logoLoadError, setLogoLoadError] = useState(false);
 
   const getApiBaseUrl = () => {
-    // When opened from a real domain (e.g. srm-test.procnex.com), use window.location.origin/api
     if (
       typeof window !== 'undefined' &&
       !window.location.hostname.includes('localhost') &&
       !window.location.hostname.includes('127.0.0.1')
     ) {
-      return `${window.location.origin}/api`;
+      if (API_BASE && !API_BASE.includes('localhost') && !API_BASE.includes('127.0.0.1')) {
+        return API_BASE;
+      }
+      if (window.location.hostname.includes('procnex.com')) {
+        return 'https://procnexapi-test.procnex.com/api';
+      }
     }
-    return import.meta.env.VITE_API_URL || '/api';
+    return API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
   };
 
   const fetchVerification = async () => {
@@ -203,7 +208,6 @@ export default function DocumentVerificationPage() {
               src={displayLogo}
               alt={displayCompanyName}
               className="verify-header-logo"
-              crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onError={() => {
                 setLogoLoadError(true);
