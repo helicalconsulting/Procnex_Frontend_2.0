@@ -932,7 +932,7 @@ export default function RFQPage() {
           <TableSkeleton rows={5} columnWidths={['44px', '140px', '220px', '140px', '150px', '110px', '65px', '75px', '70px', '110px', '85px', '100px']} />
         ) : paginated.length > 0 ? (
           <>
-            <DataTableViewport stickyActions label="RFQ register" wrapperClassName="hidden lg:block">
+            <DataTableViewport label="RFQ register" wrapperClassName="hidden lg:block">
               <table className="w-full text-sm" style={{ minWidth: 44 + 224 + visibleColumns.reduce((sum, col) => sum + parseInt(COL_META[col.key]?.width || '140'), 0) }}>
                 <colgroup><col style={{ width: 44 }} />{visibleColumns.map(col => <col key={col.key} style={{ width: COL_META[col.key]?.width || '140px' }} />)}<col style={{ width: 224 }} /></colgroup>
                 <thead>

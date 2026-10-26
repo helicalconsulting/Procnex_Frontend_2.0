@@ -427,6 +427,7 @@ export default function VendorInvoicesPage() {
                     {paginatedDispatches.map((dn) => {
                       const isReceived = String(dn.status || '').toUpperCase() === 'RECEIVED';
                       const poRef = dn.poNumber || dn.purchaseOrder?.poNumber || (dn.poId ? `PO-${String(dn.poId).slice(-6).toUpperCase()}` : '—');
+                      const isDispatchOnly = (dn as any).vendorFulfillmentAllowed === 'DISPATCH_ONLY' || (dn.purchaseOrder as any)?.vendorFulfillmentAllowed === 'DISPATCH_ONLY';
                       return (
                         <tr key={dn.id} className="transition-colors hover:bg-accent/35">
                           <td className="px-4 py-3.5">
@@ -481,14 +482,16 @@ export default function VendorInvoicesPage() {
                               >
                                 <Printer className="size-3 text-sky-600" /> Challan
                               </Button>
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
-                                className="gap-1 text-xs"
-                              >
-                                <Plus className="size-3" /> Invoice <ArrowRight className="size-3" />
-                              </Button>
+                              {!isDispatchOnly && (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
+                                  className="gap-1 text-xs"
+                                >
+                                  <Plus className="size-3" /> Invoice <ArrowRight className="size-3" />
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -503,6 +506,7 @@ export default function VendorInvoicesPage() {
               {paginatedDispatches.map((dn) => {
                 const isReceived = String(dn.status || '').toUpperCase() === 'RECEIVED';
                 const poRef = dn.poNumber || dn.purchaseOrder?.poNumber || (dn.poId ? `PO-${String(dn.poId).slice(-6).toUpperCase()}` : '—');
+                const isDispatchOnly = (dn as any).vendorFulfillmentAllowed === 'DISPATCH_ONLY' || (dn.purchaseOrder as any)?.vendorFulfillmentAllowed === 'DISPATCH_ONLY';
                 return (
                   <Card key={dn.id} className="p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -537,14 +541,16 @@ export default function VendorInvoicesPage() {
                       >
                         <Printer className="size-3 text-sky-600" /> View Challan
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
-                        className="gap-1 text-xs"
-                      >
-                        <Plus className="size-3" /> Create Invoice
-                      </Button>
+                      {!isDispatchOnly && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
+                          className="gap-1 text-xs"
+                        >
+                          <Plus className="size-3" /> Create Invoice
+                        </Button>
+                      )}
                     </div>
                   </Card>
                 );

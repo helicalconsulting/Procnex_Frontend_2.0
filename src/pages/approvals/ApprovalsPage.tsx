@@ -327,15 +327,25 @@ export default function ApprovalsPage() {
       refreshAll();
     };
 
+    const handleApprovalUpdated = (e: Event) => {
+      if ((e as CustomEvent)?.detail?.source === 'ApprovalsPage') {
+        return;
+      }
+      refreshAll();
+    };
+
     window.addEventListener('heliflow:po-deleted', handlePoDeleted);
     window.addEventListener('heliflow:po-created', refreshAll);
-    window.addEventListener('heliflow:approval-updated', refreshAll);
+    window.addEventListener('heliflow:approval-updated', handleApprovalUpdated);
     window.addEventListener('heliflow:po-updated', refreshAll);
 
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel('heliflow_sync');
-      bc.onmessage = () => { refreshAll(); };
+      bc.onmessage = (e) => {
+        if (e?.data?.source === 'ApprovalsPage') return;
+        refreshAll();
+      };
     } catch {}
 
     return () => {
@@ -343,7 +353,7 @@ export default function ApprovalsPage() {
       unsubLevel(); unsubChain(); unsubForwarded(); unsubPoStatus(); unsubReq(); unsubNotif(); unsubPoCreated(); unsubApprovalInit(); unsubApprovalUpdated(); unsubPoUpdated();
       window.removeEventListener('heliflow:po-deleted', handlePoDeleted);
       window.removeEventListener('heliflow:po-created', refreshAll);
-      window.removeEventListener('heliflow:approval-updated', refreshAll);
+      window.removeEventListener('heliflow:approval-updated', handleApprovalUpdated);
       window.removeEventListener('heliflow:po-updated', refreshAll);
       if (bc) bc.close();
     };
@@ -577,10 +587,10 @@ export default function ApprovalsPage() {
           .replace(/\bPayments\b/g, 'Payment Voucher');
         setActionSuccessData((prev) => (prev ? { ...prev, message: msg } : null));
       }
-      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated', { detail: { source: 'ApprovalsPage' } }));
       try {
         const bc = new BroadcastChannel('heliflow_sync');
-        bc.postMessage({ type: 'approval_updated', id, actionType });
+        bc.postMessage({ type: 'approval_updated', id, actionType, source: 'ApprovalsPage' });
         bc.close();
       } catch {}
       await forceRefresh();
@@ -759,7 +769,7 @@ export default function ApprovalsPage() {
         {loading && approvals.length === 0 ? (
           <TableSkeleton rows={5} columnWidths={['220px', '140px', '110px', '95px', '110px', '130px', '120px', '90px']} />
         ) : paginated.length > 0 ? (
-          <DataTableViewport stickyActions label="Purchase order approvals">
+          <DataTableViewport label="Purchase order approvals">
             <table className="w-full text-sm" style={{ minWidth: actionsWidth + visibleColumns.reduce((sum, col) => sum + (col.key === 'request' ? 340 : col.key === 'module' ? 180 : 150), 0) }}>
               <colgroup>{visibleColumns.map(col => <col key={col.key} style={{ width: col.key === 'request' ? 340 : col.key === 'module' ? 180 : 150 }} />)}<col style={{ width: actionsWidth }} /></colgroup>
               <thead>
@@ -775,7 +785,7 @@ export default function ApprovalsPage() {
                       {col.label}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-center sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]">
+                  <th className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <span>Actions</span>
                       <div className="relative">
@@ -822,7 +832,7 @@ export default function ApprovalsPage() {
                         {col.render(req, formatDateTime)}
                       </td>
                     ))}
-                    <td className="px-3 py-3.5 text-center sticky right-0 z-10 bg-card group-hover:bg-[var(--table-row-hover)] transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye className="size-4 text-muted-foreground hover:text-foreground" />

@@ -60,17 +60,14 @@ export function ActionSuccessModal({ data, onClose }: ActionSuccessModalProps) {
     ? `The ${data.module} request has been rejected. Email notifications have been sent to relevant parties.`
     : `The ${data.module} request has been returned for revision. The originator/vendor has been notified via email.`;
 
-  const formattedMessage = React.useMemo(() => {
-    let msg = data.message || defaultMessage;
-    if (data.referenceNumber) {
-      msg = msg.replace(/#[0-9a-fA-F]{24}/g, data.referenceNumber);
-    }
-    msg = msg
-      .replace(/\bPurchaseOrders\b/g, 'Purchase Order')
-      .replace(/\bAccountsPayable\b/g, 'Purchase Invoice')
-      .replace(/\bPayments\b/g, 'Payment Voucher');
-    return msg;
-  }, [data.message, defaultMessage, data.referenceNumber]);
+  let formattedMessage = data.message || defaultMessage;
+  if (data.referenceNumber) {
+    formattedMessage = formattedMessage.replace(/#[0-9a-fA-F]{24}/g, data.referenceNumber);
+  }
+  formattedMessage = formattedMessage
+    .replace(/\bPurchaseOrders\b/g, 'Purchase Order')
+    .replace(/\bAccountsPayable\b/g, 'Purchase Invoice')
+    .replace(/\bPayments\b/g, 'Payment Voucher');
 
   const content = (
     <div className="action-success-backdrop" onClick={onClose} role="presentation">

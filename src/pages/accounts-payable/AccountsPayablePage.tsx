@@ -220,6 +220,9 @@ export default function AccountsPayablePage() {
   const [invoicesList, setInvoicesList] = useState<APInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isInitialLoadRef = useRef(true);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [optimisticMap, setOptimisticMap] = useState<Record<string, { status: APStatus; canAct: boolean; currentLevel?: number }>>({});
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<APStatus | 'ALL'>('ALL');
   const [detailInvoice, setDetailInvoice] = useState<APInvoice | null>(null);
@@ -283,9 +286,11 @@ export default function AccountsPayablePage() {
     [columnOrder, visibleKeys]
   );
 
-  const fetchInvoicesData = useCallback(async () => {
+  const fetchInvoicesData = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!options?.silent && isInitialLoadRef.current) {
+        setLoading(true);
+      }
       setError(null);
 
       const [approvalRows, rawInvoices] = await Promise.all([
@@ -518,27 +523,51 @@ export default function AccountsPayablePage() {
         }
       });
 
-      setInvoicesList(merged);
+      const finalMerged = merged.map((inv) => {
+        const opt = optimisticMap[String(inv.id)] || (inv.invoiceNumber ? optimisticMap[inv.invoiceNumber] : null);
+        if (opt) {
+          return {
+            ...inv,
+            status: opt.status,
+            canAct: opt.canAct,
+            currentLevel: opt.currentLevel !== undefined ? opt.currentLevel : inv.currentLevel,
+          };
+        }
+        return inv;
+      });
+
+      setInvoicesList(finalMerged);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load purchase invoices');
     } finally {
       setLoading(false);
+      isInitialLoadRef.current = false;
     }
-  }, [authRoles, canApproveAP, isAdmin]);
+  }, [authRoles, canApproveAP, isAdmin, optimisticMap]);
+
+  const debouncedRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      fetchInvoicesData({ silent: true });
+    }, 300);
+  }, [fetchInvoicesData]);
 
   useEffect(() => {
     fetchInvoicesData();
 
-    const unsub1 = sseClient.on('approval_level_complete', fetchInvoicesData);
-    const unsub2 = sseClient.on('approval_chain_complete', fetchInvoicesData);
-    const unsub3 = sseClient.on('notification', fetchInvoicesData);
+    const unsub1 = sseClient.on('approval_level_complete', debouncedRefresh);
+    const unsub2 = sseClient.on('approval_chain_complete', debouncedRefresh);
+    const unsub3 = sseClient.on('notification', debouncedRefresh);
+    window.addEventListener('heliflow:approval-updated', debouncedRefresh);
 
     return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
       unsub1();
       unsub2();
       unsub3();
+      window.removeEventListener('heliflow:approval-updated', debouncedRefresh);
     };
-  }, [fetchInvoicesData]);
+  }, [fetchInvoicesData, debouncedRefresh]);
 
   const summary = useMemo(
     () => {
@@ -603,6 +632,19 @@ export default function AccountsPayablePage() {
         : returnTarget === 'LEVEL_1'
         ? 'PENDING'
         : 'RETURNED';
+
+    const optUpdate = {
+      status: newStatus,
+      canAct: false,
+      currentLevel: act === 'return' && returnTarget === 'LEVEL_1' ? 1 : targetInvoice.currentLevel,
+    };
+
+    setOptimisticMap((prev) => ({
+      ...prev,
+      [String(targetInvoice.id)]: optUpdate,
+      ...(targetInvoice.invoiceNumber ? { [targetInvoice.invoiceNumber]: optUpdate } : {}),
+      ...(approvalId ? { [approvalId]: optUpdate } : {}),
+    }));
 
     setInvoicesList((prev) =>
       prev.map((inv) =>
@@ -719,13 +761,13 @@ export default function AccountsPayablePage() {
         }
 
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-        fetchInvoicesData().catch(() => {});
+        debouncedRefresh();
       } catch (err) {
         console.error('Action failed in background:', err);
-        fetchInvoicesData().catch(() => {});
+        debouncedRefresh();
       }
     })();
-  }, [actionModal, actionComment, actionReturnTarget, fetchInvoicesData, companyDefaultCurrency, formatAmount]);
+  }, [actionModal, actionComment, actionReturnTarget, debouncedRefresh, companyDefaultCurrency, formatAmount]);
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
@@ -734,6 +776,14 @@ export default function AccountsPayablePage() {
       let approvalId = targetInvoice.approvalId;
 
       // ⚡ INSTANT 0ms Optimistic UI & Success Modal Trigger
+      const optUpdate = { status: 'APPROVED' as APStatus, canAct: false };
+      setOptimisticMap((prev) => ({
+        ...prev,
+        [String(targetInvoice.id)]: optUpdate,
+        ...(targetInvoice.invoiceNumber ? { [targetInvoice.invoiceNumber]: optUpdate } : {}),
+        ...(approvalId ? { [approvalId]: optUpdate } : {}),
+      }));
+
       setInvoicesList((prev) =>
         prev.map((inv) =>
           inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || (approvalId && inv.approvalId === approvalId)
@@ -835,16 +885,16 @@ export default function AccountsPayablePage() {
 
           await Promise.all([signPromise, approvePromise]);
           window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-          fetchInvoicesData().catch(() => {});
+          debouncedRefresh();
         } catch (err) {
           console.error('Background approval sync error:', err);
-          fetchInvoicesData().catch(() => {});
+          debouncedRefresh();
         } finally {
           setActionSaving(false);
         }
       })();
     },
-    [actionModal, fetchInvoicesData, companyDefaultCurrency, formatAmount]
+    [actionModal, debouncedRefresh, companyDefaultCurrency, formatAmount]
   );
 
   const openAction = useCallback((invoice: APInvoice, action: ActionType) => {
@@ -869,14 +919,14 @@ export default function AccountsPayablePage() {
           )
         );
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-        fetchInvoicesData().catch(() => {});
+        debouncedRefresh();
       } catch (err) {
         console.error('Failed to submit draft invoice:', err);
       } finally {
         setActionSaving(false);
       }
     },
-    [fetchInvoicesData]
+    [debouncedRefresh]
   );
 
   const formatDate = (date: string) =>
@@ -1020,7 +1070,7 @@ export default function AccountsPayablePage() {
         </div>
       </div>
 
-      {loading ? (
+      {loading && invoicesList.length === 0 ? (
         <Card className="p-4">
           <TableSkeleton rows={5} columns={visibleColumns.length + 1} />
         </Card>

@@ -853,16 +853,30 @@ export default function CreateGRNPage() {
           { label: 'Items Received', value: `${payloadItems.length} line items` },
           { label: 'Received Date', value: receivedDate },
         ],
-        primaryBtnText: 'Create Purchase Invoice',
+        primaryBtnText: 'View Recorded GRNs',
         onPrimaryClick: () => {
+          navigate('/procurement/goods-receipt?tab=recorded', {
+            state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber },
+            replace: true,
+          });
+        },
+        secondaryBtnText: 'Create Purchase Invoice',
+        onSecondaryClick: () => {
           navigate(
             `/procurement/create-purchase-invoice?poId=${encodeURIComponent(selectedPO?.id || selectedPO?.poNumber || selectedPoId)}&grnId=${encodeURIComponent(grnNumber)}`
           );
         },
+        onClose: () => {
+          navigate('/procurement/goods-receipt?tab=recorded', {
+            state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber },
+            replace: true,
+          });
+        },
       });
 
       navigate('/procurement/goods-receipt?tab=recorded', {
-        state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber }
+        state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber },
+        replace: true,
       });
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to save Goods Receipt Note.');

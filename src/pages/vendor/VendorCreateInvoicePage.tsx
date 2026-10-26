@@ -686,7 +686,7 @@ export default function VendorCreateInvoicePage() {
                 <option value="">-- Select Purchase Order --</option>
                 {poList.map((po) => (
                   <option key={po.id} value={po.id}>
-                    {po.poNumber} — ({formatAmount(po.totalAmount, currency)})
+                    {po.poNumber} — ({formatAmount(po.totalAmount, currency)}){po.vendorFulfillmentAllowed === 'DISPATCH_ONLY' ? ' [Dispatch Only]' : ''}
                   </option>
                 ))}
                 {selectedPoId && !poList.some((po) => String(po.id) === String(selectedPoId)) && (

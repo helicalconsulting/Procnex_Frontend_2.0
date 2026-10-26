@@ -694,7 +694,7 @@ export default function ContractsPage() {
       ) : paginated.length > 0 ? (
         view === 'table' ? (
           <Card className="overflow-hidden">
-            <DataTableViewport stickyActions label="Contracts register">
+            <DataTableViewport label="Contracts register">
               <table className="w-full min-w-[1180px] text-left text-sm" style={{ tableLayout: 'auto' }}>
                 <thead>
                   <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">

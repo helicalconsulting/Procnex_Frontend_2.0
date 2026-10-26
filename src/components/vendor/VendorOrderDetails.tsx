@@ -60,7 +60,7 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
       actions={<>
         <RecordStatusBadge kind="order" status={order.status} />
         <Button size="sm" variant="outline" onClick={download} disabled={downloading}><Download className="size-3.5" />{downloading ? 'Downloading…' : 'Download PO'}</Button>
-        {!state.cancelled && (
+        {!state.cancelled && order.vendorFulfillmentAllowed !== 'INVOICE_ONLY' && (
           <Link
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
             to={getVendorPath(`/vendor/create-dispatch-note?poId=${encodeURIComponent(order.id || order.poNumber)}`)}
@@ -68,7 +68,11 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
             <Truck className="size-3.5" />Create Dispatch Note
           </Link>
         )}
-        {!state.cancelled && <Link className={buttonVariants({ size: 'sm' })} to={getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(order.id || order.poNumber)}`)}><Plus className="size-3.5" />Create Invoice</Link>}
+        {!state.cancelled && order.vendorFulfillmentAllowed !== 'DISPATCH_ONLY' && (
+          <Link className={buttonVariants({ size: 'sm' })} to={getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(order.id || order.poNumber)}`)}>
+            <Plus className="size-3.5" />Create Invoice
+          </Link>
+        )}
         {(state.received || state.value === 'INVOICED') && <Link className={buttonVariants({ variant: 'outline', size: 'sm' })} to={getVendorPath('/vendor/invoices')}><Receipt className="size-3.5" />View Invoices</Link>}
       </>} />
     {downloadError && <MessageStrip type="error" onClose={() => setDownloadError('')}>{downloadError}</MessageStrip>}

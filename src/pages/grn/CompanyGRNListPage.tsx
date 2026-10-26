@@ -179,7 +179,9 @@ export default function CompanyGRNListPage() {
     }
     // Always trigger fresh refetch when landing on GRN management page
     queryClient.invalidateQueries({ queryKey: ['svc'] });
-  }, [searchParams, location.state, queryClient]);
+    forceRefreshGrns();
+    forceRefreshPOs();
+  }, [searchParams, location.state, queryClient, forceRefreshGrns, forceRefreshPOs]);
 
   // Real-time synchronization across tabs & components
   useEffect(() => {

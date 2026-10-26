@@ -1587,7 +1587,7 @@ export default function CreatePurchaseInvoicePage() {
               </div>
             ) : (
               <>
-                <DataTableViewport stickyActions label="Purchase invoices">
+                <DataTableViewport label="Purchase invoices">
                   <table className="w-full min-w-[1244px] text-sm">
                     <colgroup>{[44, 170, 230, 140, 100, 180, 220, 160].map((width, i) => <col key={i} style={{ width }} />)}</colgroup>
                     <thead>

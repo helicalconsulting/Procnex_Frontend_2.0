@@ -7,15 +7,14 @@
 .data-table-register table { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .data-table-register th { white-space: nowrap; }
 .data-table-register td { overflow-wrap: break-word; }
-.data-table-register :is(th, td):last-child { text-align: right; border-left: 1px solid var(--border); background: var(--card); border-radius: 0 !important; }
-.data-table-register th:last-child { background: var(--surface-elevated); }
+.data-table-register :is(th, td):last-child { text-align: right; border-radius: 0 !important; }
 .data-table-register td:last-child > div { justify-content: flex-end; }
 .data-table-register td:last-child button { flex-shrink: 0; }
 @media (min-width: 768px) {
-  .data-table-register :is(th, td):last-child { position: sticky; right: 0; z-index: 2; box-shadow: -4px 0 8px -6px rgba(15, 23, 42, .3); }
+  .data-table-register :is(th, td):last-child { position: sticky; right: 0; z-index: 2; }
 }
 @media (max-width: 767px) {
-  .data-table-register :is(th, td):last-child { position: static; box-shadow: none; }
+  .data-table-register :is(th, td):last-child { position: static; }
 }
 
 .data-table-register tbody td { border-bottom: 1px solid var(--border); }

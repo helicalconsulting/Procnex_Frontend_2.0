@@ -506,7 +506,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
         });
 
         const chainItems = res?.levels && res.levels.length > 0 ? res.levels : (res?.history && res.history.length > 0 ? res.history : []);
-        const isApproved = !['REJECTED', 'CANCELLED'].includes((data.status || '').toUpperCase().trim());
+        const isApproved = ['APPROVED', 'COMPLETED', 'CONFIRMED', 'DELIVERED', 'CLOSED', 'ISSUED'].includes((data.status || '').toUpperCase().trim());
 
         // Identify any signature explicitly belonging to Mahi Agarwal or Nischal Agarwal
         const docSigMahi = sortedDocSigs.find((d: any) => {
@@ -535,10 +535,12 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
               : `Level ${levelNum} Approver`;
             const isLevelApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
 
-            let levelSig: string | undefined = item.signatureUrl || item.dataUrl;
-            let signerDisplayName: string | undefined = !isGenericName(item.signedByName) ? item.signedByName : undefined;
+            let levelSig: string | undefined = undefined;
+            let signerDisplayName: string | undefined = undefined;
 
             if (isLevelApproved) {
+              levelSig = item.signatureUrl || item.dataUrl;
+              signerDisplayName = !isGenericName(item.signedByName) ? item.signedByName : undefined;
               // 1. Match by approverId in sortedDocSigs
               if (item.approverId) {
                 const byId = sortedDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(item.approverId));
@@ -624,8 +626,8 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
               actionDate: isLevelApproved && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : (isLevelApproved ? fmtDate(data.submittedAt) : undefined),
               date: isLevelApproved && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.submittedAt),
               status: isLevelApproved ? 'APPROVED' : 'PENDING',
-              signatureUrl: levelSig,
-              dataUrl: levelSig,
+              signatureUrl: isLevelApproved ? levelSig : undefined,
+              dataUrl: isLevelApproved ? levelSig : undefined,
             };
           });
 

@@ -272,10 +272,14 @@ export default function PaymentsPage() {
   const [paymentsList, setPaymentsList] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isInitialLoadRef = useRef(true);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchPaymentsData = useCallback(async () => {
+  const fetchPaymentsData = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!options?.silent && isInitialLoadRef.current) {
+        setLoading(true);
+      }
       setError(null);
 
       const [rawPayments, approvalRowsPay] = await Promise.all([
@@ -459,16 +463,31 @@ export default function PaymentsPage() {
       setError(err instanceof Error ? err.message : 'Failed to load payments');
     } finally {
       setLoading(false);
+      isInitialLoadRef.current = false;
     }
   }, [authRoles, canApprovePayment, isAdmin]);
 
+  const debouncedRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      fetchPaymentsData({ silent: true });
+    }, 300);
+  }, [fetchPaymentsData]);
+
   useEffect(() => {
     fetchPaymentsData();
-    window.addEventListener('heliflow:approval-updated', fetchPaymentsData);
+    window.addEventListener('heliflow:approval-updated', debouncedRefresh);
+    const unsub1 = sseClient.on('approval_level_complete', debouncedRefresh);
+    const unsub2 = sseClient.on('approval_chain_complete', debouncedRefresh);
+    const unsub3 = sseClient.on('notification', debouncedRefresh);
     return () => {
-      window.removeEventListener('heliflow:approval-updated', fetchPaymentsData);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      window.removeEventListener('heliflow:approval-updated', debouncedRefresh);
+      unsub1();
+      unsub2();
+      unsub3();
     };
-  }, [fetchPaymentsData]);
+  }, [fetchPaymentsData, debouncedRefresh]);
 
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState<string>(() => searchParams.get('search') || searchParams.get('q') || '');
@@ -937,16 +956,10 @@ export default function PaymentsPage() {
         }
       }
 
-      await new Promise((r) => setTimeout(r, 200));
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-      await fetchPaymentsData();
-      setPendingActions((current) => {
-        const next = { ...current };
-        delete next[target.id];
-        return next;
-      });
+      debouncedRefresh();
     })();
-  }, [actionComment, actionModal, fetchPaymentsData, amount]);
+  }, [actionComment, actionModal, debouncedRefresh, amount]);
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
@@ -1083,21 +1096,14 @@ export default function PaymentsPage() {
           }
 
           await Promise.all(sigPromises);
-          await new Promise((r) => setTimeout(r, 200));
           window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-          await fetchPaymentsData();
+          debouncedRefresh();
         } catch (err) {
           console.error('Background payment signature processing error:', err);
-        } finally {
-          setPendingActions((current) => {
-            const next = { ...current };
-            delete next[target.id];
-            return next;
-          });
         }
       })();
     },
-    [actionModal, fetchPaymentsData, amount]
+    [actionModal, debouncedRefresh, amount]
   );
 
   const cardProps = (filter: PaymentStatus | 'ALL') => {
@@ -1201,7 +1207,7 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {loading ? (
+      {loading && paymentsList.length === 0 ? (
         <Card className="p-4">
           <TableSkeleton rows={5} columns={visibleColumns.length + 1} />
         </Card>

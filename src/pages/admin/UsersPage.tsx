@@ -868,7 +868,7 @@ export default function UsersPage() {
       ) : paginated.length > 0 ? (
         view === 'table' ? (
           <Card className="overflow-hidden">
-            <DataTableViewport stickyActions label="Users register">
+            <DataTableViewport label="Users register">
               <table className="users-table" style={{ tableLayout: 'fixed', minWidth: `${44 + 192 + visibleColumns.reduce((sum, col) => sum + parseInt(col.width || '140'), 0)}px` }}>
                 <colgroup>
                   <col style={{ width: '44px' }} />

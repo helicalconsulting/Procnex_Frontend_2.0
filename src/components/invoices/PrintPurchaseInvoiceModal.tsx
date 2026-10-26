@@ -463,7 +463,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
               role: roleName,
               date: isLevelApproved && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.invoiceDate),
               status: isLevelApproved ? 'APPROVED' : 'PENDING',
-              signatureUrl: levelSig,
+              signatureUrl: isLevelApproved ? levelSig : undefined,
             };
           });
 
@@ -517,7 +517,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
             role: 'Purchase Clerk',
             date: fmtDate(data.invoiceDate),
             status: isApproved ? 'APPROVED' : 'PENDING',
-            signatureUrl: localStorage.getItem('heliflow_sig_mahi') || undefined,
+            signatureUrl: isApproved ? (localStorage.getItem('heliflow_sig_mahi') || undefined) : undefined,
           },
           {
             level: 'Level 2',
@@ -525,7 +525,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
             role: 'Purchase Manager',
             date: fmtDate(data.invoiceDate),
             status: isApproved ? 'APPROVED' : 'PENDING',
-            signatureUrl: localStorage.getItem('heliflow_sig_nischal') || undefined,
+            signatureUrl: isApproved ? (localStorage.getItem('heliflow_sig_nischal') || undefined) : undefined,
           },
         ];
         setApproversList(fallbackList);

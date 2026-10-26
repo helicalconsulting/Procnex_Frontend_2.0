@@ -36,6 +36,7 @@ import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import '../../styles/vendor-portal.css';
 import './vendor-invoice-workspace.css';
 import { PrintDispatchNoteModal } from '../../components/dispatch-notes/PrintDispatchNoteModal';
+import { getVendorPath } from '../../utils/tenantResolver';
 
 interface LineItemState {
   id: string;
@@ -114,6 +115,8 @@ export default function VendorCreateDispatchNotePage() {
       }) || null
     );
   }, [selectedPoId, poList]);
+
+  const isInvoiceOnly = selectedPO?.vendorFulfillmentAllowed === 'INVOICE_ONLY';
 
   // Sync PO Param
   useEffect(() => {
@@ -216,6 +219,10 @@ export default function VendorCreateDispatchNotePage() {
   // Validation
   const validateForm = (): boolean => {
     setErrorMsg(null);
+    if (isInvoiceOnly) {
+      setErrorMsg('This Purchase Order is configured for Direct Invoicing only. Dispatch note creation is not permitted for this order.');
+      return false;
+    }
     if (!dispatchNoteNumber.trim()) {
       setErrorMsg('Dispatch Note Number is required.');
       return false;
@@ -244,6 +251,10 @@ export default function VendorCreateDispatchNotePage() {
 
   // Submit Dispatch Note
   const handleSubmit = async (isDraft: boolean) => {
+    if (isInvoiceOnly) {
+      setErrorMsg('This Purchase Order is configured for Direct Invoicing only. Dispatch note creation is not permitted for this order.');
+      return;
+    }
     if (!validateForm()) return;
 
     if (isDraft) setSavingDraft(true);
@@ -364,6 +375,30 @@ export default function VendorCreateDispatchNotePage() {
       )}
 
       <div className="space-y-6">
+        {/* Invoice Only Warning Banner */}
+        {isInvoiceOnly && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 shrink-0">
+                <FileText className="size-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Direct Invoicing Required for this Order</p>
+                <p className="text-xs text-amber-700/90 dark:text-amber-300/80 mt-0.5">
+                  The buyer has configured {selectedPO?.poNumber || selectedPoId} for <strong>Direct Invoicing only</strong>. Dispatch note creation is not permitted for this order.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 gap-1.5"
+              onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(selectedPoId)}`))}
+            >
+              <Plus className="size-4" /> Create Invoice Instead
+            </Button>
+          </div>
+        )}
+
         {/* Section 01: Order & Dispatch Identification */}
         <Card className="p-6 border border-border/80 shadow-xs space-y-6">
           <div className="flex items-center gap-2 pb-3 border-b border-border/60">
@@ -386,7 +421,7 @@ export default function VendorCreateDispatchNotePage() {
                 <option value="">-- Select Purchase Order to Dispatch --</option>
                 {poList.map((po) => (
                   <option key={po.id} value={po.id}>
-                    {po.poNumber} — {formatAmount(po.totalAmount, companyDefaultCurrency)} ({po.status})
+                    {po.poNumber} — {formatAmount(po.totalAmount, companyDefaultCurrency)} ({po.status}){po.vendorFulfillmentAllowed === 'INVOICE_ONLY' ? ' [Invoice Only]' : ''}
                   </option>
                 ))}
               </select>
@@ -440,6 +475,23 @@ export default function VendorCreateDispatchNotePage() {
                 <span className="text-muted-foreground font-medium">Order Status:</span>
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold">
                   {selectedPO.status}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground font-medium">Fulfillment:</span>
+                <Badge
+                  variant="outline"
+                  className={
+                    selectedPO.vendorFulfillmentAllowed === 'INVOICE_ONLY'
+                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-semibold'
+                      : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold'
+                  }
+                >
+                  {selectedPO.vendorFulfillmentAllowed === 'INVOICE_ONLY'
+                    ? 'Direct Invoice Only'
+                    : selectedPO.vendorFulfillmentAllowed === 'DISPATCH_ONLY'
+                    ? 'Dispatch Only'
+                    : 'Dispatch & Invoice'}
                 </Badge>
               </div>
             </div>
@@ -798,7 +850,7 @@ export default function VendorCreateDispatchNotePage() {
               <Button
                 type="button"
                 onClick={() => handleSubmit(false)}
-                disabled={submitting || savingDraft}
+                disabled={submitting || savingDraft || isInvoiceOnly}
                 className="w-full py-2.5 gap-2 shadow-sm font-bold"
               >
                 <Send className="size-4" /> {submitting ? 'Submitting Challan…' : 'Submit Dispatch Note'}
@@ -807,7 +859,7 @@ export default function VendorCreateDispatchNotePage() {
                 type="button"
                 variant="outline"
                 onClick={() => handleSubmit(true)}
-                disabled={submitting || savingDraft}
+                disabled={submitting || savingDraft || isInvoiceOnly}
                 className="w-full py-2.5 gap-2 font-medium"
               >
                 <Save className="size-4" /> {savingDraft ? 'Saving Draft…' : 'Save Draft'}

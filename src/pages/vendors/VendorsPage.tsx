@@ -936,7 +936,7 @@ export default function VendorsPage() {
         ) : paginated.length > 0 ? (
           view === 'table' ? (
             <>
-              <DataTableViewport stickyActions label="Vendors register">
+              <DataTableViewport label="Vendors register">
                 <table className="w-full text-sm" style={{ minWidth: 192 + visibleColumns.reduce((sum, col) => sum + parseInt(COL_META[col.key]?.width || '140'), 0) }}>
                   <colgroup>
                     {visibleColumns.map((col) => (
@@ -958,7 +958,7 @@ export default function VendorsPage() {
                           </th>
                         );
                       })}
-                      <th className="px-4 py-3 text-right sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[192px] w-[192px]">
+                      <th className="px-4 py-3 text-right min-w-[192px] w-[192px]">
                         <div className="flex items-center justify-end gap-2">
                           <span>Actions</span>
                           <div className="relative">
@@ -1006,10 +1006,8 @@ export default function VendorsPage() {
 
                           <td
                             className={cn(
-                              "px-4 py-3.5 align-middle text-right sticky right-0 z-10 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[192px] w-[192px]",
-                              isSelected
-                                ? "bg-[var(--table-row-selected)] group-hover:bg-[var(--table-row-hover)]"
-                                : "bg-card group-hover:bg-[var(--table-row-hover)]"
+                              "px-4 py-3.5 align-middle text-right transition-colors min-w-[192px] w-[192px]",
+                              isSelected && "bg-[var(--table-row-selected)]"
                             )}
                             onClick={(e) => e.stopPropagation()}
                           >
