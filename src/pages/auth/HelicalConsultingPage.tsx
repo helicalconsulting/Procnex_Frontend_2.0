@@ -510,126 +510,227 @@ export default function HelicalConsultingPage() {
     [companiesList]
   );
 
-  // ─── LOCK SCREEN (Fiori Styled Auth Dialog) ────────────────────────────────
+  // ─── LOCK SCREEN (SAP Fiori Horizon Cockpit Access Gate) ───────────────────
   if (!isUnlocked) {
     return (
-      <main className="grid min-h-svh bg-background text-foreground place-items-center relative overflow-hidden p-4 sm:p-6">
-        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_82%_8%,rgba(37,99,235,0.09),transparent_30%),radial-gradient(circle_at_16%_92%,rgba(14,165,233,0.06),transparent_34%)] pointer-events-none" />
+      <div className="min-h-screen bg-background text-foreground flex flex-col relative overflow-hidden select-none">
+        {/* Subtle SAP Fiori Horizon Enterprise Background */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(0,112,242,0.12),transparent_70%)]"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none opacity-[0.035] dark:opacity-[0.05] [background:radial-gradient(#0070F2_1px,transparent_1px)] [background-size:24px_24px]"
+        />
 
-        {/* Top Right Theme Toggle */}
-        <button
-          type="button"
-          onClick={(event) => toggleTheme({ x: event.clientX, y: event.clientY })}
-          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label="Toggle theme"
-          className="absolute right-4 top-4 sm:right-6 sm:top-6 z-10 inline-flex size-11 items-center justify-center rounded-xl border border-border/80 bg-card/75 text-muted-foreground shadow-sm backdrop-blur-xl outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <AnimatePresence initial={false} mode="wait">
-            <motion.span
-              key={isDark ? 'sun' : 'moon'}
-              className="grid place-items-center"
-              initial={{ opacity: 0, rotate: -24, scale: 0.75 }}
-              animate={{ opacity: 1, rotate: 0, scale: 1 }}
-              exit={{ opacity: 0, rotate: 24, scale: 0.75 }}
-              transition={motionTransition.fast}
-            >
-              {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            </motion.span>
-          </AnimatePresence>
-        </button>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12, scale: 0.985 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={motionTransition.softSpring}
-          className="relative z-10 w-full max-w-md rounded-3xl border border-border/80 bg-card/95 p-6 sm:p-8 shadow-2xl shadow-slate-950/[0.1] backdrop-blur-xl text-center space-y-6"
-        >
-          <div className="size-16 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto shadow-inner">
-            <Lock size={30} />
-          </div>
-
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive/10 border border-destructive/20 text-destructive text-[11px] font-bold uppercase tracking-wider mb-2">
-              <ShieldCheck size={13} /> SAP Enterprise Access Gate
-            </div>
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Helical Fleet Cockpit</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
-              Restricted to authorized system administrators. Enter Security Key to unlock the global fleet console.
-            </p>
-          </div>
-
-          {accessKeyError && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 p-3.5 text-xs font-medium text-destructive text-left" role="alert">
-              <AlertCircle size={16} className="mt-0.5 shrink-0" />
-              <span>{accessKeyError}</span>
-            </div>
-          )}
-
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setAccessKeyError(null);
-              setIsVerifying(true);
-              try {
-                const res = await fetch(`${API_BASE}/auth/helical-verify`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ passcode: accessKeyInput.trim() }),
-                });
-                const json = await res.json();
-                if (res.ok && (json.data?.token || json.token)) {
-                  const token = json.data?.token || json.token;
-                  sessionStorage.setItem(HELICAL_TOKEN_KEY, token);
-                  sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
-                  sessionStorage.setItem(HELICAL_PASSCODE_KEY, accessKeyInput.trim());
-                  setIsUnlocked(true);
-                  setAccessKeyInput('');
-                } else {
-                  setAccessKeyError(json.message || json.error || 'Invalid Access Key. Permission Denied.');
-                }
-              } catch {
-                setAccessKeyError('Failed to connect to authentication server. Please check your network.');
-              } finally {
-                setIsVerifying(false);
-              }
-            }}
-            className="grid gap-4 text-left"
-          >
-            <div className="grid gap-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="access-key-input">
-                Master Security Key <span className="text-destructive">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="access-key-input"
-                  type={showAccessKey ? 'text' : 'password'}
-                  className="w-full h-11 px-4 pr-12 rounded-xl border border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition-all"
-                  placeholder="Enter Passcode"
-                  value={accessKeyInput}
-                  onChange={(e) => setAccessKeyInput(e.target.value)}
-                  autoFocus
-                  required
-                  disabled={isVerifying}
-                />
-                <button
-                  type="button"
-                  className="absolute right-0 top-0 inline-flex size-11 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => setShowAccessKey(!showAccessKey)}
-                  tabIndex={-1}
-                  aria-label={showAccessKey ? 'Hide passcode' : 'Show passcode'}
-                >
-                  {showAccessKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+        {/* ── SAP FIORI HORIZON SHELL BAR ── */}
+        <header className="sticky top-0 z-30 w-full border-b border-border/80 bg-card/85 backdrop-blur-xl shadow-xs">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
+            {/* Brand & System Title */}
+            <div className="flex items-center gap-3">
+              <img
+                src={heliflowLogo}
+                alt="Helical Consulting"
+                className="size-8 rounded-lg object-contain ring-1 ring-border shadow-xs"
+              />
+              <div className="flex items-center gap-2.5">
+                <span className="font-bold tracking-tight text-foreground text-sm sm:text-base">Helical Consulting</span>
+                <span className="hidden sm:inline-block text-border font-light">|</span>
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0070F2]/10 text-[#0070F2] dark:text-[#3894ff] border border-[#0070F2]/20 text-[11px] font-bold tracking-wide uppercase font-mono">
+                  <Radio size={11} className="animate-pulse text-emerald-500" /> Fleet Cockpit Gate
+                </span>
               </div>
             </div>
 
-            <Button type="submit" size="lg" className="w-full h-11 font-bold text-sm" disabled={isVerifying}>
-              {isVerifying ? <LoaderCircle size={17} className="animate-spin" /> : <KeyRound size={17} />}
-              <span>{isVerifying ? 'Verifying Key...' : 'Unlock Fleet Cockpit'}</span>
-            </Button>
-          </form>
-        </motion.div>
-      </main>
+            {/* Right Shell Controls */}
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md bg-muted/50 border border-border/60 text-xs text-muted-foreground font-mono">
+                <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>SYS_ID: HFC-PRD-01</span>
+              </div>
+              <button
+                type="button"
+                onClick={(event) => toggleTheme({ x: event.clientX, y: event.clientY })}
+                title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label="Toggle theme"
+                className="size-9 inline-flex items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:text-foreground shadow-xs transition-colors cursor-pointer"
+              >
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.span
+                    key={isDark ? 'sun' : 'moon'}
+                    initial={{ opacity: 0, scale: 0.75 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.75 }}
+                  >
+                    {isDark ? <Sun size={15} /> : <Moon size={15} />}
+                  </motion.span>
+                </AnimatePresence>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* ── MAIN COCKPIT AUTHENTICATION DIALOG (SAP FIORI HORIZON OBJECT CARD) ── */}
+        <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={motionTransition.softSpring}
+            className="w-full max-w-[480px] rounded-xl border border-border/80 bg-card shadow-2xl shadow-slate-950/20 backdrop-blur-xl overflow-hidden flex flex-col"
+          >
+            {/* SAP Blue Accent Bar */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-[#0070F2] via-[#0094F7] to-[#1650EB]" />
+
+            {/* Dialog Header */}
+            <div className="px-6 pt-6 pb-4 border-b border-border/70 flex items-start gap-4">
+              <div className="size-12 rounded-lg bg-[#0070F2]/10 border border-[#0070F2]/25 text-[#0070F2] dark:text-[#3894ff] flex items-center justify-center shrink-0 shadow-xs">
+                <Lock size={22} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0070F2]/10 text-[#0070F2] dark:text-[#3894ff] border border-[#0070F2]/20 text-[10px] font-bold uppercase tracking-wider font-mono">
+                    <ShieldCheck size={12} /> SAP Enterprise Access Gate
+                  </span>
+                  <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+                    TIER-1 SECURE
+                  </span>
+                </div>
+                <h2 className="text-xl font-bold tracking-tight text-foreground mt-1">Helical Fleet Cockpit</h2>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Restricted administrative console. Authenticate to unlock global deployment telemetry and remote control.
+                </p>
+              </div>
+            </div>
+
+            {/* Dialog Body */}
+            <div className="p-6 space-y-4">
+              {/* SAP Fiori MessageStrip — Informational */}
+              <div className="flex items-start gap-2.5 rounded-lg border border-[#0070F2]/25 bg-[#0070F2]/5 dark:bg-[#0070F2]/10 p-3 text-xs text-foreground/80 leading-relaxed">
+                <ShieldCheck size={16} className="text-[#0070F2] dark:text-[#3894ff] shrink-0 mt-0.5" />
+                <span>
+                  Please enter your Master Security Key. This session grants access to multi-tenant buyout telemetry, tenant provisioning, and server killswitches.
+                </span>
+              </div>
+
+              {/* SAP Fiori MessageStrip — Error state */}
+              {accessKeyError && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs font-medium text-destructive leading-relaxed" role="alert">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  <span>{accessKeyError}</span>
+                </div>
+              )}
+
+              {/* Authentication Form */}
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setAccessKeyError(null);
+                  setIsVerifying(true);
+                  try {
+                    const res = await fetch(`${API_BASE}/auth/helical-verify`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ passcode: accessKeyInput.trim() }),
+                    });
+                    const json = await res.json();
+                    if (res.ok && (json.data?.token || json.token)) {
+                      const token = json.data?.token || json.token;
+                      sessionStorage.setItem(HELICAL_TOKEN_KEY, token);
+                      sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
+                      sessionStorage.setItem(HELICAL_PASSCODE_KEY, accessKeyInput.trim());
+                      setIsUnlocked(true);
+                      setAccessKeyInput('');
+                    } else {
+                      setAccessKeyError(json.message || json.error || 'Invalid Access Key. Permission Denied.');
+                    }
+                  } catch {
+                    setAccessKeyError('Failed to connect to authentication server. Please check your network.');
+                  } finally {
+                    setIsVerifying(false);
+                  }
+                }}
+                className="space-y-4 text-left"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1" htmlFor="access-key-input">
+                      Master Security Key <span className="text-destructive font-bold">*</span>
+                    </label>
+                    <span className="text-[10px] text-muted-foreground/70 font-mono">PBKDF2-SHA512</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="access-key-input"
+                      type={showAccessKey ? 'text' : 'password'}
+                      className="w-full h-11 px-3.5 pr-11 rounded-lg border border-border bg-background/80 text-foreground placeholder:text-muted-foreground/50 font-mono text-sm tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0070F2] focus:border-[#0070F2] transition-all disabled:opacity-60"
+                      placeholder="Enter Master Passcode"
+                      value={accessKeyInput}
+                      onChange={(e) => setAccessKeyInput(e.target.value)}
+                      autoFocus
+                      required
+                      disabled={isVerifying}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-0 top-0 inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      onClick={() => setShowAccessKey(!showAccessKey)}
+                      tabIndex={-1}
+                      aria-label={showAccessKey ? 'Hide passcode' : 'Show passcode'}
+                    >
+                      {showAccessKey ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* SAP Object Attribute Telemetry Badges */}
+                <div className="grid grid-cols-3 gap-2 py-1">
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/50 text-center">
+                    <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-mono">Cluster</div>
+                    <div className="text-[11px] font-bold text-foreground font-mono truncate">PRD-EAST-01</div>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/50 text-center">
+                    <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-mono">Protocol</div>
+                    <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono truncate">mTLS 1.3</div>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/50 text-center">
+                    <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-mono">Auth Mode</div>
+                    <div className="text-[11px] font-bold text-[#0070F2] dark:text-[#3894ff] font-mono truncate">Zero-Trust</div>
+                  </div>
+                </div>
+
+                {/* Footer Action Toolbar */}
+                <div className="pt-2 border-t border-border/60 flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5 font-medium">
+                    <Terminal size={13} className="text-[#0070F2] dark:text-[#3894ff]" /> Admin Auth
+                  </span>
+                  <Button
+                    type="submit"
+                    size="default"
+                    className="h-10 px-5 font-bold text-xs bg-[#0070F2] hover:bg-[#0057C2] text-white shadow-sm gap-2 transition-all active:scale-[0.98] cursor-pointer"
+                    disabled={isVerifying}
+                  >
+                    {isVerifying ? (
+                      <LoaderCircle size={15} className="animate-spin" />
+                    ) : (
+                      <KeyRound size={15} />
+                    )}
+                    <span>{isVerifying ? 'Verifying Key...' : 'Unlock Fleet Cockpit'}</span>
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </motion.div>
+        </main>
+
+        {/* ── SAP FIORI BOTTOM FOOTER ── */}
+        <footer className="py-3 px-6 text-xs text-muted-foreground/60 border-t border-border/40 w-full z-10">
+          <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span>SAP Fiori Horizon Design System · Enterprise Fleet Console v3.0</span>
+            <span>© {new Date().getFullYear()} Helical Consulting Ltd. All Rights Reserved.</span>
+          </div>
+        </footer>
+      </div>
     );
   }
 
