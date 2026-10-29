@@ -166,9 +166,10 @@ class SSEClient {
       }
 
       // Named SSE events have event.type set (e.g. 'notification',
-      // 'vendor_onboarding_documents_submitted').  For unnamed events
+      // 'vendor_onboarding_documents_submitted'). For unnamed events
       // (no `event:` line) event.type === 'message'.
-      if (event.type && event.type !== 'message') {
+      // Guard against double dispatch when event.type matches typeFromData
+      if (event.type && event.type !== 'message' && event.type !== typeFromData) {
         this.dispatch(event.type, parsed);
       }
 

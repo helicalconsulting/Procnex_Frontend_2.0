@@ -24,6 +24,9 @@ export interface APInvoice {
   comments?: string;
   grn?: any;
   purchaseOrder?: any;
+  registeredById?: string;
+  postedById?: string;
+  createdById?: string;
 }
 
 async function mockList(_params?: { poId?: string; vendorId?: string; search?: string }): Promise<APInvoice[]> {
@@ -40,7 +43,7 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
     if (params?.limit) query.set('limit', String(params.limit));
 
     const url = query.toString() ? `/invoices?${query.toString()}` : '/invoices';
-    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url);
+    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url, { cacheTtlMs: 15000 });
     if (!data.invoices || data.invoices.length === 0) {
       return [];
     }
@@ -102,6 +105,11 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
       comments: inv.comments ? String(inv.comments) : undefined,
       grn: inv.grn,
       purchaseOrder: inv.purchaseOrder,
+      registeredById: inv.registeredById ? String(inv.registeredById) : undefined,
+      postedById: inv.postedById ? String(inv.postedById) : undefined,
+      createdById: (inv.purchaseOrder as any)?.rfq?.createdBy
+        ? String((inv.purchaseOrder as any).rfq.createdBy)
+        : (inv.createdById ? String(inv.createdById) : undefined),
     }));
   } catch (_err) {
     return [];

@@ -341,7 +341,7 @@ async function mockList(): Promise<NotificationRow[]> {
 }
 
 async function apiList(): Promise<NotificationRow[]> {
-  const data = await apiRequest<{ notifications: Notification[] }>('/notifications?limit=100', { cacheTtlMs: 0 });
+  const data = await apiRequest<{ notifications: Notification[] }>('/notifications?limit=100', { cacheTtlMs: 5000 });
   const list = pickList<Notification>(data, ['notifications']);
   return list.map((n) => mapNotificationToRow(n as Notification & Record<string, unknown>));
 }
@@ -351,7 +351,7 @@ async function mockListTyped(): Promise<Notification[]> {
 }
 
 async function apiListTyped(): Promise<Notification[]> {
-  const data = await apiRequest<{ notifications: Notification[] }>('/notifications?limit=100', { cacheTtlMs: 0 });
+  const data = await apiRequest<{ notifications: Notification[] }>('/notifications?limit=100', { cacheTtlMs: 5000 });
   return pickList<Notification>(data, ['notifications']);
 }
 
@@ -385,7 +385,7 @@ async function mockUnreadCount(): Promise<number> {
 }
 
 async function apiUnreadCount(): Promise<number> {
-  const data = await apiRequest<{ unreadCount: number }>('/notifications/unread-count', { cacheTtlMs: 0 });
+  const data = await apiRequest<{ unreadCount: number }>('/notifications/unread-count', { cacheTtlMs: 5000 });
   return data.unreadCount ?? 0;
 }
 

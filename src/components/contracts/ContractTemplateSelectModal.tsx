@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { companySettingsService, type ContractTemplate } from '../../services/companySettingsService';
@@ -338,7 +339,7 @@ export default function ContractTemplateSelectModal({
               {previewTemplate.content ? (
                 <div
                   className="ctr-template-preview-content"
-                  dangerouslySetInnerHTML={{ __html: previewTemplate.content }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewTemplate.content) }}
                 />
               ) : (
                 <div className="ctsm-empty">

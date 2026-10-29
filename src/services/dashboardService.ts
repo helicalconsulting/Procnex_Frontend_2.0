@@ -19,11 +19,35 @@ interface DashboardOverview {
   vendors: { total: number; pendingApproval: number };
 }
 
+export interface DashboardSummary {
+  overview: DashboardOverview;
+  pipeline: { distribution: { status: string; count: number }[] };
+  recentRFQs: Array<Record<string, unknown>>;
+  spend: {
+    monthlyTrend: Array<{ month: string; value: number }>;
+    categories: Array<{ label: string; amount: number; percent: number }>;
+  };
+  myTasks: MyTasksResponse;
+  kpis: KpiItem[];
+  sseClients?: number;
+}
+
+async function fetchSummary(): Promise<DashboardSummary> {
+  return apiRequest<DashboardSummary>('/dashboard/summary', { cacheTtlMs: 15000 });
+}
+
 async function mockKpis(): Promise<KpiItem[]> {
   return DASHBOARD_KPI_MOCK.map((k) => ({ ...k, trend: '' }));
 }
 
 async function apiKpis(): Promise<KpiItem[]> {
+  try {
+    const summary = await fetchSummary();
+    if (summary.kpis && summary.kpis.length > 0) {
+      return summary.kpis;
+    }
+  } catch {}
+
   const [o, tasksRes, approvalsRes] = await Promise.all([
     apiRequest<DashboardOverview>('/dashboard/overview'),
     apiRequest<{ tasks: Array<{ type: string; count: number; label: string; link: string }>; taskCount: number }>('/dashboard/my-tasks'),
@@ -55,22 +79,34 @@ interface RfqStatusReport {
 }
 
 function fetchRfqStatusReport(): Promise<RfqStatusReport> {
-  return apiRequest<RfqStatusReport>('/dashboard/rfq-status');
+  return apiRequest<RfqStatusReport>('/dashboard/rfq-status', { cacheTtlMs: 15000 });
 }
 
+const RFQ_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  SENT: 'Sent',
+  QUOTATIONS_RECEIVED: 'Quotations In',
+  UNDER_EVALUATION: 'Under Eval',
+  PO_CREATED: 'PO Created',
+  CLOSED: 'Closed',
+};
+
 async function apiPipeline(): Promise<DashboardPipelineItem[]> {
+  try {
+    const summary = await fetchSummary();
+    if (summary.pipeline?.distribution) {
+      return summary.pipeline.distribution.map((d) => ({
+        status: mapBackendRfqStatus(d.status),
+        label: RFQ_STATUS_LABELS[d.status] || d.status,
+        count: d.count,
+      }));
+    }
+  } catch {}
+
   const report = await fetchRfqStatusReport();
-  const labels: Record<string, string> = {
-    DRAFT: 'Draft',
-    SENT: 'Sent',
-    QUOTATIONS_RECEIVED: 'Quotations In',
-    UNDER_EVALUATION: 'Under Eval',
-    PO_CREATED: 'PO Created',
-    CLOSED: 'Closed',
-  };
   return (report.distribution || []).map((d) => ({
     status: mapBackendRfqStatus(d.status),
-    label: labels[d.status] || d.status,
+    label: RFQ_STATUS_LABELS[d.status] || d.status,
     count: d.count,
   }));
 }
@@ -80,6 +116,21 @@ async function mockRecentRfqs(): Promise<DashboardRecentRfq[]> {
 }
 
 async function apiRecentRfqs(): Promise<DashboardRecentRfq[]> {
+  try {
+    const summary = await fetchSummary();
+    if (summary.recentRFQs && summary.recentRFQs.length > 0) {
+      return summary.recentRFQs.map((r) => ({
+        id: String(r.id),
+        rfqNumber: String(r.rfqNumber),
+        title: String(r.title),
+        status: mapBackendRfqStatus(String(r.status)),
+        creator: (r.creator as { fullName?: string })?.fullName || '—',
+        quotations: (r._count as { quotations?: number })?.quotations ?? 0,
+        createdAt: String(r.createdAt).slice(0, 10),
+      }));
+    }
+  } catch {}
+
   const report = await fetchRfqStatusReport();
   return (report.recentRFQs || []).map((r) => ({
     id: String(r.id),
@@ -97,8 +148,6 @@ async function mockActivity(): Promise<ActivityItem[]> {
 }
 
 async function apiActivity(): Promise<ActivityItem[]> {
-  // No dedicated backend endpoint for "recent activity" timeline yet.
-  // Return empty in dynamic mode to avoid frontend mock data leakage.
   return [];
 }
 
@@ -136,7 +185,30 @@ async function mockMyTasks(): Promise<MyTasksResponse> {
 }
 
 async function apiMyTasks(): Promise<MyTasksResponse> {
-  return apiRequest<MyTasksResponse>('/dashboard/my-tasks');
+  try {
+    const summary = await fetchSummary();
+    if (summary.myTasks) return summary.myTasks;
+  } catch {}
+  return apiRequest<MyTasksResponse>('/dashboard/my-tasks', { cacheTtlMs: 15000 });
+}
+
+async function apiOverview(): Promise<DashboardOverview> {
+  try {
+    const summary = await fetchSummary();
+    if (summary.overview) return summary.overview;
+  } catch {}
+  return apiRequest<DashboardOverview>('/dashboard/overview', { cacheTtlMs: 15000 });
+}
+
+async function apiSpendOverview(): Promise<{
+  monthlyTrend: Array<{ month: string; value: number }>;
+  categories: Array<{ label: string; amount: number; percent: number }>;
+}> {
+  try {
+    const summary = await fetchSummary();
+    if (summary.spend) return summary.spend;
+  } catch {}
+  return apiRequest('/dashboard/spend-overview', { cacheTtlMs: 15000 });
 }
 
 async function apiTopVendors() {
@@ -144,16 +216,13 @@ async function apiTopVendors() {
 }
 
 export const dashboardService = {
+  getSummary: fetchSummary,
   getMyTasks: USE_MOCK ? mockMyTasks : apiMyTasks,
   getKpis: USE_MOCK ? mockKpis : apiKpis,
   getPipeline: USE_MOCK ? mockPipeline : apiPipeline,
   getRecentRfqs: USE_MOCK ? mockRecentRfqs : apiRecentRfqs,
   getActivity: USE_MOCK ? mockActivity : apiActivity,
   getTopVendors: USE_MOCK ? mockTopVendors : apiTopVendors,
-  getOverview: () => apiRequest<DashboardOverview>('/dashboard/overview'),
-  getSpendOverview: () =>
-    apiRequest<{
-      monthlyTrend: Array<{ month: string; value: number }>;
-      categories: Array<{ label: string; amount: number; percent: number }>;
-    }>('/dashboard/spend-overview'),
+  getOverview: apiOverview,
+  getSpendOverview: apiSpendOverview,
 };

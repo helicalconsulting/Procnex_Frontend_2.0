@@ -160,37 +160,40 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const { timeoutMs: requestTimeoutMs, cacheTtlMs, skipCacheBust, ...fetchOptions } = options;
   const method = methodOf(fetchOptions);
-  const useCache = method === 'GET' && cacheTtlMs !== 0;
+  const isGet = method === 'GET';
+  const key = isGet ? buildCacheKey(path, fetchOptions) : '';
+  const useCache = isGet && cacheTtlMs !== 0;
   const ttlMs = cacheTtlMs ?? DEFAULT_GET_CACHE_TTL_MS;
-  const key = useCache ? buildCacheKey(path, fetchOptions) : '';
 
-  if (useCache) {
-    const cached = apiCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.value as T;
+  if (isGet) {
+    if (useCache && ttlMs > 0) {
+      const cached = apiCache.get(key);
+      if (cached && cached.expiresAt > Date.now()) {
+        return cached.value as T;
+      }
     }
 
     const pending = inFlightRequests.get(key);
     if (pending) {
       return pending as Promise<T>;
     }
-  } else if (method !== 'GET' && !skipCacheBust) {
+  } else if (!skipCacheBust) {
     // FIX 3 applied: only bust cache entries related to this path
     bustRelatedCache(path);
   }
 
   const request = fetchApi<T>(path, fetchOptions, requestTimeoutMs)
     .then((result) => {
-      if (useCache) {
+      if (useCache && ttlMs > 0) {
         apiCache.set(key, { expiresAt: Date.now() + ttlMs, value: result });
       }
       return result;
     })
     .finally(() => {
-      if (useCache) inFlightRequests.delete(key);
+      if (isGet) inFlightRequests.delete(key);
     });
 
-  if (useCache) inFlightRequests.set(key, request);
+  if (isGet) inFlightRequests.set(key, request);
   return request;
 }
 

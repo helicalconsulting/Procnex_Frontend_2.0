@@ -1,5 +1,6 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { createPortal } from 'react-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -1181,7 +1182,7 @@ export default function OnboardingQueuePage() {
               <div className="oq-signed-modal__canvas">
                 <div
                   className="oq-signed-modal__content"
-                  dangerouslySetInnerHTML={{ __html: signedPreviewDoc.contentSnapshot || '' }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(signedPreviewDoc.contentSnapshot || '') }}
                 />
               </div>
             </div>

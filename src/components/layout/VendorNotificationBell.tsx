@@ -16,6 +16,7 @@ export default function VendorNotificationBell() {
   const [loading, setLoading] = useState(false);
   const [bouncing, setBouncing] = useState(false);
   const bounceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout>>();
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -48,14 +49,18 @@ export default function VendorNotificationBell() {
       void load(false);
     }, 0);
 
-    // Responsive 4-second polling to guarantee real-time updates (silent)
-    const interval = setInterval(() => void load(true), 4000);
+    // Fallback 30-second polling (SSE delivers instant updates)
+    const interval = setInterval(() => void load(true), 30000);
 
     const triggerBounce = () => {
       setBouncing(true);
       clearTimeout(bounceTimer.current);
       bounceTimer.current = setTimeout(() => setBouncing(false), 600);
-      void load(true);
+
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => {
+        void load(true);
+      }, 500);
     };
 
     // SSE real-time listeners — instant notification delivery
@@ -72,6 +77,7 @@ export default function VendorNotificationBell() {
       window.clearTimeout(timeout);
       clearInterval(interval);
       clearTimeout(bounceTimer.current);
+      clearTimeout(refreshTimer.current);
       unsubscribe();
       unsubscribeGeneric();
       if (typeof unsubAny === 'function') unsubAny();

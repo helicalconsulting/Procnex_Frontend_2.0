@@ -1,6 +1,7 @@
 import { findVendorWithPhone } from '../../services/vendorPhoneService';
 import { normalizeVendorPhone } from '../../utils/vendorPhone';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -2199,7 +2200,7 @@ export default function NewOnboardingPage() {
                   {previewTemplate.content ? (
                     <div
                       className="onb-template-preview-content"
-                      dangerouslySetInnerHTML={{ __html: previewTemplate.content }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewTemplate.content) }}
                     />
                   ) : (
                     <div className="onb-popup-empty">

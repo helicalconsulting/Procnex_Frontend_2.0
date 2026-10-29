@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { companySettingsService, type ContractTemplate, type VendorOption } from '../../services/companySettingsService';
@@ -483,7 +484,7 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
                     </div>
                     <div
                       className="cdbm-preview-content"
-                      dangerouslySetInnerHTML={{ __html: resolvedPreviewHtml }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(resolvedPreviewHtml) }}
                     />
                   </div>
                 </div>

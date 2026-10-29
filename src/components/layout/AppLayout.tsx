@@ -29,51 +29,67 @@ export default function AppLayout() {
   useEffect(() => {
     sseClient.connect();
 
-    // Global handler when any real-time SSE event is received
-    const handleGlobalSSE = (eventData: any) => {
-      // 1. Immediately invalidate all active services queries so visible pages refetch without reload
-      queryClient.invalidateQueries({ queryKey: ['svc'] });
-      queryClient.refetchQueries({ queryKey: ['svc'], type: 'active' });
-
-      // 2. Dispatch custom events for components listening on window
-      window.dispatchEvent(new CustomEvent('heliflow:sse-event', { detail: eventData }));
-      window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:quotation-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:payment-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:vendor-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:grn-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:dashboard-updated'));
+    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedInvalidate = () => {
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      invalidateTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['svc'] });
+      }, 500);
     };
 
-    const unsubAny = typeof sseClient.onAny === 'function' ? sseClient.onAny(handleGlobalSSE) : () => {};
-    const unsubNotification = sseClient.on('notification', handleGlobalSSE);
-    const unsubRfq = sseClient.on('rfq_status_changed', handleGlobalSSE);
-    const unsubApprovalReq = sseClient.on('approval_required', handleGlobalSSE);
-    const unsubApprovalLvl = sseClient.on('approval_level_complete', handleGlobalSSE);
-    const unsubApprovalChain = sseClient.on('approval_chain_complete', handleGlobalSSE);
-    const unsubPo = sseClient.on('po_created', handleGlobalSSE);
-    const unsubPoStatus = sseClient.on('po_status_changed', handleGlobalSSE);
-    const unsubQuotation = sseClient.on('quotation_received', handleGlobalSSE);
-    const unsubQuotationStatus = sseClient.on('quotation_status_changed', handleGlobalSSE);
-    const unsubVendor = sseClient.on('vendor_approved', handleGlobalSSE);
-    const unsubGrn = sseClient.on('grn_created', handleGlobalSSE);
+    // Targeted handler when real-time SSE events are received
+    const dispatchTargetedEvent = (category: string, eventData: any) => {
+      debouncedInvalidate();
+      window.dispatchEvent(new CustomEvent('heliflow:sse-event', { detail: eventData }));
+
+      switch (category) {
+        case 'notification':
+          window.dispatchEvent(new CustomEvent('heliflow:notification-updated', { detail: eventData }));
+          break;
+        case 'rfq':
+          window.dispatchEvent(new CustomEvent('heliflow:rfq-updated', { detail: eventData }));
+          break;
+        case 'approval':
+          window.dispatchEvent(new CustomEvent('heliflow:approval-updated', { detail: eventData }));
+          break;
+        case 'po':
+          window.dispatchEvent(new CustomEvent('heliflow:po-updated', { detail: eventData }));
+          break;
+        case 'quotation':
+          window.dispatchEvent(new CustomEvent('heliflow:quotation-updated', { detail: eventData }));
+          break;
+        case 'vendor':
+          window.dispatchEvent(new CustomEvent('heliflow:vendor-updated', { detail: eventData }));
+          break;
+        case 'grn':
+          window.dispatchEvent(new CustomEvent('heliflow:grn-updated', { detail: eventData }));
+          break;
+        case 'payment':
+          window.dispatchEvent(new CustomEvent('heliflow:payment-updated', { detail: eventData }));
+          break;
+        default:
+          break;
+      }
+    };
+
+    const unsubs = [
+      sseClient.on('notification', (d) => dispatchTargetedEvent('notification', d)),
+      sseClient.on('vendor_notification', (d) => dispatchTargetedEvent('notification', d)),
+      sseClient.on('rfq_status_changed', (d) => dispatchTargetedEvent('rfq', d)),
+      sseClient.on('approval_required', (d) => dispatchTargetedEvent('approval', d)),
+      sseClient.on('approval_level_complete', (d) => dispatchTargetedEvent('approval', d)),
+      sseClient.on('approval_chain_complete', (d) => dispatchTargetedEvent('approval', d)),
+      sseClient.on('po_created', (d) => dispatchTargetedEvent('po', d)),
+      sseClient.on('po_status_changed', (d) => dispatchTargetedEvent('po', d)),
+      sseClient.on('quotation_received', (d) => dispatchTargetedEvent('quotation', d)),
+      sseClient.on('quotation_status_changed', (d) => dispatchTargetedEvent('quotation', d)),
+      sseClient.on('vendor_approved', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('grn_created', (d) => dispatchTargetedEvent('grn', d)),
+    ];
 
     return () => {
-      unsubAny();
-      unsubNotification();
-      unsubRfq();
-      unsubApprovalReq();
-      unsubApprovalLvl();
-      unsubApprovalChain();
-      unsubPo();
-      unsubPoStatus();
-      unsubQuotation();
-      unsubQuotationStatus();
-      unsubVendor();
-      unsubGrn();
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      unsubs.forEach((unsub) => unsub());
       sseClient.disconnect();
     };
   }, [queryClient]);

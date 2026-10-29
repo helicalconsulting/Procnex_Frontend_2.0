@@ -309,7 +309,7 @@ export default function RFQPage() {
     () => rfqService.list({ limit: 100 }),
     [] as RFQTableRow[],
     [],
-    { cacheKey: 'rfqs:list', cacheTtlMs: 0 }
+    { cacheKey: 'rfqs:list', cacheTtlMs: 15000 }
   );
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);

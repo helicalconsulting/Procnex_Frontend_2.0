@@ -23,7 +23,8 @@ async function apiListTable(params?: ListParams): Promise<ApprovalTableRow[]> {
   if (params?.search) query.set('search', params.search);
   const qs = query.toString();
   const data = await apiRequest<{ approvals: Record<string, unknown>[] }>(
-    `/approvals${qs ? `?${qs}` : ''}`
+    `/approvals${qs ? `?${qs}` : ''}`,
+    { cacheTtlMs: 15000 }
   );
   return (data.approvals || []).map(mapApprovalToTableRow);
 }

@@ -17,6 +17,7 @@ export default function AdminNotificationBell() {
   const [loading, setLoading] = useState(false);
   const [bouncing, setBouncing] = useState(false);
   const bounceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout>>();
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -49,14 +50,18 @@ export default function AdminNotificationBell() {
     // Initial load
     void load(false);
 
-    // Responsive 4-second polling to guarantee real-time updates across multiple tabs (silent)
-    const interval = setInterval(() => void load(true), 4000);
+    // Fallback 30-second polling (SSE delivers instant updates)
+    const interval = setInterval(() => void load(true), 30000);
 
     const triggerRefresh = () => {
       setBouncing(true);
       clearTimeout(bounceTimer.current);
       bounceTimer.current = setTimeout(() => setBouncing(false), 600);
-      void load(true);
+
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => {
+        void load(true);
+      }, 500);
     };
 
     // SSE real-time listeners for instant notification delivery
@@ -79,6 +84,7 @@ export default function AdminNotificationBell() {
     return () => {
       clearInterval(interval);
       clearTimeout(bounceTimer.current);
+      clearTimeout(refreshTimer.current);
       unsubNotification();
       unsubApprovalReq();
       unsubApprovalChain();

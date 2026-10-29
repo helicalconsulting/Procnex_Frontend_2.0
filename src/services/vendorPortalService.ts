@@ -529,6 +529,7 @@ function saveLocalVendorPayments(payments: VendorPaymentRecord[]): void {
 }
 
 async function apiListPayments(): Promise<VendorPaymentRecord[]> {
+  const localPayments = getLocalVendorPayments();
   try {
     const data = await vendorFetch<{ payments?: VendorPaymentRecord[] }>('/payments', { cacheTtlMs: 0 });
     const serverPayments = (data.payments || []).filter((p) => {
@@ -541,9 +542,20 @@ async function apiListPayments(): Promise<VendorPaymentRecord[]> {
         String(p.paymentNumber || '').startsWith('VPAY-')
       );
     });
-    return serverPayments;
+
+    // Merge serverPayments with localPayments, deduplicating by paymentNumber or id
+    const seen = new Set<string>();
+    const combined: VendorPaymentRecord[] = [];
+    for (const p of [...serverPayments, ...localPayments]) {
+      const key = p.paymentNumber || p.id;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        combined.push(p);
+      }
+    }
+    return combined;
   } catch {
-    return getLocalVendorPayments();
+    return localPayments;
   }
 }
 
@@ -575,11 +587,17 @@ async function apiRecordPayment(payload: RecordVendorPaymentPayload): Promise<Ve
       body: JSON.stringify(payload),
     });
     if (res?.payment) {
-      return {
+      const savedResult: VendorPaymentRecord = {
         ...localPayment,
         ...res.payment,
         id: res.payment.id || localId,
       };
+      // Replace the optimistic localPayment with the server-confirmed record
+      const updatedLocal = getLocalVendorPayments().map((p) =>
+        p.id === localId || p.paymentNumber === savedResult.paymentNumber ? savedResult : p
+      );
+      saveLocalVendorPayments(updatedLocal);
+      return savedResult;
     }
   } catch (err) {
     console.warn('Backend payment record fallback to local store:', err);

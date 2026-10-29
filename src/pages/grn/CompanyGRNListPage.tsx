@@ -137,10 +137,10 @@ export default function CompanyGRNListPage() {
 
   // Load Invoices from invoiceService
   const { data: invoicesList, forceRefresh: forceRefreshInvoices } = useServiceData(
-    () => invoiceService.list({ limit: 1000 }),
+    () => invoiceService.list({ limit: 100 }),
     [],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'company-grn:invoices', cacheTtlMs: 15000 }
   );
 
   // Map of PO ID/Number to Inbound Dispatch / Invoice

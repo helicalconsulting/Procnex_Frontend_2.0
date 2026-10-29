@@ -187,12 +187,10 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
         (req.comments && /return/i.test(req.comments))
       );
       if (req.status === 'PENDING' || req.status === 'RETURNED' || req.status === 'RE_REVIEW') {
-        if (req.canAct) {
+        if (req.status === 'PENDING') {
           effectiveStatus = isReturnedReReview ? 'RE_REVIEW' : 'PENDING';
-        } else if ((req.currentLevel || 1) > 1 && !isReturnedReReview) {
-          effectiveStatus = 'APPROVED';
-        } else if (isReturnedReReview) {
-          effectiveStatus = 'RE_REVIEW';
+        } else {
+          effectiveStatus = isReturnedReReview ? 'RE_REVIEW' : req.status;
         }
       }
       return (
@@ -465,8 +463,9 @@ export default function ApprovalsPage() {
   const getEffectiveStatus = useCallback((a: ApprovalRequest): ApprovalStatusType => {
     if (a.status === 'APPROVED' || (a.status as string) === 'APPROVED_L1') return 'APPROVED';
     if (a.status === 'REJECTED') return 'REJECTED';
-    if (a.status === 'RETURNED' || (a as any).isReturned) return 'RETURNED';
-    if (a.canAct) return 'PENDING';
+    if (a.status === 'PENDING') return 'PENDING';
+    if (a.status === 'RETURNED') return 'RETURNED';
+    if ((a as any).isReturned) return 'RETURNED';
     return 'PENDING';
   }, []);
 
@@ -494,22 +493,22 @@ export default function ApprovalsPage() {
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
   const actionsWidth = paginated.some(request => request.canAct) ? 384 : 144;
 
-  const handleAction = useCallback(async () => {
+  const handleAction = useCallback(async (actionOverride?: string, commentOverride?: string) => {
     if (!actionModal) return;
     const { id } = actionModal.request;
-    const actionType = actionModal.action;
+    const actionType = actionOverride || actionModal.action;
     const req = actionModal.request;
-    const comment = actionComment.trim() || undefined;
+    const comment = (commentOverride !== undefined ? commentOverride : actionComment).trim() || undefined;
 
     setActionModal(null);
     setActionComment('');
 
     const isFinalLevel = (req.currentLevel || 1) >= (req.totalLevels || 1);
-    const newStatus: ApprovalStatusType = actionType === 'approve'
-      ? (isFinalLevel ? 'APPROVED' : 'APPROVED')
-      : actionType === 'reject'
-      ? 'REJECTED'
-      : (actionReturnTarget === 'LEVEL_1' ? 'PENDING' : 'RETURNED');
+      const newStatus: ApprovalStatusType = actionType === 'approve'
+        ? (isFinalLevel ? 'APPROVED' : 'APPROVED')
+        : actionType === 'reject'
+        ? 'REJECTED'
+        : 'RETURNED';
     const targetLevel = actionType === 'approve'
       ? ((req.currentLevel || 1) + 1)
       : (actionReturnTarget === 'LEVEL_1' ? 1 : req.currentLevel);
@@ -861,7 +860,7 @@ export default function ApprovalsPage() {
                         {req.canAct && (
                           <>
                             <Button variant="outline" size="sm" className="h-8 text-xs gap-1 shrink-0 text-emerald-600 hover:text-emerald-700 whitespace-nowrap" onClick={() => openAction(req, 'approve')}>
-                              <ThumbsUp className="size-3.5" /> {(req.status === 'RETURNED' || (req as any).isReturned) ? 'Resubmit' : 'Approve'}
+                              <ThumbsUp className="size-3.5" /> {req.status === 'RETURNED' ? 'Resubmit' : 'Approve'}
                             </Button>
                             <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 shrink-0 text-amber-600 hover:text-amber-700 whitespace-nowrap" onClick={() => openAction(req, 'return')}>
                               <RotateCcw className="size-3.5" /> Return
@@ -907,14 +906,17 @@ export default function ApprovalsPage() {
           onConfirm={async (signatureDataUrl: string, comment?: string) => {
             const req = actionModal.request;
             const targetModule = req.module === 'Purchase Order' ? 'PurchaseOrders' : (req.module === 'Purchase Invoice' ? 'AccountsPayable' : req.module);
-            await signatureService.signDocument({
-              module: targetModule,
-              referenceId: req.referenceNumber || String(req.id),
-              signatureId: 'digital_signature',
-              dataUrl: signatureDataUrl,
-              levelNumber: req.currentLevel || 1,
-              comments: comment,
-            }).catch((err) => console.warn('Signature record warning:', err));
+            const refsToSign = Array.from(new Set([req.referenceNumber, String(req.id), req.referenceId].filter(Boolean) as string[]));
+            for (const ref of refsToSign) {
+              await signatureService.signDocument({
+                module: targetModule,
+                referenceId: ref,
+                signatureId: 'digital_signature',
+                dataUrl: signatureDataUrl,
+                levelNumber: req.currentLevel || 1,
+                comments: comment,
+              }).catch((err) => console.warn('Signature record warning:', err));
+            }
             handleAction('approve', comment);
           }}
           docTitle={`${actionModal.request.module} ${actionModal.request.referenceNumber}`}
@@ -1395,7 +1397,7 @@ export default function ApprovalsPage() {
                         openAction(req, 'approve');
                       }}
                     >
-                      <ThumbsUp className="size-3.5 mr-1" /> {(detailRequest.status === 'RETURNED' || (detailRequest as any).isReturned) ? 'Resubmit' : 'Approve'}
+                      <ThumbsUp className="size-3.5 mr-1" /> {detailRequest.status === 'RETURNED' ? 'Resubmit' : 'Approve'}
                     </Button>
                   </>
                 )}

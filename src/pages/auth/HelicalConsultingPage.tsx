@@ -53,9 +53,20 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
 
-// Master Security Passcode
-const SECRET_PASSCODE = import.meta.env.VITE_PROVISIONING_PASSCODE || 'Helical2026!';
+// Helical Security Token Session Keys
 const SESSION_UNLOCK_KEY = 'helical_consulting_unlocked';
+const HELICAL_TOKEN_KEY = 'helical_consulting_token';
+const HELICAL_PASSCODE_KEY = 'helical_consulting_passcode';
+
+const getHelicalHeaders = (): Record<string, string> => {
+  const token = sessionStorage.getItem(HELICAL_TOKEN_KEY) || '';
+  const passcode = sessionStorage.getItem(HELICAL_PASSCODE_KEY) || '';
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(passcode ? { 'x-helical-passcode': passcode } : {}),
+  };
+};
 
 export interface CompanyOverviewItem {
   companyCode: string;
@@ -120,15 +131,13 @@ export default function HelicalConsultingPage() {
   const [activeTab, setActiveTab] = useState<'saas_multitenant' | 'standalone_deployments' | 'provision_tenant'>('saas_multitenant');
 
   // Security Lock State
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
+    return Boolean(sessionStorage.getItem(HELICAL_TOKEN_KEY));
+  });
   const [accessKeyInput, setAccessKeyInput] = useState('');
   const [accessKeyError, setAccessKeyError] = useState<string | null>(null);
   const [showAccessKey, setShowAccessKey] = useState(false);
-
-  useEffect(() => {
-    sessionStorage.removeItem(SESSION_UNLOCK_KEY);
-    setIsUnlocked(false);
-  }, []);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // ── Standalone Deployments State ──────────────────────────────────────────
   const [standaloneList, setStandaloneList] = useState<StandaloneDeploymentItem[]>([]);
@@ -209,7 +218,16 @@ export default function HelicalConsultingPage() {
   const fetchCompaniesOverview = async () => {
     setCompaniesLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/companies-overview`);
+      const res = await fetch(`${API_BASE}/auth/companies-overview`, {
+        headers: getHelicalHeaders(),
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem(HELICAL_TOKEN_KEY);
+        sessionStorage.removeItem(SESSION_UNLOCK_KEY);
+        sessionStorage.removeItem(HELICAL_PASSCODE_KEY);
+        setIsUnlocked(false);
+        return;
+      }
       const json = await res.json();
       const list = Array.isArray(json?.data?.companies)
         ? json.data.companies
@@ -229,7 +247,14 @@ export default function HelicalConsultingPage() {
   const fetchStandaloneDeployments = async () => {
     setStandaloneLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/admin/standalone-deployments`);
+      const res = await fetch(`${API_BASE}/admin/standalone-deployments`, {
+        headers: getHelicalHeaders(),
+      });
+      if (res.status === 401) {
+        // If standalone deployments has an authorization mismatch, don't boot out of entire cockpit
+        setStandaloneList([]);
+        return;
+      }
       const json = await res.json();
       if (json.success && json.data) {
         setStandaloneList(json.data.deployments || []);
@@ -257,6 +282,7 @@ export default function HelicalConsultingPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/standalone-deployments/${id}/toggle-status`, {
         method: 'PUT',
+        headers: getHelicalHeaders(),
       });
       const json = await res.json();
       if (!res.ok || json.success === false) {
@@ -275,6 +301,7 @@ export default function HelicalConsultingPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/standalone-deployments/${deleteConfirmDeployment.id}`, {
         method: 'DELETE',
+        headers: getHelicalHeaders(),
       });
       const json = await res.json();
       if (!res.ok || json.success === false) {
@@ -299,7 +326,7 @@ export default function HelicalConsultingPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/standalone-deployments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHelicalHeaders(),
         body: JSON.stringify({
           companyName: newCompName.trim(),
           licenseKey: newLicenseKey.trim() || undefined,
@@ -336,6 +363,7 @@ export default function HelicalConsultingPage() {
     try {
       const res = await fetch(`${API_BASE}/auth/company/${compCode}/toggle-status`, {
         method: 'PUT',
+        headers: getHelicalHeaders(),
       });
       const json = await res.json();
       if (!res.ok || json.success === false) {
@@ -355,6 +383,7 @@ export default function HelicalConsultingPage() {
     try {
       const res = await fetch(`${API_BASE}/auth/company/${deleteConfirmCompany.code}`, {
         method: 'DELETE',
+        headers: getHelicalHeaders(),
       });
       const json = await res.json();
       if (!res.ok || json.success === false) {
@@ -393,7 +422,7 @@ export default function HelicalConsultingPage() {
         promises.push(
           fetch(`${API_BASE}/auth/company/${editLimitCompany.code}/max-users`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHelicalHeaders(),
             body: JSON.stringify({ maxUsers: parsedUsers }),
           })
         );
@@ -402,7 +431,7 @@ export default function HelicalConsultingPage() {
         promises.push(
           fetch(`${API_BASE}/auth/company/${editLimitCompany.code}/max-vendors`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHelicalHeaders(),
             body: JSON.stringify({ maxVendors: parsedVendors }),
           })
         );
@@ -537,14 +566,31 @@ export default function HelicalConsultingPage() {
           )}
 
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               setAccessKeyError(null);
-              if (accessKeyInput.trim() === SECRET_PASSCODE) {
-                setIsUnlocked(true);
-                setAccessKeyInput('');
-              } else {
-                setAccessKeyError('Invalid Access Key. Permission Denied.');
+              setIsVerifying(true);
+              try {
+                const res = await fetch(`${API_BASE}/auth/helical-verify`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ passcode: accessKeyInput.trim() }),
+                });
+                const json = await res.json();
+                if (res.ok && (json.data?.token || json.token)) {
+                  const token = json.data?.token || json.token;
+                  sessionStorage.setItem(HELICAL_TOKEN_KEY, token);
+                  sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
+                  sessionStorage.setItem(HELICAL_PASSCODE_KEY, accessKeyInput.trim());
+                  setIsUnlocked(true);
+                  setAccessKeyInput('');
+                } else {
+                  setAccessKeyError(json.message || json.error || 'Invalid Access Key. Permission Denied.');
+                }
+              } catch {
+                setAccessKeyError('Failed to connect to authentication server. Please check your network.');
+              } finally {
+                setIsVerifying(false);
               }
             }}
             className="grid gap-4 text-left"
@@ -563,6 +609,7 @@ export default function HelicalConsultingPage() {
                   onChange={(e) => setAccessKeyInput(e.target.value)}
                   autoFocus
                   required
+                  disabled={isVerifying}
                 />
                 <button
                   type="button"
@@ -576,9 +623,9 @@ export default function HelicalConsultingPage() {
               </div>
             </div>
 
-            <Button type="submit" size="lg" className="w-full h-11 font-bold text-sm">
-              <KeyRound size={17} />
-              <span>Unlock Fleet Cockpit</span>
+            <Button type="submit" size="lg" className="w-full h-11 font-bold text-sm" disabled={isVerifying}>
+              {isVerifying ? <LoaderCircle size={17} className="animate-spin" /> : <KeyRound size={17} />}
+              <span>{isVerifying ? 'Verifying Key...' : 'Unlock Fleet Cockpit'}</span>
             </Button>
           </form>
         </motion.div>
@@ -642,7 +689,9 @@ export default function HelicalConsultingPage() {
             <button
               type="button"
               onClick={() => {
+                sessionStorage.removeItem(HELICAL_TOKEN_KEY);
                 sessionStorage.removeItem(SESSION_UNLOCK_KEY);
+                sessionStorage.removeItem(HELICAL_PASSCODE_KEY);
                 setIsUnlocked(false);
               }}
               className="h-9 px-3 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"

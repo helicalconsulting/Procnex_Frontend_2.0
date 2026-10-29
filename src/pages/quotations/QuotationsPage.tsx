@@ -2623,8 +2623,8 @@ export default function QuotationsPage() {
   const { data: serverAllQuotations, reload: reloadAllQuotations } = useServiceData(
     () => quotationService.listAll().then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[],
-    [],
-    { cacheKey: 'quotations:all' }
+    [compareModalOpen],
+    { cacheKey: 'quotations:all', enabled: compareModalOpen }
   );
 
   const [allQuotations, setAllQuotations] = useState<MockQuotation[]>([]);

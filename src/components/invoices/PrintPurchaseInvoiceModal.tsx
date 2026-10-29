@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, X, FileText, CheckCircle2, ShieldCheck, Landmark, Building2, Clock } from 'lucide-react';
+import { Printer, X, FileText, CheckCircle2, ShieldCheck, Landmark, Building2, Clock, RotateCcw } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { approvalService } from '../../services/approvalService';
@@ -372,17 +372,18 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
               ? item.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
               : `Level ${levelNum} Approver`;
             const isLevelApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
+            const isLevelReturned = item.status === 'RETURNED';
 
-            let levelSig: string | undefined = undefined;
-            let signerDisplayName: string | undefined = undefined;
+            let levelSig: string | undefined = item.signatureUrl || item.dataUrl || undefined;
+            let signerDisplayName: string | undefined = item.signedByName || item.approverName || undefined;
 
             if (isLevelApproved) {
               // 1. Direct match by approverId
-              if (item.approverId) {
+              if (!levelSig && item.approverId) {
                 const byId = sortedDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(item.approverId));
-                if (byId && !usedSigUrls.has(byId.dataUrl)) {
+                if (byId) {
                   levelSig = byId.dataUrl;
-                  signerDisplayName = byId.signedByName;
+                  signerDisplayName = signerDisplayName || byId.signedByName;
                 }
               }
 
@@ -461,9 +462,10 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
               level: `Level ${levelNum}`,
               name,
               role: roleName,
-              date: isLevelApproved && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.invoiceDate),
-              status: isLevelApproved ? 'APPROVED' : 'PENDING',
+              date: (isLevelApproved || isLevelReturned) && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.invoiceDate),
+              status: isLevelApproved ? 'APPROVED' : (isLevelReturned ? 'RETURNED' : 'PENDING'),
               signatureUrl: isLevelApproved ? levelSig : undefined,
+              comments: item.comments || undefined,
             };
           });
 
@@ -860,14 +862,30 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
             <div className="ppi-stamps-grid">
               {approversList.map((app, idx) => {
                 const isPending = app.status === 'PENDING';
+                const isReturned = app.status === 'RETURNED';
+                const isApproved = app.status === 'APPROVED' || app.status === 'AUTO_FORWARDED';
                 return (
                   <div key={idx} className="ppi-stamp-card">
                     {/* Level & Status */}
                     <div className="ppi-stamp-card__header">
                       <span className="ppi-stamp-level-pill">LEVEL {idx + 1}</span>
-                      <span className={`ppi-stamp-status-tag ${isPending ? 'ppi-stamp-status-tag--pending' : ''}`}>
-                        {isPending ? <Clock size={11} /> : <CheckCircle2 size={11} />}
-                        {isPending ? 'PENDING' : 'APPROVED & SIGNED'}
+                      <span
+                        className={`ppi-stamp-status-tag ${
+                          isReturned
+                            ? 'ppi-stamp-status-tag--returned'
+                            : isPending
+                            ? 'ppi-stamp-status-tag--pending'
+                            : ''
+                        }`}
+                      >
+                        {isReturned ? (
+                          <RotateCcw size={11} />
+                        ) : isPending ? (
+                          <Clock size={11} />
+                        ) : (
+                          <CheckCircle2 size={11} />
+                        )}
+                        {isReturned ? 'RETURNED' : isPending ? 'PENDING' : 'APPROVED & SIGNED'}
                       </span>
                     </div>
 
@@ -879,7 +897,12 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
 
                     {/* Digital Signature */}
                     <div className="ppi-stamp-card__signature">
-                      {isPending ? (
+                      {isReturned ? (
+                        <div className="ppi-stamp-sig-returned">
+                          <RotateCcw size={12} className="inline mr-1" />
+                          <span>Returned for Revision{app.comments ? `: "${app.comments}"` : ''}</span>
+                        </div>
+                      ) : isPending ? (
                         <div className="ppi-stamp-sig-pending">Pending Digital Signature</div>
                       ) : (
                         <div className="ppi-stamp-sig-active">

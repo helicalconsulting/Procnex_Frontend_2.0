@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import { cleanDuplicateSignatures, type ContractPlaceholderContext } from '../../utils/cleanSignatures';
+import DOMPurify from 'dompurify';
 import { sseClient } from '../../services/sseClient';
 import { DetailSkeleton } from '../../components/shared/Skeleton';
 import { signatureService, type SavedSignature } from '../../services/signatureService';
@@ -1242,7 +1243,7 @@ export default function ContractDetailPage() {
           <div>
             <div className="ctr-detail__doc-preview">
               {contract.contentSnapshot ? (
-                <div className="ctr-doc-preview-content" dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot, undefined, contractContext) }} />
+                <div className="ctr-doc-preview-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(cleanDuplicateSignatures(contract.contentSnapshot, undefined, contractContext)) }} />
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 48 }}>
                   No generated document content available. The contract document will appear here after generation.

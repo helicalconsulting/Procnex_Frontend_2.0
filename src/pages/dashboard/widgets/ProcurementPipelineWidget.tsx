@@ -65,7 +65,9 @@ const STAGE_CONFIG: Record<
 export default function ProcurementPipelineWidget() {
   const { data: pipeline, loading, error, reload } = useServiceData(
     () => dashboardService.getPipeline(),
-    [] as DashboardPipelineItem[]
+    [] as DashboardPipelineItem[],
+    [],
+    { cacheKey: 'dashboard-pipeline' }
   );
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Wallet,
   Check,
+  ChevronDown,
   Filter,
   Info,
 } from 'lucide-react';
@@ -61,6 +62,21 @@ const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Cash' },
   { value: 'OTHER', label: 'Other Channel' },
 ];
+
+export function extractCleanInvoiceNumber(raw?: string | null): string {
+  if (!raw) return '—';
+  const str = String(raw).trim();
+  const matchInv = str.match(/(?:•|\||\b)\s*Invoice:\s*([^\s|•]+)/i);
+  if (matchInv && matchInv[1]) return matchInv[1].trim();
+
+  const matchInvPrefix = str.match(/^Invoice\s*[:#]\s*([^\s|•]+)/i);
+  if (matchInvPrefix && matchInvPrefix[1]) return matchInvPrefix[1].trim();
+
+  const matchDn = str.match(/^(?:DN|Dispatch Note):\s*([^\s|•]+)/i);
+  if (matchDn && matchDn[1]) return matchDn[1].trim();
+
+  return str;
+}
 
 export default function VendorPaymentsPage() {
   const navigate = useNavigate();
@@ -107,11 +123,31 @@ export default function VendorPaymentsPage() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Custom Invoice Dropdown state
+  const [isInvoiceDropdownOpen, setIsInvoiceDropdownOpen] = useState(false);
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
+  const invoiceDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (invoiceDropdownRef.current && !invoiceDropdownRef.current.contains(event.target as Node)) {
+        setIsInvoiceDropdownOpen(false);
+      }
+    }
+    if (isInvoiceDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isInvoiceDropdownOpen]);
+
   // Load Invoices
   const {
     data: invoices,
     loading: invoicesLoading,
     forceRefresh: forceRefreshInvoices,
+    setData: setInvoicesData,
   } = useServiceData(
     () => vendorPortalService.listInvoices(),
     [] as VendorInvoiceMock[],
@@ -124,6 +160,7 @@ export default function VendorPaymentsPage() {
     data: payments,
     loading: paymentsLoading,
     forceRefresh: forceRefreshPayments,
+    setData: setPaymentsData,
   } = useServiceData(
     () => vendorPortalService.listPayments(),
     [] as VendorPaymentRecord[],
@@ -203,6 +240,8 @@ export default function VendorPaymentsPage() {
         ...primary,
         invoiceNumber: bestVendorInvoiceNumber,
         status: resolvedStatus,
+        rfqTitle: primary.rfqTitle || group.find((i) => i.rfqTitle)?.rfqTitle || '',
+        rfqNumber: primary.rfqNumber || group.find((i) => i.rfqNumber)?.rfqNumber || '—',
       });
     }
 
@@ -213,11 +252,33 @@ export default function VendorPaymentsPage() {
       result.push({
         ...inv,
         invoiceNumber: invNum,
+        rfqTitle: inv.rfqTitle || '',
+        rfqNumber: inv.rfqNumber || '—',
       });
     });
 
     return result;
   }, [invoices]);
+
+  const filteredDropdownInvoices = useMemo(() => {
+    const list = normalizedInvoices || invoices || [];
+    if (!invoiceSearchQuery.trim()) return list;
+    const q = invoiceSearchQuery.toLowerCase();
+    return list.filter((inv) => {
+      const cleanInv = extractCleanInvoiceNumber(inv.invoiceNumber).toLowerCase();
+      const rawInv = (inv.invoiceNumber || '').toLowerCase();
+      const rfqTitle = ((inv as any).rfqTitle || '').toLowerCase();
+      const rfqNum = (inv.rfqNumber || '').toLowerCase();
+      const poNum = (inv.poNumber || '').toLowerCase();
+      return (
+        cleanInv.includes(q) ||
+        rawInv.includes(q) ||
+        rfqTitle.includes(q) ||
+        rfqNum.includes(q) ||
+        poNum.includes(q)
+      );
+    });
+  }, [normalizedInvoices, invoices, invoiceSearchQuery]);
 
   // Summary Metrics calculations
   const summary = useMemo(() => {
@@ -242,33 +303,47 @@ export default function VendorPaymentsPage() {
   // Invoice balance lookup map
   const invoiceStatsMap = useMemo(() => {
     const map = new Map<string, { totalAmount: number; paidAmount: number; balance: number; poNumber: string }>();
-    
+    const hasPayments = Array.isArray(payments) && payments.length > 0;
+
     normalizedInvoices.forEach((inv) => {
       const invTotal = inv.totalAmount || inv.amount || 0;
-      map.set(inv.invoiceNumber, {
+      const cleanNum = extractCleanInvoiceNumber(inv.invoiceNumber);
+      const initialPaid = hasPayments ? 0 : Number(inv.paidAmount || 0);
+      const entry = {
         totalAmount: invTotal,
-        paidAmount: 0,
-        balance: invTotal,
+        paidAmount: initialPaid,
+        balance: Math.max(0, invTotal - initialPaid),
         poNumber: inv.poNumber || '—',
-      });
+      };
+      map.set(inv.invoiceNumber, entry);
+      if (cleanNum) {
+        map.set(cleanNum, entry);
+      }
       if (inv.id) {
-        map.set(String(inv.id), {
-          totalAmount: invTotal,
-          paidAmount: 0,
-          balance: invTotal,
-          poNumber: inv.poNumber || '—',
-        });
+        map.set(String(inv.id), entry);
       }
     });
 
-    // Aggregate paid amounts from payments
-    (payments || []).forEach((pay) => {
-      const target = pay.invoiceNumber ? map.get(pay.invoiceNumber) : (pay.invoiceId ? map.get(pay.invoiceId) : null);
-      if (target) {
-        target.paidAmount += pay.amount || 0;
-        target.balance = Math.max(0, target.totalAmount - target.paidAmount);
-      }
-    });
+    if (hasPayments) {
+      const seenPaymentKeys = new Set<string>();
+      payments.forEach((pay) => {
+        const payKey = pay.paymentNumber || pay.id;
+        if (payKey && seenPaymentKeys.has(payKey)) return;
+        if (payKey) seenPaymentKeys.add(payKey);
+
+        const cleanPayInv = pay.invoiceNumber ? extractCleanInvoiceNumber(pay.invoiceNumber) : '';
+        const target =
+          (pay.invoiceNumber && map.get(pay.invoiceNumber)) ||
+          (cleanPayInv && map.get(cleanPayInv)) ||
+          (pay.invoiceId && map.get(pay.invoiceId)) ||
+          null;
+
+        if (target) {
+          target.paidAmount += pay.amount || 0;
+          target.balance = Math.max(0, target.totalAmount - target.paidAmount);
+        }
+      });
+    }
 
     return map;
   }, [normalizedInvoices, payments]);
@@ -343,6 +418,8 @@ export default function VendorPaymentsPage() {
         paidAmount: 0,
         balance: invoice.totalAmount || invoice.amount || 0,
       };
+      const cleanInv = extractCleanInvoiceNumber(invoice.invoiceNumber);
+      const rfqName = (invoice as any).rfqTitle || (invoice.rfqNumber && invoice.rfqNumber !== '—' ? invoice.rfqNumber : null);
       setFormData({
         invoiceId: String(invoice.id || ''),
         invoiceNumber: invoice.invoiceNumber,
@@ -351,18 +428,20 @@ export default function VendorPaymentsPage() {
         method: 'NEFT',
         referenceNumber: '',
         bankAccount: '',
-        comments: `Payment received for Invoice #${invoice.invoiceNumber}`,
+        comments: rfqName ? `Payment for ${rfqName} (Invoice #${cleanInv})` : `Payment for Invoice #${cleanInv}`,
         status: 'RECEIVED',
       });
     } else {
       // Default to first invoice with pending balance if available
-      const firstPending = (invoices || []).find((inv) => {
+      const firstPending = (normalizedInvoices || invoices || []).find((inv) => {
         const stats = invoiceStatsMap.get(inv.invoiceNumber);
         return stats ? stats.balance > 0 : true;
       });
 
       if (firstPending) {
         const stats = invoiceStatsMap.get(firstPending.invoiceNumber);
+        const cleanInv = extractCleanInvoiceNumber(firstPending.invoiceNumber);
+        const rfqName = (firstPending as any).rfqTitle || (firstPending.rfqNumber && firstPending.rfqNumber !== '—' ? firstPending.rfqNumber : null);
         setFormData({
           invoiceId: String(firstPending.id || ''),
           invoiceNumber: firstPending.invoiceNumber,
@@ -371,7 +450,7 @@ export default function VendorPaymentsPage() {
           method: 'NEFT',
           referenceNumber: '',
           bankAccount: '',
-          comments: `Payment received for Invoice #${firstPending.invoiceNumber}`,
+          comments: rfqName ? `Payment for ${rfqName} (Invoice #${cleanInv})` : `Payment for Invoice #${cleanInv}`,
           status: 'RECEIVED',
         });
       } else {
@@ -388,21 +467,25 @@ export default function VendorPaymentsPage() {
         });
       }
     }
+    setIsInvoiceDropdownOpen(false);
+    setInvoiceSearchQuery('');
     setIsRecordModalOpen(true);
   };
 
   // Handle invoice selection change in modal
   const handleInvoiceSelectChange = (selectedInvNum: string) => {
-    const inv = (invoices || []).find((i) => i.invoiceNumber === selectedInvNum);
+    const inv = (normalizedInvoices || invoices || []).find((i) => i.invoiceNumber === selectedInvNum);
     if (inv) {
       const stats = invoiceStatsMap.get(inv.invoiceNumber);
       const remBalance = stats ? stats.balance : inv.totalAmount || inv.amount || 0;
+      const cleanInv = extractCleanInvoiceNumber(inv.invoiceNumber);
+      const rfqName = (inv as any).rfqTitle || (inv.rfqNumber && inv.rfqNumber !== '—' ? inv.rfqNumber : null);
       setFormData((prev) => ({
         ...prev,
         invoiceId: String(inv.id || ''),
         invoiceNumber: inv.invoiceNumber,
         amount: remBalance > 0 ? String(remBalance) : String(inv.totalAmount || inv.amount || 0),
-        comments: `Payment received for Invoice #${inv.invoiceNumber}`,
+        comments: rfqName ? `Payment for ${rfqName} (Invoice #${cleanInv})` : `Payment for Invoice #${cleanInv}`,
       }));
     } else {
       setFormData((prev) => ({
@@ -445,16 +528,47 @@ export default function VendorPaymentsPage() {
       };
 
       const created = await vendorPortalService.recordPayment(payload);
+
+      // Optimistically update payments state immediately
+      setPaymentsData((prev) => {
+        const existing = prev || [];
+        const filtered = existing.filter((p) => p.paymentNumber !== created.paymentNumber && p.id !== created.id);
+        return [created, ...filtered];
+      });
+
+      // Optimistically update invoice paid status in invoices state
+      setInvoicesData((prev) => {
+        const existing = prev || [];
+        return existing.map((inv) => {
+          const match =
+            (formData.invoiceId && inv.id === formData.invoiceId) ||
+            inv.invoiceNumber === formData.invoiceNumber ||
+            extractCleanInvoiceNumber(inv.invoiceNumber) === extractCleanInvoiceNumber(formData.invoiceNumber);
+          if (match) {
+            const currentPaid = Number(inv.paidAmount || 0);
+            const newPaid = currentPaid + payAmount;
+            const total = Number(inv.totalAmount || inv.amount || 0);
+            return {
+              ...inv,
+              paidAmount: newPaid,
+              status: newPaid >= total ? 'PAID' : newPaid > 0 ? 'PARTIALLY_PAID' : inv.status,
+            };
+          }
+          return inv;
+        });
+      });
+
       setIsRecordModalOpen(false);
       refreshAll();
 
+      const cleanInvNum = extractCleanInvoiceNumber(formData.invoiceNumber);
       showSuccess({
         title: 'Payment Recorded Successfully!',
         badge: 'PAYMENT RECEIVED',
-        message: `Payment of ${amount(payAmount)} against Invoice #${formData.invoiceNumber} has been verified and registered.`,
+        message: `Payment of ${amount(payAmount)} against Invoice #${cleanInvNum} has been verified and registered.`,
         referenceNumber: created.paymentNumber,
         details: [
-          { label: 'Target Invoice', value: formData.invoiceNumber },
+          { label: 'Target Invoice', value: cleanInvNum },
           { label: 'Amount Received', value: `${amount(payAmount)}` },
           { label: 'Payment Mode', value: formData.method },
           { label: 'Payment Date', value: formatDate(formData.paymentDate) },
@@ -476,14 +590,16 @@ export default function VendorPaymentsPage() {
     const deletedPay = paymentToDelete;
     try {
       await vendorPortalService.deletePayment(deletedPay.id);
+      setPaymentsData((prev) => (prev || []).filter((p) => p.id !== deletedPay.id && p.paymentNumber !== deletedPay.paymentNumber));
       setPaymentToDelete(null);
       refreshAll();
 
+      const cleanDeletedInv = extractCleanInvoiceNumber(deletedPay.invoiceNumber);
       showSuccess({
         title: 'Payment Voucher Removed',
         badge: 'PAYMENT VOIDED',
         type: 'info',
-        message: `Payment entry ${deletedPay.paymentNumber} has been removed. Outstanding balance on Invoice #${deletedPay.invoiceNumber} has been restored.`,
+        message: `Payment entry ${deletedPay.paymentNumber} has been removed. Outstanding balance on Invoice #${cleanDeletedInv} has been restored.`,
         primaryBtnText: 'Continue',
       });
     } catch (err: any) {
@@ -700,10 +816,11 @@ export default function VendorPaymentsPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="font-medium text-foreground">{pay.invoiceNumber}</div>
-                          {pay.poNumber && pay.poNumber !== '—' && (
-                            <div className="text-[11px] text-muted-foreground">PO: {pay.poNumber}</div>
-                          )}
+                          <div className="font-semibold text-primary">{extractCleanInvoiceNumber(pay.invoiceNumber)}</div>
+                          <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2">
+                            {pay.poNumber && pay.poNumber !== '—' && <span>PO: {pay.poNumber}</span>}
+                            {(pay as any).rfqTitle && <span className="truncate max-w-[150px]" title={(pay as any).rfqTitle}>• {(pay as any).rfqTitle}</span>}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5 text-xs text-muted-foreground">
                           <div className="flex items-center gap-1">
@@ -811,10 +928,13 @@ export default function VendorPaymentsPage() {
                   </thead>
                   <tbody className="divide-y divide-border/60">
                     {paginatedInvoices.map((inv) => {
-                      const stats = invoiceStatsMap.get(inv.invoiceNumber) || {
+                      const cleanInv = extractCleanInvoiceNumber(inv.invoiceNumber);
+                      const stats = invoiceStatsMap.get(inv.invoiceNumber) ||
+                        (cleanInv ? invoiceStatsMap.get(cleanInv) : null) ||
+                        (inv.id ? invoiceStatsMap.get(String(inv.id)) : null) || {
                         totalAmount: inv.totalAmount || inv.amount || 0,
-                        paidAmount: 0,
-                        balance: inv.totalAmount || inv.amount || 0,
+                        paidAmount: Number(inv.paidAmount || 0),
+                        balance: Math.max(0, (inv.totalAmount || inv.amount || 0) - Number(inv.paidAmount || 0)),
                       };
                       const isSettled = stats.balance <= 0 || inv.status === 'PAID';
                       const isPartial = stats.paidAmount > 0 && stats.balance > 0;
@@ -827,9 +947,9 @@ export default function VendorPaymentsPage() {
                                 <FileText className="size-4" />
                               </span>
                               <div>
-                                <div className="font-semibold text-primary">{inv.invoiceNumber}</div>
-                                <div className="text-[11px] text-muted-foreground max-w-44 truncate">
-                                  {inv.description || inv.rfqNumber || 'Direct Purchase Invoice'}
+                                <div className="font-semibold text-primary">{extractCleanInvoiceNumber(inv.invoiceNumber)}</div>
+                                <div className="text-[11px] text-muted-foreground max-w-56 truncate" title={(inv as any).rfqTitle || inv.description || inv.rfqNumber}>
+                                  {(inv as any).rfqTitle || (inv.rfqNumber && inv.rfqNumber !== '—' ? `RFQ: ${inv.rfqNumber}` : inv.description || 'Purchase Invoice')}
                                 </div>
                               </div>
                             </div>
@@ -936,24 +1056,147 @@ export default function VendorPaymentsPage() {
                       </span>
                     )}
                   </div>
-                  {(invoices || []).length > 0 ? (
-                    <select
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                      value={formData.invoiceNumber}
-                      onChange={(e) => handleInvoiceSelectChange(e.target.value)}
-                      required
-                    >
-                      <option value="">— Select Invoice —</option>
-                      {(invoices || []).map((inv) => {
-                        const stats = invoiceStatsMap.get(inv.invoiceNumber);
-                        const bal = stats ? stats.balance : inv.totalAmount || 0;
-                        return (
-                          <option key={inv.id || inv.invoiceNumber} value={inv.invoiceNumber}>
-                            {inv.invoiceNumber} | PO: {inv.poNumber} | Total: {amount(inv.totalAmount || 0)} | Due: {amount(bal)}
-                          </option>
-                        );
-                      })}
-                    </select>
+                  {(normalizedInvoices || invoices || []).length > 0 ? (
+                    <div className="relative" ref={invoiceDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsInvoiceDropdownOpen((prev) => !prev);
+                          setInvoiceSearchQuery('');
+                        }}
+                        className={cn(
+                          "w-full min-h-[44px] px-3.5 py-2 text-left rounded-lg border bg-background text-sm flex items-center justify-between gap-3 transition-all",
+                          "focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary",
+                          isInvoiceDropdownOpen ? "border-primary ring-2 ring-primary/20 shadow-sm" : "border-input hover:border-muted-foreground/40",
+                          !formData.invoiceNumber && "text-muted-foreground"
+                        )}
+                      >
+                        {(() => {
+                          const selectedInv = (normalizedInvoices || invoices || []).find((i) => i.invoiceNumber === formData.invoiceNumber);
+                          if (!selectedInv) {
+                            return (
+                              <span className="text-muted-foreground text-sm font-normal">
+                                — Select Invoice or Fulfilled RFQ —
+                              </span>
+                            );
+                          }
+                          const cleanInv = extractCleanInvoiceNumber(selectedInv.invoiceNumber);
+                          const rfqTitle = (selectedInv as any).rfqTitle;
+                          const rfqNum = selectedInv.rfqNumber && selectedInv.rfqNumber !== '—' ? selectedInv.rfqNumber : null;
+                          const stats = invoiceStatsMap.get(selectedInv.invoiceNumber);
+                          const bal = stats ? stats.balance : selectedInv.totalAmount || 0;
+
+                          return (
+                            <div className="flex-1 min-w-0 pr-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-[15px] text-foreground truncate max-w-[340px]">
+                                  {rfqTitle || `Invoice #${cleanInv}`}
+                                </span>
+                                {rfqNum && (
+                                  <span className="text-xs font-mono px-2 py-0.5 rounded bg-secondary text-muted-foreground shrink-0">
+                                    {rfqNum}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1 truncate">
+                                <span>Inv: <strong className="font-mono text-primary font-semibold">{cleanInv}</strong></span>
+                                {selectedInv.poNumber && selectedInv.poNumber !== '—' && (
+                                  <>
+                                    <span>•</span>
+                                    <span>PO: {selectedInv.poNumber}</span>
+                                  </>
+                                )}
+                                <span>•</span>
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">Due: {amount(bal)}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <ChevronDown className={cn("size-4 text-muted-foreground shrink-0 transition-transform duration-200", isInvoiceDropdownOpen && "rotate-180")} />
+                      </button>
+
+                      {/* Dropdown Menu - strictly constrained to the exact width of the input */}
+                      {isInvoiceDropdownOpen && (
+                        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg border border-border bg-popover text-popover-foreground shadow-2xl overflow-hidden flex flex-col max-h-[300px]">
+                          {/* Search bar inside dropdown */}
+                          <div className="p-2.5 border-b border-border/60 bg-muted/20 shrink-0">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <input
+                                type="text"
+                                autoFocus
+                                placeholder="Search by RFQ, invoice or PO..."
+                                value={invoiceSearchQuery}
+                                onChange={(e) => setInvoiceSearchQuery(e.target.value)}
+                                className="w-full h-9 pl-9 pr-3 text-sm rounded-md bg-background border border-input focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Options List */}
+                          <div className="overflow-y-auto divide-y divide-border/40 p-1 flex-1">
+                            {filteredDropdownInvoices.length === 0 ? (
+                              <div className="py-6 text-center text-sm text-muted-foreground">
+                                No matching invoices found.
+                              </div>
+                            ) : (
+                              filteredDropdownInvoices.map((inv) => {
+                                const isSelected = inv.invoiceNumber === formData.invoiceNumber;
+                                const stats = invoiceStatsMap.get(inv.invoiceNumber);
+                                const bal = stats ? stats.balance : inv.totalAmount || 0;
+                                const cleanInv = extractCleanInvoiceNumber(inv.invoiceNumber);
+                                const rfqTitle = (inv as any).rfqTitle;
+                                const rfqNum = inv.rfqNumber && inv.rfqNumber !== '—' ? inv.rfqNumber : null;
+
+                                return (
+                                  <div
+                                    key={inv.id || inv.invoiceNumber}
+                                    onClick={() => {
+                                      handleInvoiceSelectChange(inv.invoiceNumber);
+                                      setIsInvoiceDropdownOpen(false);
+                                    }}
+                                    className={cn(
+                                      "p-3 rounded-md cursor-pointer transition-colors text-left flex items-center justify-between gap-3",
+                                      isSelected
+                                        ? "bg-primary/10 border-l-2 border-primary"
+                                        : "hover:bg-accent/70"
+                                    )}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-sm text-foreground truncate">
+                                          {rfqTitle || `Invoice #${cleanInv}`}
+                                        </span>
+                                        {isSelected && <Check className="size-4 text-primary shrink-0" />}
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                                        <span className="font-mono text-primary font-semibold">Inv #{cleanInv}</span>
+                                        <span>•</span>
+                                        <span>PO: {inv.poNumber}</span>
+                                        {rfqNum && (
+                                          <>
+                                            <span>•</span>
+                                            <span>RFQ: {rfqNum}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <div className="text-sm font-semibold text-foreground">
+                                        {amount(inv.totalAmount || 0)}
+                                      </div>
+                                      <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                        Due: {amount(bal)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <Input
                       placeholder="Enter Invoice Number (e.g. INV-2026-001)"
@@ -1139,12 +1382,18 @@ export default function VendorPaymentsPage() {
                 </div>
                 <div className="flex justify-between items-center border-b border-border/50 pb-2">
                   <span className="text-xs text-muted-foreground">Invoice Reference</span>
-                  <span className="font-semibold text-foreground">{selectedPaymentForView.invoiceNumber}</span>
+                  <span className="font-semibold text-foreground">{extractCleanInvoiceNumber(selectedPaymentForView.invoiceNumber)}</span>
                 </div>
                 {selectedPaymentForView.poNumber && selectedPaymentForView.poNumber !== '—' && (
                   <div className="flex justify-between items-center border-b border-border/50 pb-2">
                     <span className="text-xs text-muted-foreground">Purchase Order</span>
                     <span className="font-medium">{selectedPaymentForView.poNumber}</span>
+                  </div>
+                )}
+                {(selectedPaymentForView as any).rfqTitle && (
+                  <div className="flex justify-between items-center border-b border-border/50 pb-2">
+                    <span className="text-xs text-muted-foreground">Fulfilled RFQ</span>
+                    <span className="font-medium text-foreground">{(selectedPaymentForView as any).rfqTitle}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center border-b border-border/50 pb-2">
@@ -1204,7 +1453,7 @@ export default function VendorPaymentsPage() {
             <DialogDescription>
               Are you sure you want to remove payment voucher{' '}
               <strong>{paymentToDelete?.paymentNumber}</strong> ({amount(paymentToDelete?.amount || 0)})?
-              The outstanding balance on Invoice {paymentToDelete?.invoiceNumber} will be restored.
+              The outstanding balance on Invoice #{extractCleanInvoiceNumber(paymentToDelete?.invoiceNumber)} will be restored.
             </DialogDescription>
           </DialogHeader>
 

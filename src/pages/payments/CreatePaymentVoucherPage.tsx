@@ -1173,6 +1173,30 @@ export default function CreatePaymentVoucherPage() {
     const qAccount = searchParams.get('accountNumber');
     const qIfsc = searchParams.get('ifscCode');
     const qBeneficiary = searchParams.get('beneficiaryName');
+    const qEdit = searchParams.get('edit') || searchParams.get('voucher') || searchParams.get('voucherNumber');
+
+    if (qEdit && vouchersList && vouchersList.length > 0) {
+      const match = vouchersList.find((v) =>
+        v.paymentId === qEdit ||
+        (v as any).paymentNumber === qEdit ||
+        String(v.id) === qEdit
+      );
+      if (match) {
+        handleEditVoucher(match);
+        return;
+      }
+    }
+
+    if (qInvoiceRef && vouchersList && vouchersList.length > 0 && !voucherNumber) {
+      const match = vouchersList.find((v) =>
+        v.invoiceRef === qInvoiceRef ||
+        v.invoices?.some((i) => i.invoiceNumber === qInvoiceRef)
+      );
+      if (match && (match.status === 'RETURNED' || match.status === 'DRAFT')) {
+        handleEditVoucher(match);
+        return;
+      }
+    }
 
     if (qVendor) {
       setVendorName(qVendor);
@@ -1194,7 +1218,7 @@ export default function CreatePaymentVoucherPage() {
     if (qBankName) setBankName(qBankName);
     if (qAccount) setAccountNumber(qAccount);
     if (qIfsc) setIfscCode(qIfsc);
-  }, [searchParams, vendorsList]);
+  }, [searchParams, vendorsList, vouchersList]);
 
   // Handle vendor selection change
   const handleVendorSelect = (vId: string) => {
@@ -1246,7 +1270,7 @@ export default function CreatePaymentVoucherPage() {
     if (!canCreateVoucher) return;
     setErrorMsg(null);
     setSuccessMsg(null);
-    setVoucherNumber(v.paymentId || '');
+    setVoucherNumber(v.paymentId || (v as any).paymentNumber || '');
     setInvoiceRef(v.invoiceRef || '');
     let editAmount = typeof v.amount === 'number' ? v.amount : (typeof v.grossAmount === 'number' ? v.grossAmount : '');
     setGrossAmount(editAmount);
@@ -1497,6 +1521,8 @@ export default function CreatePaymentVoucherPage() {
       });
 
       refetchVouchers();
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:payment-updated'));
 
       showSuccess({
         title: 'Payment Voucher Submitted!',

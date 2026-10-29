@@ -18,10 +18,11 @@ export interface VendorOrderMock {
 }
 
 export interface VendorInvoiceMock {
-  id: number;
+  id: number | string;
   invoiceNumber: string;
   poNumber: string;
   rfqNumber: string;
+  rfqTitle?: string;
   amount: number;
   gst: number;
   totalAmount: number;

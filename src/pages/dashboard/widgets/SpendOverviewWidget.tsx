@@ -12,7 +12,8 @@ export default function SpendOverviewWidget() {
   const { data, loading } = useServiceData(
     () => dashboardService.getSpendOverview(),
     { monthlyTrend: [], categories: [] },
-    []
+    [],
+    { cacheKey: 'dashboard-spend' }
   );
 
   const maxValue = Math.max(1, ...data.monthlyTrend.map((m) => m.value));

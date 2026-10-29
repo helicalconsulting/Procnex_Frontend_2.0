@@ -34,7 +34,9 @@ function formatRfqDate(d: string) {
 export default function RecentRfqsWidget() {
   const { data: recentRfqs, loading, error } = useServiceData(
     () => dashboardService.getRecentRfqs(),
-    [] as DashboardRecentRfq[]
+    [] as DashboardRecentRfq[],
+    [],
+    { cacheKey: 'dashboard-recent-rfqs' }
   );
 
   return (

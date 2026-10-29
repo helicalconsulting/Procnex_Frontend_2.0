@@ -1,7 +1,7 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, FileText, Plus, Receipt, Search, Truck, XCircle, ArrowRight, Printer, Eye } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, FileText, Plus, Receipt, Search, Truck, XCircle, Printer, Eye } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
 import { TablePagination } from '@/components/shared/TablePagination';
@@ -17,6 +17,7 @@ import { dispatchNoteService, type DispatchNote } from '../../services/dispatchN
 import { getVendorPath } from '../../utils/tenantResolver';
 import { TableSkeleton } from '@/components/shared/Skeleton';
 import { PrintDispatchNoteModal } from '../../components/dispatch-notes/PrintDispatchNoteModal';
+import { extractCleanInvoiceNumber } from './VendorPaymentsPage';
 
 export default function VendorInvoicesPage() {
   const navigate = useNavigate();
@@ -355,7 +356,7 @@ export default function VendorInvoicesPage() {
                   <tbody className="divide-y divide-border/60">
                     {paginatedInvoices.map((invoice) => (
                       <tr key={invoice.id} className="transition-colors hover:bg-accent/35">
-                        <td className="px-4 py-3.5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-0.5 text-[12px] text-muted-foreground">{invoice.rfqNumber}</div></div></div></td>
+                        <td className="px-4 py-3.5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><div className="font-semibold text-primary">{extractCleanInvoiceNumber(invoice.invoiceNumber)}</div><div className="mt-0.5 text-[12px] text-muted-foreground truncate max-w-[200px]" title={invoice.rfqTitle || invoice.rfqNumber}>{invoice.rfqTitle || invoice.rfqNumber}</div></div></div></td>
                         <td className="px-4 py-3.5 font-medium">{invoice.poNumber}</td>
                         <td className="max-w-48 truncate px-4 py-3.5 text-xs text-muted-foreground" title={invoice.description}>{invoice.description}</td>
                         <td className="px-4 py-3.5 font-medium tabular-nums">{amount(invoice.amount, (invoice as any).currency)}</td>
@@ -374,7 +375,7 @@ export default function VendorInvoicesPage() {
             <div className="grid gap-3 lg:hidden">
               {paginatedInvoices.map((invoice) => (
                 <Card key={invoice.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-1 truncate text-xs text-muted-foreground">PO {invoice.poNumber} · {invoice.rfqNumber}</div></div><RecordStatusBadge kind="invoice" status={invoice.status} /></div>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-primary">{extractCleanInvoiceNumber(invoice.invoiceNumber)}</div><div className="mt-1 truncate text-xs text-muted-foreground">PO {invoice.poNumber} · {invoice.rfqTitle || invoice.rfqNumber}</div></div><RecordStatusBadge kind="invoice" status={invoice.status} /></div>
                   <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{invoice.description}</p>
                   <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
                     <div><dt className="text-muted-foreground">Total</dt><dd className="mt-1 font-semibold tabular-nums">{amount(invoice.totalAmount, (invoice as any).currency)}</dd></div>
@@ -427,7 +428,6 @@ export default function VendorInvoicesPage() {
                     {paginatedDispatches.map((dn) => {
                       const isReceived = String(dn.status || '').toUpperCase() === 'RECEIVED';
                       const poRef = dn.poNumber || dn.purchaseOrder?.poNumber || (dn.poId ? `PO-${String(dn.poId).slice(-6).toUpperCase()}` : '—');
-                      const isDispatchOnly = (dn as any).vendorFulfillmentAllowed === 'DISPATCH_ONLY' || (dn.purchaseOrder as any)?.vendorFulfillmentAllowed === 'DISPATCH_ONLY';
                       return (
                         <tr key={dn.id} className="transition-colors hover:bg-accent/35">
                           <td className="px-4 py-3.5">
@@ -472,27 +472,16 @@ export default function VendorInvoicesPage() {
                             )}
                           </td>
                           <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                onClick={() => setSelectedDispatchForPrint(dn)}
-                                className="gap-1 text-xs"
-                                title="View / Print Delivery Challan"
-                              >
-                                <Printer className="size-3 text-sky-600" /> Challan
-                              </Button>
-                              {!isDispatchOnly && (
-                                <Button
-                                  size="xs"
-                                  variant="outline"
-                                  onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
-                                  className="gap-1 text-xs"
-                                >
-                                  <Plus className="size-3" /> Invoice <ArrowRight className="size-3" />
-                                </Button>
-                              )}
-                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedDispatchForPrint(dn)}
+                              className="h-8 gap-1.5 px-3.5 text-xs font-semibold rounded-lg bg-sky-50/80 hover:bg-sky-100 text-sky-700 hover:text-sky-800 border-sky-200/90 hover:border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/70 dark:hover:bg-sky-900/50 shadow-xs transition-all group"
+                              title="View and print delivery challan"
+                            >
+                              <Printer className="size-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
+                              <span>View Challan</span>
+                            </Button>
                           </td>
                         </tr>
                       );
@@ -506,7 +495,6 @@ export default function VendorInvoicesPage() {
               {paginatedDispatches.map((dn) => {
                 const isReceived = String(dn.status || '').toUpperCase() === 'RECEIVED';
                 const poRef = dn.poNumber || dn.purchaseOrder?.poNumber || (dn.poId ? `PO-${String(dn.poId).slice(-6).toUpperCase()}` : '—');
-                const isDispatchOnly = (dn as any).vendorFulfillmentAllowed === 'DISPATCH_ONLY' || (dn.purchaseOrder as any)?.vendorFulfillmentAllowed === 'DISPATCH_ONLY';
                 return (
                   <Card key={dn.id} className="p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -532,25 +520,16 @@ export default function VendorInvoicesPage() {
                       <div><dt className="text-muted-foreground">Dispatched Date</dt><dd className="mt-1 font-medium">{formatDate(dn.dispatchDate)}</dd></div>
                       <div><dt className="text-muted-foreground">Packages</dt><dd className="mt-1 font-medium">{dn.totalPackages || 1} pkg</dd></div>
                     </dl>
-                    <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-end gap-2">
+                    <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-end">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => setSelectedDispatchForPrint(dn)}
-                        className="gap-1 text-xs"
+                        className="h-8 gap-1.5 px-3.5 text-xs font-semibold rounded-lg bg-sky-50/80 hover:bg-sky-100 text-sky-700 hover:text-sky-800 border-sky-200/90 hover:border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/70 dark:hover:bg-sky-900/50 shadow-xs transition-all group"
                       >
-                        <Printer className="size-3 text-sky-600" /> View Challan
+                        <Printer className="size-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
+                        <span>View Challan</span>
                       </Button>
-                      {!isDispatchOnly && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigate(getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(dn.poId || dn.poNumber || '')}`))}
-                          className="gap-1 text-xs"
-                        >
-                          <Plus className="size-3" /> Create Invoice
-                        </Button>
-                      )}
                     </div>
                   </Card>
                 );

@@ -89,7 +89,7 @@ export default function CreatePurchaseInvoicePage() {
   const invoiceIdParam = searchParams.get('invoiceId') || searchParams.get('id');
   const editParam = searchParams.get('edit') === 'true';
 
-  const { roles, hasPermission } = useAuth();
+  const { user, roles, hasPermission } = useAuth();
   const canCreateInvoice =
     hasPermission('Create Purchase Invoice', 'canCreate') ||
     hasPermission('Purchase Invoice', 'canCreate') ||
@@ -276,7 +276,23 @@ export default function CreatePurchaseInvoicePage() {
         }
 
         if (found && isMounted) {
-          openInvoiceEntry(found, 'edit');
+          const statusKey = String(found.status || '').toUpperCase();
+          const isReturned =
+            statusKey.includes('RETURN') || statusKey.includes('REVIEW') || statusKey === 'CHANGES_REQUESTED';
+          const isOriginator = Boolean(
+            user?.id &&
+              (String(found.registeredById) === String(user.id) ||
+                String(found.postedById) === String(user.id) ||
+                String(found.createdById) === String(user.id) ||
+                String(found.purchaseOrder?.rfq?.createdBy) === String(user.id))
+          );
+          const isAdmin = roles.some((r) => {
+            const lower = r.toLowerCase();
+            return lower === 'super admin' || lower === 'administrator' || lower.includes('admin');
+          });
+          const canEditInvoice = (isReturned && (isOriginator || isAdmin)) || (statusKey === 'DRAFT' && (isOriginator || isAdmin));
+
+          openInvoiceEntry(found, canEditInvoice ? 'edit' : 'view');
           setIsCreating(true);
           setCreationMode('linked');
         }
@@ -289,7 +305,7 @@ export default function CreatePurchaseInvoicePage() {
     return () => {
       isMounted = false;
     };
-  }, [invoiceNumberParam, invoiceIdParam, invoicesList, editingInvoiceId, invoiceNumber, selectedPoId]);
+  }, [invoiceNumberParam, invoiceIdParam, invoicesList, editingInvoiceId, invoiceNumber, selectedPoId, user, roles]);
 
   const [vendorName, setVendorName] = useState<string>('');
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -1257,7 +1273,15 @@ export default function CreatePurchaseInvoicePage() {
         localStorage.setItem(`invoice_attachments_${invoiceNumber}`, JSON.stringify(attachments));
       } catch (e) {}
 
-      const cleanVendorInv = displayGrnNumber && displayGrnNumber !== '—' && !displayGrnNumber.startsWith('GRN-') && !displayGrnNumber.toLowerCase().includes('select') ? displayGrnNumber : undefined;
+      const cleanVendorInv = (() => {
+        if (!displayGrnNumber || displayGrnNumber === '—') return undefined;
+        const matchInv = displayGrnNumber.match(/(?:•|\||\b)\s*Invoice:\s*([^\s|•]+)/i);
+        if (matchInv && matchInv[1]) return matchInv[1].trim();
+        if (!displayGrnNumber.startsWith('GRN-') && !displayGrnNumber.toLowerCase().includes('select')) {
+          return displayGrnNumber.replace(/^(?:DN|Dispatch Note):\s*/i, '').trim();
+        }
+        return undefined;
+      })();
 
       const resolvedGrnId =
         (selectedGrnId && selectedGrnId.startsWith('grn_') ? selectedGrnId.replace(/^grn_/, '') : selectedGrnId) ||
@@ -1648,7 +1672,19 @@ export default function CreatePurchaseInvoicePage() {
                         const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED' || statusKey === 'POSTED';
                         const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
                         const isReturned = statusKey.includes('RETURN') || statusKey.includes('REVIEW') || statusKey === 'CHANGES_REQUESTED';
-                        const isEditable = isDraft || isReturned || isRejected;
+                        const isOriginator = Boolean(
+                          user?.id && (
+                            String(inv.registeredById) === String(user.id) ||
+                            String(inv.postedById) === String(user.id) ||
+                            String(inv.createdById) === String(user.id) ||
+                            String(inv.purchaseOrder?.rfq?.createdBy) === String(user.id)
+                          )
+                        );
+                        const isAdmin = roles.some((r) => {
+                          const lower = r.toLowerCase();
+                          return lower === 'super admin' || lower === 'administrator' || lower.includes('admin');
+                        });
+                        const canEditInvoice = isReturned && (isOriginator || isAdmin);
 
                         const tone =
                           isApproved
@@ -1714,7 +1750,7 @@ export default function CreatePurchaseInvoicePage() {
                                 >
                                   <Eye size={15} />
                                 </Button>
-                                {isEditable && (
+                                {canEditInvoice && (
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"

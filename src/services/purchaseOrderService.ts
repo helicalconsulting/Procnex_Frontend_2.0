@@ -129,7 +129,8 @@ async function apiList(params?: { page?: number; limit?: number }): Promise<List
   if (params?.limit) query.set('limit', String(params.limit || 50));
   const qs = query.toString();
   const data = await apiRequest<{ purchaseOrders?: PurchaseOrder[]; pos?: PurchaseOrder[]; orders?: PurchaseOrder[]; total: number }>(
-    `/purchase-orders${qs ? `?${qs}` : ''}`
+    `/purchase-orders${qs ? `?${qs}` : ''}`,
+    { cacheTtlMs: 15000 }
   );
   const rawList = data.purchaseOrders || data.pos || data.orders || [];
   const orders = rawList.map(normalizePO);

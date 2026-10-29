@@ -1,6 +1,6 @@
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React, { useCallback, useMemo, useState, useEffect, useRef, type KeyboardEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Ban,
   Banknote,
@@ -10,6 +10,7 @@ import {
   FileText,
   MessageSquare,
   Paperclip,
+  Pencil,
   Printer,
   RefreshCw,
   RotateCcw,
@@ -48,6 +49,7 @@ import { approvalService } from '../../services/approvalService';
 import { procurementService } from '../../services/procurementService';
 import { vendorService } from '../../services/vendorService';
 import { useAuth } from '../../context/AuthContext';
+import { sseClient } from '../../services/sseClient';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { signatureService } from '../../services/signatureService';
@@ -489,6 +491,7 @@ export default function PaymentsPage() {
     };
   }, [fetchPaymentsData, debouncedRefresh]);
 
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState<string>(() => searchParams.get('search') || searchParams.get('q') || '');
 
@@ -518,6 +521,7 @@ export default function PaymentsPage() {
   }, [searchParams]);
   const [actionModal, setActionModal] = useState<{ payment: Payment; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
+  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
   const [selectedPrintVoucher, setSelectedPrintVoucher] = useState<Payment | null>(null);
   const [voucherApprovers, setVoucherApprovers] = useState<any[] | null>(null);
@@ -828,6 +832,9 @@ export default function PaymentsPage() {
   const openAction = useCallback((payment: Payment, action: ActionType) => {
     setActionModal({ payment, action });
     setActionComment('');
+    if (action === 'return') {
+      setActionReturnTarget((payment.currentLevel || 1) > 1 ? 'LEVEL_1' : 'ORIGINATOR');
+    }
   }, []);
 
   const handleAction = useCallback(async () => {
@@ -837,6 +844,7 @@ export default function PaymentsPage() {
     const comment = actionComment.trim() || undefined;
     const isLevel1 = (target.currentLevel || 1) === 1;
     const isMultiLevel = (target.totalLevels || 2) > 1;
+    const returnTarget = (target.currentLevel || 1) > 1 ? actionReturnTarget : 'ORIGINATOR';
     const optimisticStatus: PaymentStatus = act === 'confirm'
       ? 'CONFIRMED'
       : act === 'cancel' ? 'CANCELLED' : act === 'return' ? 'RETURNED' : 'RETRIED';
@@ -844,10 +852,14 @@ export default function PaymentsPage() {
     const updatedPayment: Payment = {
       ...target,
       status: optimisticStatus,
-      currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
-      requiredRole: isLevel1 && isMultiLevel ? 'Purchase Manager' : target.requiredRole,
+      currentLevel: act === 'return'
+        ? (returnTarget === 'LEVEL_1' ? 1 : 1)
+        : (isLevel1 && isMultiLevel ? 2 : target.currentLevel),
+      requiredRole: act === 'return'
+        ? (returnTarget === 'LEVEL_1' ? 'Purchase Clerk' : target.requiredRole)
+        : (isLevel1 && isMultiLevel ? 'Purchase Manager' : target.requiredRole),
       canAct: false,
-      hasApprovedPriorLevel: true,
+      hasApprovedPriorLevel: act === 'confirm',
       approvedBy: isLevel1 ? 'Purchase Clerk' : 'Purchase Manager',
       comments: comment || target.comments,
     };
@@ -872,7 +884,9 @@ export default function PaymentsPage() {
         ? 'Payment Voucher approved successfully.'
         : act === 'cancel'
         ? 'Payment Voucher rejected successfully.'
-        : 'Payment Voucher returned for revision successfully.',
+        : returnTarget === 'LEVEL_1'
+        ? 'Payment Voucher returned to Level 1 Approver successfully.'
+        : 'Payment Voucher returned to Originator/Admin for revision successfully.',
       comment: comment,
       details: [
         { label: 'Vendor / Beneficiary', value: target.vendorName },
@@ -931,7 +945,7 @@ export default function PaymentsPage() {
           } else if (act === 'cancel') {
             await approvalService.reject(approvalIdToUse, comment);
           } else {
-            await approvalService.return(approvalIdToUse, comment);
+            await approvalService.return(approvalIdToUse, comment, returnTarget);
           }
           actionSucceeded = true;
         } catch (err) {
@@ -949,7 +963,11 @@ export default function PaymentsPage() {
           };
           await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
             method: 'PUT',
-            body: JSON.stringify({ status: statusMap[act] || 'APPROVED', comments: comment }),
+            body: JSON.stringify({
+              status: statusMap[act] || 'APPROVED',
+              comments: comment,
+              returnTarget: act === 'return' ? returnTarget : undefined,
+            }),
           });
         } catch (statusErr) {
           console.error('Payment status update fallback failed:', statusErr);
@@ -959,7 +977,7 @@ export default function PaymentsPage() {
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       debouncedRefresh();
     })();
-  }, [actionComment, actionModal, debouncedRefresh, amount]);
+  }, [actionComment, actionModal, actionReturnTarget, debouncedRefresh, amount]);
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
@@ -1393,6 +1411,20 @@ export default function PaymentsPage() {
                           >
                             <Printer className="size-4" />
                           </Button>
+                          {(payment.status === 'RETURNED' || payment.status === 'DRAFT') && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/payments/create-voucher?edit=${encodeURIComponent(payment.paymentNumber || String(payment.id))}`);
+                              }}
+                              title="Edit & Resubmit Payment Voucher"
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                          )}
                           {ACTIONABLE.includes(payment.status) && payment.canAct ? (
                             <>
                               <Button
@@ -1505,6 +1537,16 @@ export default function PaymentsPage() {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedPrintVoucher(payment)}>
                     <Printer /> Print
                   </Button>
+                  {(payment.status === 'RETURNED' || payment.status === 'DRAFT') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-amber-600 hover:text-amber-700"
+                      onClick={() => navigate(`/payments/create-voucher?edit=${encodeURIComponent(payment.paymentNumber || String(payment.id))}`)}
+                    >
+                      <Pencil className="size-3.5 mr-1" /> Edit & Resubmit
+                    </Button>
+                  )}
                   {ACTIONABLE.includes(payment.status) && payment.canAct && (
                     <>
                       <Button size="sm" onClick={() => openAction(payment, 'confirm')}>
@@ -1549,61 +1591,204 @@ export default function PaymentsPage() {
       ) : (
         <Dialog open={!!actionModal} onOpenChange={(open) => { if (!open) setActionModal(null); }}>
           {actionModal && (
-            <DialogContent>
-              <DialogHeader className="pr-10">
-                <div
-                  className={cn(
-                    'mb-1 grid size-11 place-items-center rounded-xl',
-                    actionModal.action === 'cancel'
-                      ? 'bg-destructive/10 text-destructive'
-                      : actionModal.action === 'return'
-                      ? 'bg-amber-500/10 text-amber-600'
-                      : 'bg-emerald-500/10 text-emerald-600'
-                  )}
-                >
-                  {actionModal.action === 'cancel' ? (
-                    <Ban className="size-5" />
-                  ) : (
-                    <RotateCcw className="size-5" />
+            <DialogContent className="sm:max-w-[500px] p-6 gap-4">
+              <DialogHeader className="space-y-0 pb-1">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      'grid size-10 shrink-0 place-items-center rounded-xl',
+                      actionModal.action === 'cancel'
+                        ? 'bg-destructive/10 text-destructive border border-destructive/20'
+                        : actionModal.action === 'return'
+                        ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                        : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                    )}
+                  >
+                    {actionModal.action === 'cancel' ? (
+                      <Ban className="size-5" />
+                    ) : (
+                      <RotateCcw className="size-5" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <DialogTitle className="text-base font-bold text-foreground">
+                      {actionModal.action === 'cancel'
+                        ? 'Cancel Payment'
+                        : actionModal.action === 'return'
+                        ? 'Return Payment Voucher'
+                        : actionTitle}
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                      Review payment voucher details before returning
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Clean Structured Payment Voucher Summary */}
+              <div className="rounded-xl border border-border/70 bg-card/60 dark:bg-muted/10 p-3.5 space-y-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                      Vendor / Beneficiary
+                    </span>
+                    <span className="text-xs sm:text-sm font-semibold text-foreground truncate block">
+                      {actionModal.payment.vendorName}
+                    </span>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                      Disbursement Amount
+                    </span>
+                    <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                      {amount(actionModal.payment.amount)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[11px] text-muted-foreground">
+                  <span>Voucher: <strong className="text-foreground font-semibold">{actionModal.payment.paymentNumber}</strong></span>
+                  <span>Method: <strong className="text-foreground font-semibold">{actionModal.payment.method || 'NEFT'}</strong></span>
+                  {actionModal.payment.invoiceRef && actionModal.payment.invoiceRef !== '—' && (
+                    <span>Invoice: <strong className="text-foreground font-semibold">{actionModal.payment.invoiceRef}</strong></span>
                   )}
                 </div>
-                <DialogTitle>{actionTitle}</DialogTitle>
-                <DialogDescription>Review the payment before applying this decision.</DialogDescription>
-              </DialogHeader>
-              <dl className="grid gap-2 rounded-xl border border-border/65 bg-secondary/40 p-4 sm:grid-cols-2">
-                {[
-                  ['Payment', actionModal.payment.paymentNumber],
-                  ['Vendor', actionModal.payment.vendorName],
-                  ['Amount', amount(actionModal.payment.amount)],
-                  ['Method', actionModal.payment.method],
-                  ['Invoice', actionModal.payment.invoiceRef],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
-                    <dd className="mt-1 text-sm font-medium">{value}</dd>
+              </div>
+
+              {actionModal.action === 'return' && (
+                (actionModal.payment.currentLevel || 1) > 1 ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                      <span>Return Destination</span>
+                      <span className="text-[11px] font-normal text-muted-foreground">Select recipient</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        className={cn(
+                          "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
+                          actionReturnTarget === 'ORIGINATOR'
+                            ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
+                            : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
+                        )}
+                        onClick={() => setActionReturnTarget('ORIGINATOR')}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="text-xs font-bold">Originator / Admin</span>
+                          <div className={cn(
+                            "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                            actionReturnTarget === 'ORIGINATOR'
+                              ? "border-amber-500 bg-amber-500"
+                              : "border-muted-foreground/30 bg-transparent"
+                          )}>
+                            {actionReturnTarget === 'ORIGINATOR' && (
+                              <div className="size-1.5 rounded-full bg-white" />
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          Send back to creator for revision & edits
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={cn(
+                          "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
+                          actionReturnTarget === 'LEVEL_1'
+                            ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
+                            : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
+                        )}
+                        onClick={() => setActionReturnTarget('LEVEL_1')}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="text-xs font-bold">Approver 1 (Level 1)</span>
+                          <div className={cn(
+                            "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                            actionReturnTarget === 'LEVEL_1'
+                              ? "border-amber-500 bg-amber-500"
+                              : "border-muted-foreground/30 bg-transparent"
+                          )}>
+                            {actionReturnTarget === 'LEVEL_1' && (
+                              <div className="size-1.5 rounded-full bg-white" />
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          Restart workflow at Level 1 Approver
+                        </p>
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </dl>
-              <label className="grid gap-2 text-sm font-semibold">
-                <span className="flex items-center gap-1.5">
-                  <MessageSquare className="size-3.5" /> Comments {destructive && <span className="text-destructive">*</span>}
-                </span>
+                ) : (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                    <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5 text-xs">
+                      <div className="font-bold text-amber-900 dark:text-amber-200">
+                        Return Destination: Originator / Admin
+                      </div>
+                      <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                        As Level 1 Approver, returning this payment voucher will send it back to the <strong>Originator / Admin</strong> for modification and revision.
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
+
+              {/* Comments Field */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <MessageSquare className="size-3.5 text-muted-foreground" />
+                  Reason for {actionModal.action === 'return' ? 'Return' : 'Cancellation'} {destructive && <span className="text-destructive">*</span>}
+                </label>
                 <textarea
-                  className="min-h-28 resize-y rounded-xl border border-input bg-background px-3.5 py-3 text-sm font-normal outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring/30"
+                  className="w-full min-h-[90px] rounded-xl border border-input bg-card/60 px-3.5 py-2.5 text-xs sm:text-sm font-normal outline-none focus:border-amber-500/70 focus:ring-2 focus:ring-amber-500/20 transition-all placeholder:text-muted-foreground/60 resize-none"
                   value={actionComment}
                   onChange={(event) => setActionComment(event.target.value)}
-                  placeholder={actionModal.action === 'return' ? 'Provide a reason for return…' : destructive ? 'Provide a reason…' : 'Optional comments…'}
+                  placeholder={
+                    actionModal.action === 'return'
+                      ? (actionModal.payment.currentLevel || 1) > 1 && actionReturnTarget === 'LEVEL_1'
+                        ? 'Explain why this payment voucher is being sent back to Level 1…'
+                        : 'Explain what changes the originator needs to make…'
+                      : destructive
+                      ? 'Provide a reason…'
+                      : 'Optional comments…'
+                  }
                 />
-              </label>
-              <DialogFooter>
-                <Button variant="secondary" onClick={() => setActionModal(null)}>Cancel</Button>
+              </div>
+
+              <DialogFooter className="flex flex-row justify-end items-center gap-2.5 pt-2">
+                <Button
+                  variant="outline"
+                  className="rounded-xl h-9 px-4 text-xs font-medium cursor-pointer"
+                  onClick={() => setActionModal(null)}
+                >
+                  Cancel
+                </Button>
                 <Button
                   variant={actionModal.action === 'cancel' ? 'destructive' : 'default'}
-                  className={actionModal.action === 'return' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
+                  className={cn(
+                    "rounded-xl h-9 px-5 text-xs font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-1.5",
+                    actionModal.action === 'return'
+                      ? "bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white shadow-amber-600/20"
+                      : ""
+                  )}
                   disabled={destructive && !actionComment.trim()}
                   onClick={handleAction}
                 >
-                  {actionTitle}
+                  {actionModal.action === 'return' ? (
+                    <>
+                      <RotateCcw className="size-3.5" />
+                      <span>
+                        {(actionModal.payment.currentLevel || 1) > 1
+                          ? actionReturnTarget === 'LEVEL_1'
+                            ? 'Return to Level 1'
+                            : 'Return to Originator'
+                          : 'Return to Originator'}
+                      </span>
+                    </>
+                  ) : (
+                    actionTitle
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1811,6 +1996,19 @@ export default function PaymentsPage() {
                 >
                   <Printer className="size-4 text-primary" /> Print Voucher
                 </Button>
+                {(detailPayment.status === 'RETURNED' || detailPayment.status === 'DRAFT') && (
+                  <Button
+                    variant="outline"
+                    className="gap-2 rounded-full px-4 text-amber-600 hover:text-amber-700 border-amber-500/30 hover:bg-amber-500/10"
+                    onClick={() => {
+                      const target = detailPayment;
+                      setDetailPayment(null);
+                      navigate(`/payments/create-voucher?edit=${encodeURIComponent(target.paymentNumber || String(target.id))}`);
+                    }}
+                  >
+                    <Pencil className="size-4" /> Edit & Resubmit Voucher
+                  </Button>
+                )}
               </div>
 
               {ACTIONABLE.includes(detailPayment.status) && detailPayment.canAct && (

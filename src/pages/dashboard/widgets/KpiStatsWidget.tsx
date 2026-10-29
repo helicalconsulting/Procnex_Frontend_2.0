@@ -705,23 +705,25 @@ export default function KpiStatsWidget() {
     [],
     { cacheKey: 'dashboard-kpi-top-vendors' }
   );
+  const isModalOpen = Boolean(selectedKpi);
+
   const { data: purchaseOrders } = useServiceData(
     () => purchaseRequisitionService.list().then((res) => res || []).catch(() => []),
     [],
-    [],
-    { cacheKey: 'dashboard-kpi-purchase-orders' }
+    [isModalOpen],
+    { cacheKey: 'dashboard-kpi-purchase-orders', enabled: isModalOpen }
   );
   const { data: quotations } = useServiceData(
     () => quotationService.list(true).then((res) => res || []).catch(() => []),
     [] as Quotation[],
-    [],
-    { cacheKey: 'dashboard-kpi-quotations' }
+    [isModalOpen],
+    { cacheKey: 'dashboard-kpi-quotations', enabled: isModalOpen }
   );
   const { data: vendorsList } = useServiceData(
     () => vendorService.list().then((res) => res || []).catch(() => []),
     [] as VendorTableRow[],
-    [],
-    { cacheKey: 'dashboard-kpi-vendors-list' }
+    [isModalOpen],
+    { cacheKey: 'dashboard-kpi-vendors-list', enabled: isModalOpen }
   );
 
   const { formatAmount, companyDefaultCurrency } = useCurrency();
@@ -739,20 +741,20 @@ export default function KpiStatsWidget() {
   const { data: pendingApprovals } = useServiceData(
     () => approvalService.listTable().then((res) => res || []).catch(() => []),
     [] as ApprovalTableRow[],
-    [],
-    { cacheKey: 'dashboard-kpi-approvals-table' }
+    [isModalOpen],
+    { cacheKey: 'dashboard-kpi-approvals-table', enabled: isModalOpen }
   );
   const { data: invoices } = useServiceData(
     () => invoiceService.list().then((res) => res || []).catch(() => []),
     [] as APInvoice[],
-    [],
-    { cacheKey: 'dashboard-kpi-invoices' }
+    [isModalOpen],
+    { cacheKey: 'dashboard-kpi-invoices', enabled: isModalOpen }
   );
   const { data: payments } = useServiceData(
     () => localDataService.getPayments().then((res) => res || []).catch(() => []),
     [] as any[],
-    [],
-    { cacheKey: 'dashboard-kpi-payments' }
+    [isModalOpen],
+    { cacheKey: 'dashboard-kpi-payments', enabled: isModalOpen }
   );
 
   const selectedIcon = useMemo(() => {
