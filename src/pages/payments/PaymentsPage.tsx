@@ -53,7 +53,7 @@ import { sseClient } from '../../services/sseClient';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { signatureService } from '../../services/signatureService';
-import { apiRequest } from '../../api/client';
+import { apiRequest, invalidateApiCache } from '../../api/client';
 import '../../components/shared/ColumnCustomizer.css';
 
 type PaymentStatus = 'DRAFT' | 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED' | 'RETURNED' | 'RE_REVIEW';
@@ -283,6 +283,10 @@ export default function PaymentsPage() {
         setLoading(true);
       }
       setError(null);
+      if (options?.silent) {
+        invalidateApiCache('/approvals');
+        invalidateApiCache('/payments');
+      }
 
       const [rawPayments, approvalRowsPay] = await Promise.all([
         localDataService.getPayments().catch(() => []),
@@ -926,11 +930,6 @@ export default function PaymentsPage() {
 
           if (matched) {
             approvalIdToUse = matched.id;
-          } else {
-            const created = await approvalService.resubmit('Payments', target.paymentNumber || String(target.id), 1).catch(() => null);
-            if (created && (created as any).id) {
-              approvalIdToUse = (created as any).id;
-            }
           }
         } catch (_e) {
           // ignore
@@ -974,6 +973,8 @@ export default function PaymentsPage() {
         }
       }
 
+      invalidateApiCache('/approvals');
+      invalidateApiCache('/payments');
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       debouncedRefresh();
     })();
@@ -1081,11 +1082,6 @@ export default function PaymentsPage() {
 
               if (matched) {
                 approvalIdToUse = matched.id;
-              } else {
-                const created = await approvalService.resubmit('Payments', target.paymentNumber || String(target.id), 1).catch(() => null);
-                if (created && (created as any).id) {
-                  approvalIdToUse = (created as any).id;
-                }
               }
             } catch (_e) {
               // ignore
@@ -1114,6 +1110,8 @@ export default function PaymentsPage() {
           }
 
           await Promise.all(sigPromises);
+          invalidateApiCache('/approvals');
+          invalidateApiCache('/payments');
           window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
           debouncedRefresh();
         } catch (err) {
