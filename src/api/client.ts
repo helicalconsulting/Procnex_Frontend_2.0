@@ -9,10 +9,10 @@ function getApiBase(): string {
     const host = window.location.hostname.toLowerCase();
     // 1. Testing frontend (srm-test.procnex.com) -> Testing backend
     if (host.includes('test')) {
-      return 'https://procnexapi_test.procnex.com/api';
+      return 'https://procnexapi-test.procnex.com/api';
     }
-    // 2. Main production frontend -> Main backend
-    return 'https://procnexapi.helical.consulting/api';
+    // 2. Main production frontend (srm.procnex.com) -> Main backend
+    return 'https://procnexapi.procnex.com/api';
   }
 
   let envUrl = import.meta.env.VITE_API_URL;

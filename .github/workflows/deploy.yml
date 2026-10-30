@@ -44,33 +44,38 @@ jobs:
 
             cd "$APP_DIR"
 
-            # 1. Build single Docker image
-            echo "📦 Building single frontend Docker image..."
-            docker build -t heliflow-frontend:latest .
+            # 1. Build & Run Main Container (Port 8081)
+            echo "📦 Building Main Frontend (procnexapi.procnex.com)..."
+            docker build \
+              --build-arg VITE_API_URL=https://procnexapi.procnex.com/api \
+              -t heliflow-frontend-main:latest .
 
-            # 2. Restart Testing Frontend Container (Port 8082)
-            echo "🔄 Restarting Testing Frontend container..."
-            docker rm -f heliflow-frontend-test || true
-            docker run -d \
-              --name heliflow-frontend-test \
-              --restart unless-stopped \
-              -p 8082:80 \
-              heliflow-frontend:latest
-
-            # 3. Restart Main Frontend Container (Port 8081)
-            echo "🔄 Restarting Main Frontend container..."
+            echo "🔄 Restarting Main container..."
             docker rm -f heliflow-frontend-main || true
             docker run -d \
               --name heliflow-frontend-main \
               --restart unless-stopped \
               -p 8081:80 \
-              heliflow-frontend:latest
+              heliflow-frontend-main:latest
 
-            # 4. Reload Host Nginx if installed
+            # 2. Build & Run Testing Container (Port 8082)
+            echo "📦 Building Testing Frontend (procnexapi-test.procnex.com)..."
+            docker build \
+              --build-arg VITE_API_URL=https://procnexapi-test.procnex.com/api \
+              -t heliflow-frontend-test:latest .
+
+            echo "🔄 Restarting Testing container..."
+            docker rm -f heliflow-frontend-test || true
+            docker run -d \
+              --name heliflow-frontend-test \
+              --restart unless-stopped \
+              -p 8082:80 \
+              heliflow-frontend-test:latest
+
+            # 3. Reload Host Nginx
             if command -v nginx > /dev/null 2>&1; then
-              echo "🔄 Testing and reloading Nginx..."
               sudo nginx -t && sudo systemctl reload nginx || true
             fi
 
-            echo "✅ Both Frontend containers (Test on 8082 & Main on 8081) deployed successfully!"
+            echo "✅ Both frontend containers deployed successfully!"
             docker ps | grep heliflow-frontend
