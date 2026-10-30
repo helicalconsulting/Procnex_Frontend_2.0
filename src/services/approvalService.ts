@@ -34,7 +34,7 @@ async function mockListTyped(): Promise<RequestApproval[]> {
 }
 
 async function apiListTyped(): Promise<RequestApproval[]> {
-  const data = await apiRequest<{ approvals: RequestApproval[] }>('/approvals');
+  const data = await apiRequest<{ approvals: RequestApproval[] }>('/approvals', { cacheTtlMs: 20000 });
   return data.approvals || [];
 }
 
@@ -43,7 +43,7 @@ async function mockLevels(): Promise<ApprovalLevel[]> {
 }
 
 async function apiLevels(): Promise<ApprovalLevel[]> {
-  return apiRequest<ApprovalLevel[]>('/admin/approval-levels');
+  return apiRequest<ApprovalLevel[]>('/admin/approval-levels', { cacheTtlMs: 30000 });
 }
 
 interface ApprovalActionResult {

@@ -127,7 +127,8 @@ async function apiList(params?: ListParams): Promise<RFQTableRow[]> {
   query.set('limit', String(params?.limit || 100));
   const qs = query.toString();
   const data = await apiRequest<{ rfqs: Record<string, unknown>[] }>(
-    `/rfqs${qs ? `?${qs}` : ''}`
+    `/rfqs${qs ? `?${qs}` : ''}`,
+    { cacheTtlMs: 20000 }
   );
   let rows = (data.rfqs || [])
     .map(mapApiRfqToTableRow)

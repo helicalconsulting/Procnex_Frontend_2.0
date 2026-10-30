@@ -68,8 +68,8 @@ type CacheEntry = {
   value: unknown;
 };
 
-// Real-time enabled: no stale in-memory GET caching so multi-user events reflect instantly
-const DEFAULT_GET_CACHE_TTL_MS = Number(import.meta.env.VITE_API_CACHE_TTL_MS || 0);
+// Default GET caching (15 seconds) so repeated page visits and tab switches are instant (0ms)
+const DEFAULT_GET_CACHE_TTL_MS = Number(import.meta.env.VITE_API_CACHE_TTL_MS || 15000);
 const apiCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
