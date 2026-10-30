@@ -169,6 +169,7 @@ export default function CompanyGRNListPage() {
   // Auto-switch tab and invalidate queries when arriving with recorded tab state
   useEffect(() => {
     const tab = searchParams.get('tab') || location.state?.tab;
+    const filter = location.state?.filter;
     // Only sync filter tab state
     if (tab === 'recorded' || tab === 'grn' || filter === 'GRN') {
       setKpiFilter('GRN');
