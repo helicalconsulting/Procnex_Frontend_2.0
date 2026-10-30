@@ -20,6 +20,10 @@ import {
   Clock,
   Plus,
   Trash2,
+  Check,
+  AlertCircle,
+  Phone,
+  Mail,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
@@ -87,6 +91,9 @@ export default function VendorCreateDispatchNotePage() {
   const [trackingNumber, setTrackingNumber] = useState<string>('');
   const [driverName, setDriverName] = useState<string>('');
   const [driverPhone, setDriverPhone] = useState<string>('');
+  const [driverEmail, setDriverEmail] = useState<string>('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [dispatchFromAddress, setDispatchFromAddress] = useState<string>('');
   const [shippingAddress, setShippingAddress] = useState<string>('');
   const [totalPackages, setTotalPackages] = useState<number | ''>(1);
@@ -216,6 +223,132 @@ export default function VendorCreateDispatchNotePage() {
     }
   };
 
+  // Email validator with strict checks before and after @
+  const validateEmailParts = useCallback((emailStr: string): { isValid: boolean; error: string | null } => {
+    const trimmed = emailStr.trim();
+    if (!trimmed) {
+      return { isValid: true, error: null };
+    }
+
+    if (/\s/.test(trimmed)) {
+      return { isValid: false, error: 'Email address cannot contain spaces.' };
+    }
+
+    if (!trimmed.includes('@')) {
+      return { isValid: false, error: "Email must include '@' symbol." };
+    }
+
+    const parts = trimmed.split('@');
+    if (parts.length > 2) {
+      return { isValid: false, error: "Email cannot contain multiple '@' symbols." };
+    }
+
+    const [beforeAt, afterAt] = parts;
+
+    // Validation before @
+    if (!beforeAt || beforeAt.length === 0) {
+      return { isValid: false, error: "Email must have a valid username / mailbox before '@'." };
+    }
+    if (!/^[a-zA-Z0-9._%+-]+$/.test(beforeAt)) {
+      return { isValid: false, error: "Username before '@' contains invalid characters." };
+    }
+    if (beforeAt.startsWith('.') || beforeAt.endsWith('.')) {
+      return { isValid: false, error: "Username before '@' cannot start or end with a dot." };
+    }
+    if (beforeAt.includes('..')) {
+      return { isValid: false, error: "Username before '@' cannot contain consecutive dots." };
+    }
+
+    // Validation after @
+    if (!afterAt || afterAt.length === 0) {
+      return { isValid: false, error: "Email must have a domain name after '@' (e.g. gmail.com)." };
+    }
+    if (!afterAt.includes('.')) {
+      return { isValid: false, error: "Domain after '@' must contain a dot (e.g. domain.com)." };
+    }
+
+    const domainParts = afterAt.split('.');
+    const domainName = domainParts.slice(0, -1).join('.');
+    const tld = domainParts[domainParts.length - 1];
+
+    if (!domainName || domainName.length < 1) {
+      return { isValid: false, error: "Missing domain name before '.' (e.g. company.com)." };
+    }
+    if (!/^[a-zA-Z0-9.-]+$/.test(afterAt)) {
+      return { isValid: false, error: "Domain after '@' contains invalid characters." };
+    }
+    if (afterAt.startsWith('.') || afterAt.endsWith('.')) {
+      return { isValid: false, error: "Domain after '@' cannot start or end with a dot." };
+    }
+    if (afterAt.includes('..')) {
+      return { isValid: false, error: "Domain after '@' cannot contain consecutive dots." };
+    }
+    if (!tld || tld.length < 2 || !/^[a-zA-Z]{2,}$/.test(tld)) {
+      return { isValid: false, error: "Domain extension after '.' must be at least 2 letters (e.g. .com, .in)." };
+    }
+
+    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(trimmed)) {
+      return { isValid: false, error: 'Invalid email format (e.g. name@domain.com).' };
+    }
+
+    return { isValid: true, error: null };
+  }, []);
+
+  // Mobile number input: strictly only numbers (0-9), max 15 digits, min 7 digits
+  const handlePhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    // Strip everything except digits
+    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 15);
+    setDriverPhone(digitsOnly);
+
+    if (digitsOnly.length > 0 && digitsOnly.length < 7) {
+      setPhoneError(`Mobile number must be between 7 and 15 digits (${digitsOnly.length}/7 entered)`);
+    } else {
+      setPhoneError(null);
+    }
+  }, []);
+
+  const handlePhoneKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Allow navigation & editing keys
+    if (
+      ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Home', 'End'].includes(e.key) ||
+      e.ctrlKey ||
+      e.metaKey
+    ) {
+      return;
+    }
+    // Block any non-digit key immediately so letters cannot be typed
+    if (!/^\d$/.test(e.key)) {
+      e.preventDefault();
+    }
+  }, []);
+
+  const handlePhonePaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text');
+    const digits = pasted.replace(/\D/g, '').slice(0, 15);
+    setDriverPhone((prev) => {
+      const nextVal = (prev + digits).slice(0, 15);
+      if (nextVal.length > 0 && nextVal.length < 7) {
+        setPhoneError(`Mobile number must be between 7 and 15 digits (${nextVal.length}/7 entered)`);
+      } else {
+        setPhoneError(null);
+      }
+      return nextVal;
+    });
+  }, []);
+
+  // Email input handler with immediate real-time validation
+  const handleEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDriverEmail(val);
+    if (!val.trim()) {
+      setEmailError(null);
+    } else {
+      const res = validateEmailParts(val);
+      setEmailError(res.error);
+    }
+  }, [validateEmailParts]);
+
   // Validation
   const validateForm = (): boolean => {
     setErrorMsg(null);
@@ -235,6 +368,27 @@ export default function VendorCreateDispatchNotePage() {
       setErrorMsg('Dispatch Date is required.');
       return false;
     }
+
+    // Driver Mobile Number validation (7-15 digits, no alphabets)
+    if (driverPhone.trim()) {
+      const digitsOnly = driverPhone.replace(/\D/g, '');
+      if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+        setErrorMsg(`Driver mobile number must be between 7 and 15 digits (currently ${digitsOnly.length} digits).`);
+        setPhoneError(`Must be between 7 and 15 digits (${digitsOnly.length}/7 entered)`);
+        return false;
+      }
+    }
+
+    // Driver / Transporter Email validation (before and after @)
+    if (driverEmail.trim()) {
+      const emailRes = validateEmailParts(driverEmail);
+      if (!emailRes.isValid) {
+        setErrorMsg(`Invalid email: ${emailRes.error}`);
+        setEmailError(emailRes.error);
+        return false;
+      }
+    }
+
     if (lineItems.length === 0) {
       setErrorMsg('Please add at least one line item to dispatch.');
       return false;
@@ -284,6 +438,7 @@ export default function VendorCreateDispatchNotePage() {
         trackingNumber,
         driverName,
         driverPhone,
+        driverEmail: driverEmail.trim() || undefined,
         shippingAddress,
         dispatchFromAddress,
         totalPackages: Number(totalPackages) || undefined,
@@ -581,18 +736,86 @@ export default function VendorCreateDispatchNotePage() {
               />
             </div>
 
-            {/* Driver Phone */}
+            {/* Driver Mobile Number */}
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Driver Contact Phone
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Phone className="size-3 text-muted-foreground" />
+                  Driver Mobile Number
+                </span>
+                {driverPhone.length > 0 && (
+                  <span
+                    className={`text-[10px] ${
+                      driverPhone.length >= 7
+                        ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                        : 'text-amber-600 dark:text-amber-400 font-medium'
+                    }`}
+                  >
+                    {driverPhone.length}/15 digits
+                  </span>
+                )}
               </label>
               <Input
                 type="text"
-                placeholder="e.g. +91 98765 43210"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="e.g. 9876543210 (7-15 digits)"
                 value={driverPhone}
-                onChange={(e) => setDriverPhone(e.target.value)}
-                className="text-sm bg-background"
+                onChange={handlePhoneChange}
+                onKeyDown={handlePhoneKeyDown}
+                onPaste={handlePhonePaste}
+                maxLength={15}
+                className={`text-sm bg-background font-mono transition-colors ${
+                  phoneError
+                    ? 'border-destructive focus-visible:ring-destructive'
+                    : driverPhone.length >= 7
+                    ? 'border-emerald-500/60 focus-visible:ring-emerald-500'
+                    : ''
+                }`}
               />
+              {phoneError && (
+                <p className="text-xs text-destructive font-medium mt-1 flex items-center gap-1">
+                  <AlertCircle className="size-3 shrink-0" /> {phoneError}
+                </p>
+              )}
+              {!phoneError && driverPhone.length >= 7 && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
+                  <Check className="size-3 shrink-0" /> Valid number ({driverPhone.length} digits)
+                </p>
+              )}
+            </div>
+
+            {/* Driver / Transporter Email */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Mail className="size-3 text-muted-foreground" />
+                  Driver / Transporter Email
+                </span>
+              </label>
+              <Input
+                type="email"
+                placeholder="e.g. driver@logistics.com"
+                value={driverEmail}
+                onChange={handleEmailChange}
+                className={`text-sm bg-background transition-colors ${
+                  emailError
+                    ? 'border-destructive focus-visible:ring-destructive'
+                    : driverEmail.trim().length > 0 && !emailError
+                    ? 'border-emerald-500/60 focus-visible:ring-emerald-500'
+                    : ''
+                }`}
+              />
+              {emailError && (
+                <p className="text-xs text-destructive font-medium mt-1 flex items-center gap-1">
+                  <AlertCircle className="size-3 shrink-0" /> {emailError}
+                </p>
+              )}
+              {!emailError && driverEmail.trim().length > 0 && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
+                  <Check className="size-3 shrink-0" /> Valid email address
+                </p>
+              )}
             </div>
 
             {/* Expected Delivery Date */}
@@ -893,6 +1116,7 @@ export default function VendorCreateDispatchNotePage() {
             trackingNumber,
             driverName,
             driverPhone,
+            driverEmail,
             dispatchFromAddress,
             shippingAddress,
             totalPackages: totalPackages || 1,

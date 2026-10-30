@@ -386,29 +386,46 @@ export default function RFQPage() {
     };
   }, [fetchPendingApprovals, forceRefresh]);
 
-  const openApprovalAction = useCallback(async (rfq: MockRFQ, action: 'approve' | 'reject' | 'return') => {
+  const openApprovalAction = useCallback((rfq: MockRFQ, action: 'approve' | 'reject' | 'return') => {
     const found = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber) || pendingApprovalsMap.get(String((rfq as any)._id));
-    let approvalId = found ? found.id : ((rfq as any).approvalId || String(rfq.id));
-    let levelNumber = (rfq as any).currentLevel || (rfq as any).currentLevelNumber || found?.currentLevel || (found?.level as any)?.levelNumber;
+    const approvalId = (found?.status === 'PENDING' || found?.status === 'RETURNED')
+      ? found.id
+      : ((rfq as any).approvalId || String(rfq.id));
+    const levelNumber = (rfq as any).currentLevel || (rfq as any).currentLevelNumber || found?.currentLevel || (found?.level as any)?.levelNumber || (found as any)?.levelNumber || 1;
 
-    if (!levelNumber || levelNumber <= 1) {
-      try {
-        const chain = await approvalService.getChain('RFQ', String(rfq.id) || rfq.rfqNumber).catch(() => null);
-        if (chain?.currentLevel && chain.currentLevel > 1) {
-          levelNumber = chain.currentLevel;
-        } else if (chain?.levels && Array.isArray(chain.levels)) {
-          const pendingL = chain.levels.find((l: any) => l.status === 'PENDING');
-          if (pendingL?.levelNumber && pendingL.levelNumber > 1) {
-            levelNumber = pendingL.levelNumber;
-          }
-        }
-      } catch {}
-    }
-
+    // Immediately open the decision modal without any network delay!
     setApprovalActionModal({ rfq, action, approvalId, levelNumber: levelNumber || 1 });
     setApprovalComment('');
     setApprovalModalError(null);
-    setActionReturnTarget('ORIGINATOR');
+    setActionReturnTarget((levelNumber || 1) > 1 ? 'LEVEL_1' : 'ORIGINATOR');
+
+    // In background, resolve latest chain to guarantee active pending approvalId and levelNumber
+    approvalService.getChain('RFQ', String(rfq.id) || rfq.rfqNumber)
+      .then((chain) => {
+        let resolvedLevel: number | null = null;
+        let pendingApprovalId: string | null = null;
+        if (chain?.levels && Array.isArray(chain.levels)) {
+          const pendingL = chain.levels.find((l: any) => l.status === 'PENDING' || l.status === 'RETURNED');
+          if (pendingL) {
+            resolvedLevel = pendingL.levelNumber;
+            pendingApprovalId = pendingL.approvalId || pendingL.id || null;
+          }
+        }
+        if (!resolvedLevel && chain?.currentLevel && chain.currentLevel > 1) {
+          resolvedLevel = chain.currentLevel;
+        }
+        if (pendingApprovalId || (resolvedLevel && resolvedLevel > 1)) {
+          setApprovalActionModal((prev) => {
+            if (!prev || prev.rfq.id !== rfq.id) return prev;
+            return {
+              ...prev,
+              approvalId: pendingApprovalId || prev.approvalId,
+              levelNumber: resolvedLevel || prev.levelNumber,
+            };
+          });
+        }
+      })
+      .catch(() => {});
   }, [pendingApprovalsMap]);
 
   const handleExecuteApprovalAction = useCallback(async () => {

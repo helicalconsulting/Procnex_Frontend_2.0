@@ -97,7 +97,7 @@ async function resubmit(module: string, referenceId: string, startLevelNumber?: 
 
 async function getChain(module: string, referenceId: string): Promise<any> {
   if (USE_MOCK) return { levels: [], history: [] };
-  return apiRequest<any>(`/approvals/${module}/${referenceId}/chain`);
+  return apiRequest<any>(`/approvals/${module}/${referenceId}/chain`, { cacheTtlMs: 30000 });
 }
 
 export const approvalService = {

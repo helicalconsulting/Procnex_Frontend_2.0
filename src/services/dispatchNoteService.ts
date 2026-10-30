@@ -29,6 +29,7 @@ export interface DispatchNote {
   trackingNumber?: string;
   driverName?: string;
   driverPhone?: string;
+  driverEmail?: string;
   shippingAddress?: string;
   dispatchFromAddress?: string;
   totalPackages?: number;
@@ -60,6 +61,7 @@ export interface CreateDispatchNotePayload {
   trackingNumber?: string;
   driverName?: string;
   driverPhone?: string;
+  driverEmail?: string;
   shippingAddress?: string;
   dispatchFromAddress?: string;
   totalPackages?: number;

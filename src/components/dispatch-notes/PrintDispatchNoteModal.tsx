@@ -37,6 +37,7 @@ export interface DispatchNotePrintData {
   trackingNumber?: string;
   driverName?: string;
   driverPhone?: string;
+  driverEmail?: string;
   dispatchFromAddress?: string;
   shippingAddress?: string;
   totalPackages?: number | string;
@@ -315,10 +316,11 @@ export function PrintDispatchNoteModal({
               <div className="pdn-sheet__party-address">
                 {data.dispatchFromAddress || 'Vendor Logistics Hub / Central Dispatch Warehouse'}
               </div>
-              {(data.driverName || data.driverPhone) && (
+              {(data.driverName || data.driverPhone || data.driverEmail) && (
                 <div className="pdn-sheet__party-detail">
-                  <strong>Driver in Charge:</strong> {data.driverName || '—'}{' '}
-                  {data.driverPhone ? `(Ph: ${data.driverPhone})` : ''}
+                  <strong>Driver / Contact:</strong> {data.driverName || '—'}{' '}
+                  {data.driverPhone ? `(Ph: ${data.driverPhone})` : ''}{' '}
+                  {data.driverEmail ? `(Email: ${data.driverEmail})` : ''}
                 </div>
               )}
             </div>
