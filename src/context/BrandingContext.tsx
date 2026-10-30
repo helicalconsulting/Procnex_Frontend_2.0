@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { companySettingsService, type CompanyProfile } from '../services/companySettingsService';
 import { getActiveCompanyCode, readCachedProfile, applyBrandingProfile, applyPrimaryColor, DEFAULT_PRIMARY } from '../lib/branding';
+import procnexLogo from '../assets/procnex.png';
 export { applyPrimaryColor, applyFavicon, applyTitle, generatePrimaryPalette, hexToRgb, shade, DEFAULT_PRIMARY } from '../lib/branding';
 
 interface BrandingContextType {
@@ -115,8 +116,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     companyCity: profile?.companyCity || null,
     companyState: profile?.companyState || null,
     companyCountry: profile?.companyCountry || null,
-    logoUrl: profile?.logoUrl || '/Procnex-logo.jpeg',
-    faviconUrl: profile?.faviconUrl || profile?.logoUrl || '/Procnex-logo.jpeg',
+    logoUrl: profile?.logoUrl || procnexLogo || '/Procnex-logo.jpeg',
+    faviconUrl: profile?.faviconUrl || profile?.logoUrl || procnexLogo || '/Procnex-logo.jpeg',
     primaryColor: profile?.primaryColor || DEFAULT_PRIMARY,
     setPrimaryColor,
     loginText: profile?.loginText || null,

@@ -355,6 +355,12 @@ export default function Sidebar({
             alt={companyName}
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.currentTarget;
+              if (target.src !== heliflowLogo) {
+                target.src = heliflowLogo;
+              }
+            }}
             className="h-9 w-9 shrink-0 rounded-xl object-contain ring-1 ring-[var(--shell-border)]"
           />
           <span
