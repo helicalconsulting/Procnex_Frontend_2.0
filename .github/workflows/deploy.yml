@@ -1,0 +1,76 @@
+name: Deploy Heliflow Frontend (Test & Main)
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST || '165.227.82.221' }}
+          username: ${{ secrets.SERVER_USER || 'root' }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+            APP_DIR="/opt/heliflow-frontend"
+
+            echo "🚀 Starting frontend deployment on remote server..."
+
+            git config --global --add safe.directory '*' || true
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Initializing Git repository in $APP_DIR..."
+              rm -rf "$APP_DIR"
+              git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/helicalconsulting/Procnex_Frontend_2.0.git "$APP_DIR"
+            else
+              echo "Pulling latest code..."
+              cd "$APP_DIR"
+              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/helicalconsulting/Procnex_Frontend_2.0.git
+              git fetch --all
+              git reset --hard origin/master
+            fi
+
+            cd "$APP_DIR"
+
+            # 1. Build single Docker image
+            echo "📦 Building single frontend Docker image..."
+            docker build -t heliflow-frontend:latest .
+
+            # 2. Restart Testing Frontend Container (Port 8082)
+            echo "🔄 Restarting Testing Frontend container..."
+            docker rm -f heliflow-frontend-test || true
+            docker run -d \
+              --name heliflow-frontend-test \
+              --restart unless-stopped \
+              -p 8082:80 \
+              heliflow-frontend:latest
+
+            # 3. Restart Main Frontend Container (Port 8081)
+            echo "🔄 Restarting Main Frontend container..."
+            docker rm -f heliflow-frontend-main || true
+            docker run -d \
+              --name heliflow-frontend-main \
+              --restart unless-stopped \
+              -p 8081:80 \
+              heliflow-frontend:latest
+
+            # 4. Reload Host Nginx if installed
+            if command -v nginx > /dev/null 2>&1; then
+              echo "🔄 Testing and reloading Nginx..."
+              sudo nginx -t && sudo systemctl reload nginx || true
+            fi
+
+            echo "✅ Both Frontend containers (Test on 8082 & Main on 8081) deployed successfully!"
+            docker ps | grep heliflow-frontend

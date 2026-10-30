@@ -1409,20 +1409,6 @@ export default function PaymentsPage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {(payment.status === 'RETURNED' || payment.status === 'DRAFT') && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/payments/create-voucher?edit=${encodeURIComponent(payment.paymentNumber || String(payment.id))}`);
-                              }}
-                              title="Edit & Resubmit Payment Voucher"
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
-                          )}
                           {ACTIONABLE.includes(payment.status) && payment.canAct ? (
                             <>
                               <Button
@@ -1535,16 +1521,6 @@ export default function PaymentsPage() {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedPrintVoucher(payment)}>
                     <Printer /> Print
                   </Button>
-                  {(payment.status === 'RETURNED' || payment.status === 'DRAFT') && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-amber-600 hover:text-amber-700"
-                      onClick={() => navigate(`/payments/create-voucher?edit=${encodeURIComponent(payment.paymentNumber || String(payment.id))}`)}
-                    >
-                      <Pencil className="size-3.5 mr-1" /> Edit & Resubmit
-                    </Button>
-                  )}
                   {ACTIONABLE.includes(payment.status) && payment.canAct && (
                     <>
                       <Button size="sm" onClick={() => openAction(payment, 'confirm')}>

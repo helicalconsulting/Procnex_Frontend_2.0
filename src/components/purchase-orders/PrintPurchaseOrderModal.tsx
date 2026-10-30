@@ -93,41 +93,8 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
       }
     } catch {}
 
-    const isNotRejectedOrCancelled = !['REJECTED', 'CANCELLED'].includes((data.status || '').toUpperCase().trim());
-    if (isNotRejectedOrCancelled) {
-      const sigMahi = localStorage.getItem('heliflow_sig_mahi') || undefined;
-      const sigNischal = localStorage.getItem('heliflow_sig_nischal') || undefined;
-      const dateStr = data.submittedAt ? new Date(data.submittedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-      return [
-        {
-          levelNumber: 1,
-          level: 'Level 1',
-          name: 'Mahi Agarwal',
-          approverName: 'Mahi Agarwal',
-          signedByName: 'Mahi Agarwal',
-          role: 'Purchase Clerk',
-          requiredRole: 'Purchase Clerk',
-          date: dateStr,
-          actionDate: dateStr,
-          status: 'APPROVED',
-          signatureUrl: sigMahi,
-          dataUrl: sigMahi,
-        },
-        {
-          levelNumber: 2,
-          level: 'Level 2',
-          name: 'Nischal Agarwal',
-          approverName: 'Nischal Agarwal',
-          signedByName: 'Nischal Agarwal',
-          role: 'Purchase Manager',
-          requiredRole: 'Purchase Manager',
-          date: dateStr,
-          actionDate: dateStr,
-          status: 'APPROVED',
-          signatureUrl: sigNischal,
-          dataUrl: sigNischal,
-        },
-      ];
+    if (Array.isArray(data.approvers) && data.approvers.length > 0) {
+      return data.approvers;
     }
     return [];
   });
@@ -623,11 +590,12 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
               signedByName: name,
               requiredRole: roleName,
               role: roleName,
-              actionDate: isLevelApproved && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : (isLevelApproved ? fmtDate(data.submittedAt) : undefined),
-              date: isLevelApproved && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.submittedAt),
-              status: isLevelApproved ? 'APPROVED' : 'PENDING',
+              actionDate: (isLevelApproved || item.status === 'RETURNED') && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : (isLevelApproved ? fmtDate(data.submittedAt) : undefined),
+              date: (isLevelApproved || item.status === 'RETURNED') && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.submittedAt),
+              status: isLevelApproved ? 'APPROVED' : (item.status === 'RETURNED' ? 'RETURNED' : 'PENDING'),
               signatureUrl: isLevelApproved ? levelSig : undefined,
               dataUrl: isLevelApproved ? levelSig : undefined,
+              comments: item.comments || undefined,
             };
           });
 
@@ -637,47 +605,22 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
             if (data.id) sessionStorage.setItem(`approvers_${data.id}`, JSON.stringify(mapped));
           } catch {}
         } else {
-          // Default 2-level hierarchy: Level 1 (Purchase Clerk: Mahi Agarwal), Level 2 (Purchase Manager: Nischal Agarwal)
-          const sigL1 = isApproved ? (docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi') || sortedDocSigs[0]?.dataUrl) : undefined;
-          const sigL2 = isApproved ? (docSigNischal?.dataUrl || localStorage.getItem('heliflow_sig_nischal') || (sortedDocSigs.length > 1 ? sortedDocSigs[1]?.dataUrl : undefined)) : undefined;
-
-          if (sigL1) {
-            try { localStorage.setItem('heliflow_sig_mahi', sigL1); } catch {}
-          }
-          if (sigL2) {
-            try { localStorage.setItem('heliflow_sig_nischal', sigL2); } catch {}
-          }
-
-          const fallbackList = [
-            {
-              levelNumber: 1,
-              level: 'Level 1',
-              name: 'Mahi Agarwal',
-              approverName: 'Mahi Agarwal',
-              signedByName: 'Mahi Agarwal',
-              role: 'Purchase Clerk',
-              requiredRole: 'Purchase Clerk',
-              date: fmtDate(data.submittedAt),
-              actionDate: isApproved ? fmtDate(data.submittedAt) : undefined,
-              status: isApproved ? 'APPROVED' : 'PENDING',
-              signatureUrl: sigL1,
-              dataUrl: sigL1,
-            },
-            {
-              levelNumber: 2,
-              level: 'Level 2',
-              name: 'Nischal Agarwal',
-              approverName: 'Nischal Agarwal',
-              signedByName: 'Nischal Agarwal',
-              role: 'Purchase Manager',
-              requiredRole: 'Purchase Manager',
-              date: fmtDate(data.submittedAt),
-              actionDate: isApproved ? fmtDate(data.submittedAt) : undefined,
-              status: isApproved ? 'APPROVED' : 'PENDING',
-              signatureUrl: sigL2,
-              dataUrl: sigL2,
-            },
-          ];
+          const fallbackList = sortedDocSigs.length > 0
+            ? sortedDocSigs.map((d: any, i: number) => ({
+                levelNumber: d.levelNumber || i + 1,
+                level: `Level ${d.levelNumber || i + 1}`,
+                name: d.signedByName || `Level ${i + 1} Approver`,
+                approverName: d.signedByName || `Level ${i + 1} Approver`,
+                signedByName: d.signedByName || `Level ${i + 1} Approver`,
+                role: d.role || d.requiredRole || `Level ${i + 1} Approver`,
+                requiredRole: d.role || d.requiredRole || `Level ${i + 1} Approver`,
+                date: fmtDate(d.signedAt || data.submittedAt),
+                actionDate: isApproved ? fmtDate(d.signedAt || data.submittedAt) : undefined,
+                status: isApproved ? 'APPROVED' : 'PENDING',
+                signatureUrl: d.dataUrl,
+                dataUrl: d.dataUrl,
+              }))
+            : [];
 
           setApproversList(fallbackList);
           try {

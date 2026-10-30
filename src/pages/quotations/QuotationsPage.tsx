@@ -2507,7 +2507,7 @@ function ActionModalInner({
                   />
                   <div>
                     <div style={{ fontWeight: 600, color: 'var(--primary)' }}>Return to Level 1 Approver</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Restart approval chain starting at Level 1</div>
                   </div>
                 </label>
               </div>

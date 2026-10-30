@@ -35,6 +35,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useBranding } from '../../context/BrandingContext';
 import { downloadAiReportAsPdf } from '../../utils/pdfDownload';
 import { VendorSpendRiskOverview, type VendorSpendRiskOverviewData } from './VendorSpendRiskOverview';
+import { API_BASE } from '../../api/client';
 
 interface ChatMessage {
   id: string;
@@ -493,7 +494,7 @@ export function ProcnexAiReportsWidget() {
   };
 
   const getApiUrl = (path: string): string => {
-    const rawBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+    const rawBase = API_BASE.replace(/\/+$/, '');
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     if (rawBase.endsWith('/api') && cleanPath.startsWith('/api/')) {
       return `${rawBase}${cleanPath.slice(4)}`;

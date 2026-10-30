@@ -7,7 +7,7 @@ import { invoiceService, type APInvoice as ServiceAPInvoice } from '../../servic
 import { localDataService } from '../../services/localDataService';
 import { approvalService } from '../../services/approvalService';
 import { sseClient } from '../../services/sseClient';
-import { apiRequest } from '../../api/client';
+import { apiRequest, invalidateApiCache } from '../../api/client';
 import type { ApprovalTableRow } from '../../types/viewModels';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
@@ -47,7 +47,6 @@ import {
   MessageSquare,
   Paperclip,
   Printer,
-  Receipt,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -318,6 +317,10 @@ export default function AccountsPayablePage() {
       if (!options?.silent && isInitialLoadRef.current) {
         setLoading(true);
       }
+      if (options?.silent) {
+        invalidateApiCache('/approvals');
+        invalidateApiCache('/invoices');
+      }
       setError(null);
 
       const [approvalRows, rawInvoices, rawPayments] = await Promise.all([
@@ -387,34 +390,18 @@ export default function AccountsPayablePage() {
         // Find active pending row if any
         const pendingRow = rows.find((r) => r.status === 'PENDING');
         const rejectedRow = rows.find((r) => r.status === 'REJECTED');
-        const returnedRow = rows.find((r) => r.status === 'RETURNED');
+        const returnedRow = !pendingRow ? rows.find((r) => r.status === 'RETURNED') : undefined;
         const allApproved = rows.length > 0 && rows.every((r) => r.status === 'APPROVED');
         const activeApp = pendingRow || rejectedRow || returnedRow || rows[rows.length - 1];
         const hadReturn = Boolean(
-          returnedRow ||
-          matchingRaw?.status === 'RETURNED' ||
-          (activeApp as any)?.isReturned ||
-          rows.some((r) => r.status === 'RETURNED' || (r.comments && /return/i.test(r.comments)))
+          (!pendingRow && matchingRaw?.status === 'RETURNED') ||
+          (!pendingRow && (activeApp as any)?.isReturned) ||
+          (!pendingRow && returnedRow)
         );
 
         const invNo = matchingRaw?.invoiceNumber || activeApp.referenceNumber || `INV-${activeApp.id.slice(-6)}`;
         const vName = matchingRaw?.vendorName || activeApp.requestedBy || 'Vendor';
         const initials = vName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
-
-        let status: APStatus;
-        if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE'].includes(matchingRaw.status)) {
-          status = matchingRaw.status as APStatus;
-        } else if (matchingRaw?.status === 'APPROVED' || allApproved) {
-          status = 'APPROVED';
-        } else if (rejectedRow || matchingRaw?.status === 'REJECTED') {
-          status = 'REJECTED';
-        } else if (returnedRow || matchingRaw?.status === 'RETURNED' || hadReturn) {
-          status = 'RETURNED';
-        } else if (pendingRow) {
-          status = 'PENDING';
-        } else {
-          status = (matchingRaw?.status as APStatus) || 'APPROVED';
-        }
 
         let rawAmt =
           typeof (activeApp as any).amountNum === 'number'
@@ -430,25 +417,16 @@ export default function AccountsPayablePage() {
         const l1Row = rows.find((r) => (r.currentLevel || (r.level as any)?.levelNumber || (r as any)?.levelNumber) === 1);
         const l1Role = l1Row?.requiredRole || (l1Row?.level as any)?.requiredRole || 'Analyst';
         const totalLevels = activeApp.totalLevels || rows.length || 1;
-        const currentLevel = status === 'APPROVED' ? totalLevels : (pendingRow?.currentLevel || (status === 'RETURNED' ? 1 : (activeApp.currentLevel || 1)));
-        const reqRole = status === 'APPROVED' ? '' : (pendingRow?.requiredRole || (status === 'RETURNED' ? l1Role : (activeApp.requiredRole || 'Purchase Clerk')));
+        const currentLevel = (pendingRow ? (pendingRow.currentLevel || (pendingRow.level as any)?.levelNumber) : (allApproved ? totalLevels : activeApp.currentLevel)) || 1;
+        const reqRole = pendingRow?.requiredRole || (pendingRow?.level as any)?.requiredRole || (hadReturn ? l1Role : (activeApp.requiredRole || 'Purchase Clerk'));
 
-        // Approver permissions:
-        // - ONLY users with matching role for the active approval step can act
-        let effectiveCanAct = false;
-        if (status === 'PENDING' || status === 'RE_REVIEW' || status === 'RETURNED' || status === 'PENDING_APPROVAL') {
-          const targetReqRole = pendingRow?.requiredRole || (status === 'RETURNED' ? l1Role : (activeApp?.requiredRole || (activeApp?.level as any)?.requiredRole || reqRole || 'Purchase Clerk'));
-          const isL1Role = isRoleMatching('Analyst', authRoles) || isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('L1 User', authRoles) || isRoleMatching('Approver 1', authRoles);
-          const isRoleMatch = isRoleMatching(targetReqRole, authRoles);
-
-          if (status === 'RETURNED') {
-            effectiveCanAct = isL1Role || isRoleMatch;
-          } else if (pendingRow) {
-            effectiveCanAct = pendingRow.canAct !== undefined ? Boolean(pendingRow.canAct) : isRoleMatch;
-          } else if (activeApp) {
-            effectiveCanAct = activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatch;
-          }
-        }
+        const isUserMatchingPendingStep = pendingRow
+          ? isRoleMatching(reqRole, authRoles) ||
+            (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
+            ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
+            (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
+            (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase())
+          : false;
 
         const hasApprovedPriorLevel =
           allApproved ||
@@ -481,7 +459,35 @@ export default function AccountsPayablePage() {
             isRoleMatching('L3 User', authRoles)
           ));
 
-        if (status === 'APPROVED' || (hasApprovedPriorLevel && pendingRow && !isRoleMatching(pendingRow.requiredRole, authRoles))) {
+        let status: APStatus;
+        if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE'].includes(matchingRaw.status)) {
+          status = matchingRaw.status as APStatus;
+        } else if (matchingRaw?.status === 'APPROVED' || allApproved) {
+          status = 'APPROVED';
+        } else if (rejectedRow || matchingRaw?.status === 'REJECTED') {
+          status = 'REJECTED';
+        } else if (pendingRow) {
+          // If currently pending: for approvers who already approved their prior level, show APPROVED!
+          if (hasApprovedPriorLevel && !isUserMatchingPendingStep) {
+            status = 'APPROVED';
+          } else {
+            status = 'PENDING';
+          }
+        } else if (returnedRow || matchingRaw?.status === 'RETURNED' || hadReturn) {
+          status = 'RETURNED';
+        } else {
+          status = (matchingRaw?.status as APStatus) || 'APPROVED';
+        }
+
+        let effectiveCanAct = false;
+        if (status === 'PENDING') {
+          effectiveCanAct = isUserMatchingPendingStep;
+        } else if (status === 'RETURNED') {
+          const isL1Role = isRoleMatching('Analyst', authRoles) || isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('L1 User', authRoles) || isRoleMatching('Approver 1', authRoles);
+          effectiveCanAct = isL1Role || isRoleMatching(reqRole, authRoles);
+        }
+
+        if (status === 'APPROVED' || (hasApprovedPriorLevel && !isUserMatchingPendingStep)) {
           effectiveCanAct = false;
         }
 
@@ -855,6 +861,9 @@ export default function AccountsPayablePage() {
           }
         }
 
+        invalidateApiCache('/approvals');
+        invalidateApiCache('/invoices');
+        invalidateApiCache('/payments');
         await new Promise((resolve) => setTimeout(resolve, 250));
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
         debouncedRefresh();
@@ -991,6 +1000,9 @@ export default function AccountsPayablePage() {
           }
 
           await approvePromise;
+          invalidateApiCache('/approvals');
+          invalidateApiCache('/invoices');
+          invalidateApiCache('/payments');
           await new Promise((resolve) => setTimeout(resolve, 250));
           window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
           debouncedRefresh();
@@ -1410,21 +1422,6 @@ export default function AccountsPayablePage() {
                               L{invoice.currentLevel} ({invoice.requiredRole})
                             </span>
                           ) : null}
-                          {invoice.paymentVoucher && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/payments/create-voucher?search=${encodeURIComponent(invoice.paymentVoucher.paymentNumber || invoice.invoiceNumber)}`);
-                              }}
-                              title={`Payment Voucher #${invoice.paymentVoucher.paymentNumber} (${invoice.paymentVoucher.status})`}
-                              aria-label={`Payment Voucher #${invoice.paymentVoucher.paymentNumber}`}
-                            >
-                              <Receipt className="size-4" />
-                            </Button>
-                          )}
                           {isAdmin && (
                             <Button
                               variant="ghost"
@@ -1488,17 +1485,6 @@ export default function AccountsPayablePage() {
                     <Button variant="ghost" size="sm" onClick={() => setPrintInvoice(invoice)}>
                       <Printer /> Print
                     </Button>
-                    {invoice.paymentVoucher && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400 gap-1"
-                        onClick={() => navigate('/payments/create-voucher')}
-                        title={`Payment Voucher #${invoice.paymentVoucher.paymentNumber} (${invoice.paymentVoucher.status})`}
-                      >
-                        <Receipt className="size-4" /> Voucher
-                      </Button>
-                    )}
                   </div>
                   {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(invoice.status) && invoice.canAct && (
                     <div className="flex gap-1">
@@ -1845,39 +1831,6 @@ export default function AccountsPayablePage() {
                   </div>
                 </div>
               </div>
-
-              {detailInvoice.paymentVoucher && (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                      <FileText className="size-5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-foreground flex items-center gap-2">
-                        <span>Payment Voucher #{detailInvoice.paymentVoucher.paymentNumber}</span>
-                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-200/80 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">
-                          {detailInvoice.paymentVoucher.status}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        Auto-generated draft disbursement voucher for this invoice.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="gap-1.5 shrink-0"
-                    onClick={() => {
-                      const vNum = detailInvoice.paymentVoucher?.paymentNumber || detailInvoice.invoiceNumber;
-                      setDetailInvoice(null);
-                      navigate(`/payments/create-voucher?search=${encodeURIComponent(vNum)}`);
-                    }}
-                  >
-                    <span>Open in Payment Console</span>
-                    <ArrowRight className="size-3.5" />
-                  </Button>
-                </div>
-              )}
 
               {detailInvoice.comments && (
                 <div className="rounded-xl border border-border/60 bg-muted/30 p-3.5">

@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Clock, ShieldCheck, RotateCcw } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import type { PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
@@ -265,9 +265,10 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
             <div className="po-doc__approvals-grid">
               {finalApprovers.map((appr: any, idx: number) => {
                 const levelNum = appr.levelNumber || idx + 1;
-                const isApproved =
-                  (appr.status || '').toUpperCase() === 'APPROVED' ||
-                  (appr.status || '').toUpperCase() === 'AUTO_FORWARDED';
+                const statusUpper = (appr.status || '').toUpperCase().trim();
+                const isApproved = statusUpper === 'APPROVED' || statusUpper === 'AUTO_FORWARDED';
+                const isReturned = statusUpper === 'RETURNED';
+                const isPending = !isApproved && !isReturned;
                 const sigUrl = appr.signatureUrl || appr.dataUrl;
 
                 const isGenericApproverName = (n?: string | null) => {
@@ -292,70 +293,95 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
                   (!isGenericApproverName(appr.name) ? appr.name : null) ||
                   (appr.requiredRole || `Level ${levelNum} Approver`);
 
+                const rawRole = appr.role || appr.requiredRole || `Level ${levelNum} Approver`;
+                const formattedRole = rawRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+                const dateVal = appr.date || appr.actionDate || pr.poDate || (pr as any).submittedAt;
+                const dateDisplay = dateVal ? formatDate(dateVal) : '—';
+
                 return (
                   <div key={idx} className="po-doc__stamp-card">
+                    {/* Level & Status */}
                     <div className="po-doc__stamp-card-head">
                       <span className="po-doc__stamp-level-pill">LEVEL {levelNum}</span>
                       <span
                         className={`po-doc__stamp-status-tag ${
-                          isApproved
-                            ? 'po-doc__stamp-status-tag--approved'
-                            : 'po-doc__stamp-status-tag--pending'
+                          isReturned
+                            ? 'po-doc__stamp-status-tag--returned'
+                            : isPending
+                            ? 'po-doc__stamp-status-tag--pending'
+                            : 'po-doc__stamp-status-tag--approved'
                         }`}
                       >
-                        {isApproved ? (
-                          <>
-                            <CheckCircle2 size={11} /> APPROVED & SIGNED
-                          </>
+                        {isReturned ? (
+                          <RotateCcw size={11} />
+                        ) : isPending ? (
+                          <Clock size={11} />
                         ) : (
-                          <>
-                            <Clock size={11} /> PENDING
-                          </>
+                          <CheckCircle2 size={11} />
                         )}
+                        {isReturned ? 'RETURNED' : isPending ? 'PENDING' : 'APPROVED & SIGNED'}
                       </span>
                     </div>
 
+                    {/* Role & Date */}
                     <div className="po-doc__stamp-card-details">
                       <div className="po-doc__stamp-role">
-                        {appr.requiredRole || `Level ${levelNum} Approver`}
-                      </div>
-                      <div className="po-doc__stamp-name">
-                        {cleanDisplayName}
+                        {formattedRole}
                       </div>
                       <div className="po-doc__stamp-date">
-                        {isApproved
-                          ? appr.actionDate
-                            ? `Date: ${formatDate(appr.actionDate)}`
-                            : 'Approved'
-                          : 'Pending Action'}
+                        Date: <strong>{dateDisplay}</strong>
                       </div>
                     </div>
 
+                    {/* Digital Signature */}
                     <div className="po-doc__stamp-signature">
-                      {isApproved && sigUrl ? (
-                        <div className="po-doc__stamp-sig-active">
-                          <img
-                            src={sigUrl}
-                            alt="Signature"
-                            className="po-doc__stamp-sig-img"
-                          />
-                          <div className="po-doc__stamp-sig-seal">
-                            <ShieldCheck size={11} /> Digitally Signed
-                          </div>
+                      {isReturned ? (
+                        <div className="po-doc__stamp-sig-returned">
+                          <RotateCcw size={12} className="inline mr-1" />
+                          <span>Returned for Revision{appr.comments ? `: "${appr.comments}"` : ''}</span>
                         </div>
-                      ) : isApproved && cleanDisplayName ? (
-                        <div className="po-doc__stamp-sig-active">
-                          <div className="po-doc__stamp-sig-fallback">
-                            {cleanDisplayName}
-                          </div>
-                          <div className="po-doc__stamp-sig-seal">
-                            <ShieldCheck size={11} /> Digitally Signed
-                          </div>
+                      ) : isPending ? (
+                        <div className="po-doc__stamp-sig-pending">
+                          Pending Digital Signature
                         </div>
                       ) : (
-                        <span className="po-doc__stamp-sig-pending">
-                          Pending Digital Signature
-                        </span>
+                        <div className="po-doc__stamp-sig-active">
+                          {sigUrl ? (
+                            <img
+                              src={sigUrl}
+                              alt={`Signature of ${cleanDisplayName}`}
+                              className="po-doc__stamp-sig-img"
+                            />
+                          ) : (
+                            <div className="po-doc__stamp-sig-svg-wrap" style={{ width: '100%', maxWidth: '200px', height: '48px' }}>
+                              <svg viewBox="0 0 170 32" style={{ width: '100%', height: '48px' }}>
+                                <path
+                                  d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
+                                  fill="none"
+                                  stroke="#1e3a8a"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                />
+                                <text
+                                  x="15"
+                                  y="24"
+                                  fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
+                                  fontSize="17"
+                                  fill="#1e3a8a"
+                                  fontStyle="italic"
+                                  opacity="0.9"
+                                >
+                                  {cleanDisplayName}
+                                </text>
+                              </svg>
+                            </div>
+                          )}
+                          <div className="po-doc__stamp-sig-seal">
+                            <ShieldCheck size={10} />
+                            <span>Digitally Signed</span>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>

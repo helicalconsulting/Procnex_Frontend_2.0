@@ -1,6 +1,20 @@
 import { USE_MOCK } from '../config/mock';
 
 function getApiBase(): string {
+  if (
+    typeof window !== 'undefined' &&
+    !window.location.hostname.includes('localhost') &&
+    !window.location.hostname.includes('127.0.0.1')
+  ) {
+    const host = window.location.hostname.toLowerCase();
+    // 1. Testing frontend (srm-test.procnex.com) -> Testing backend
+    if (host.includes('test')) {
+      return 'https://procnexapi_test.procnex.com/api';
+    }
+    // 2. Main production frontend -> Main backend
+    return 'https://procnexapi.helical.consulting/api';
+  }
+
   let envUrl = import.meta.env.VITE_API_URL;
   if (
     !envUrl &&
