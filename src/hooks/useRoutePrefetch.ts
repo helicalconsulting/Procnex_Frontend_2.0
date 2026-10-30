@@ -49,7 +49,7 @@ const ROUTE_FETCHERS: Record<string, Fetcher[]> = {
     () => localDataService.getSalesOrders(),
   ],
   '/accounts-payable': [
-    () => invoiceService.list(),
+    () => invoiceService.list({ limit: 50 }),
   ],
   '/notifications': [
     () => notificationService.list(),
@@ -157,7 +157,7 @@ export function useRoutePrefetch() {
       const fetchers = ROUTE_FETCHERS[matched];
       if (!fetchers.length) return;
 
-      // Debounce: wait 150ms of hover stability before firing
+      // Debounce: wait 400ms of hover stability before firing
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         // Fire fetchers sequentially to avoid flooding the backend
@@ -171,7 +171,7 @@ export function useRoutePrefetch() {
           }
         };
         run();
-      }, 150);
+      }, 400);
     };
   }, []);
 

@@ -50,8 +50,9 @@ export default function AdminNotificationBell() {
     // Initial load
     void load(false);
 
-    // Fallback 30-second polling (SSE delivers instant updates)
-    const interval = setInterval(() => void load(true), 30000);
+    // Window focus refresh (SSE already delivers real-time instant updates)
+    const onFocus = () => void load(true);
+    window.addEventListener('focus', onFocus);
 
     const triggerRefresh = () => {
       setBouncing(true);
@@ -82,7 +83,7 @@ export default function AdminNotificationBell() {
     window.addEventListener('storage', triggerRefresh);
 
     return () => {
-      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
       clearTimeout(bounceTimer.current);
       clearTimeout(refreshTimer.current);
       unsubNotification();

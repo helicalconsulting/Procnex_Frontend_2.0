@@ -278,7 +278,7 @@ function getCustomPaymentsKey(): string {
 export const localDataService = {
   getPayments: async (): Promise<Payment[]> => {
     try {
-      const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments?limit=1000', { cacheTtlMs: 15000 });
+      const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments?limit=100', { cacheTtlMs: 30000 });
       if (data.payments && Array.isArray(data.payments)) {
         const mappedList = data.payments.map((p, idx) => {
           let amt = Number(p.amount || 0);
@@ -380,7 +380,7 @@ export const localDataService = {
   },
   getAuditTrail: async () => {
     try {
-      const data = await apiRequest<{ auditTrail?: AuditEntry[] }>('/audit-trail?limit=2000');
+      const data = await apiRequest<{ auditTrail?: AuditEntry[] }>('/audit-trail?limit=500', { cacheTtlMs: 30000 });
       if (data && Array.isArray(data.auditTrail)) {
         return data.auditTrail;
       }

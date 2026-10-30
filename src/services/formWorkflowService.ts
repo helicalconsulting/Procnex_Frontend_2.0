@@ -293,7 +293,7 @@ export const formWorkflowService = {
    * List submissions for user (DB only)
    */
   async listUserSubmissions(userId?: string, userEmail?: string, userRole?: string | string[]): Promise<FormSubmissionInstance[]> {
-    const apiSubs = await apiRequest<any[]>('/custom-forms/submissions', { cacheTtlMs: 0 });
+    const apiSubs = await apiRequest<any[]>('/custom-forms/submissions', { cacheTtlMs: 30000 });
     if (!Array.isArray(apiSubs)) return [];
 
     const normalized = apiSubs.map(normalizeSubmissionFromApi);
@@ -352,7 +352,7 @@ export const formWorkflowService = {
    * List all submissions for Admin Dashboard (DB only)
    */
   async listAllSubmissions(): Promise<FormSubmissionInstance[]> {
-    const apiSubs = await apiRequest<any[]>('/custom-forms/submissions?adminView=true', { cacheTtlMs: 0 });
+    const apiSubs = await apiRequest<any[]>('/custom-forms/submissions?adminView=true', { cacheTtlMs: 30000 });
     if (!Array.isArray(apiSubs)) return [];
     return apiSubs.map(normalizeSubmissionFromApi);
   },

@@ -12,6 +12,8 @@ export interface UseServiceDataResult<T> {
   error: string | null;
   /** Invalidates the query and triggers a background refetch */
   reload: () => void;
+  /** Alias for reload for backwards compatibility */
+  refetch: () => void;
   /** Invalidates + immediately refetches and returns a promise that resolves when done */
   forceRefresh: () => Promise<void>;
 }
@@ -123,6 +125,7 @@ export function useServiceData<T>(
     loading,
     error: error ? (error instanceof Error ? error.message : 'Failed to load data') : null,
     reload,
+    refetch: reload,
     forceRefresh,
   };
 }

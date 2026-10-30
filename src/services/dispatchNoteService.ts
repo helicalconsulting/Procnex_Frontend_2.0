@@ -111,7 +111,7 @@ export const dispatchNoteService = {
     const endpoint = `/dispatch-notes${qs ? `?${qs}` : ''}`;
 
     try {
-      const res = await apiRequest<{ dispatchNotes: DispatchNote[]; total: number }>(endpoint);
+      const res = await apiRequest<{ dispatchNotes: DispatchNote[]; total: number }>(endpoint, { cacheTtlMs: 30000 });
       return res || { dispatchNotes: [], total: 0 };
     } catch {
       return { dispatchNotes: [], total: 0 };

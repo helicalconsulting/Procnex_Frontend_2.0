@@ -101,14 +101,16 @@ export default function CreateGRNPage() {
   const { data: poData, loading: poLoading1 } = useServiceData(
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
-    []
+    [],
+    { cacheKey: 'create-grn:pos', cacheTtlMs: 30000 }
   );
 
   // Load purchase requisitions list
   const { data: reqList, loading: poLoading2 } = useServiceData(
     () => purchaseRequisitionService.list(),
     [],
-    []
+    [],
+    { cacheKey: 'create-grn:requisitions', cacheTtlMs: 30000 }
   );
 
   const poLoading = poLoading1 || poLoading2;
@@ -188,24 +190,27 @@ export default function CreateGRNPage() {
 
   // Load invoices list for auto-fill source
   const { data: invoicesList } = useServiceData(
-    () => invoiceService.list(),
+    () => invoiceService.list({ limit: 100 }),
     [],
-    []
+    [],
+    { cacheKey: 'create-grn:invoices', cacheTtlMs: 30000 }
   );
 
   // Load dispatch notes list for inbound receiving
   const { data: dnData } = useServiceData(
-    () => dispatchNoteService.list({ limit: 1000 }),
+    () => dispatchNoteService.list({ limit: 100 }),
     { dispatchNotes: [], total: 0 },
-    []
+    [],
+    { cacheKey: 'create-grn:dns', cacheTtlMs: 30000 }
   );
   const dispatchNotes = dnData.dispatchNotes || [];
 
   // Load existing GRNs to detect and prevent duplicate GRN creation
   const { data: existingGrnData } = useServiceData(
-    () => grnService.list({ limit: 1000 }),
+    () => grnService.list({ limit: 100 }),
     { grns: [], total: 0 },
-    []
+    [],
+    { cacheKey: 'create-grn:grns', cacheTtlMs: 30000 }
   );
   const existingGrns = existingGrnData.grns || [];
 

@@ -101,12 +101,12 @@ export default function CompanyGRNListPage() {
   });
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
 
-  // Load GRNs with fresh cache (fetches complete registry to ensure accurate pending/recorded separation)
+  // Load GRNs with cached data
   const { data: grnData, loading: grnLoading, forceRefresh: forceRefreshGrns } = useServiceData(
-    () => grnService.list({ limit: 1000 }),
+    () => grnService.list({ limit: 100 }),
     { grns: [], total: 0 },
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'company-grn:list', cacheTtlMs: 30000 }
   );
   const grns = grnData.grns || [];
 
@@ -115,7 +115,7 @@ export default function CompanyGRNListPage() {
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'company-grn:pos', cacheTtlMs: 30000 }
   );
 
   // Load Purchase Requisitions from purchaseRequisitionService (PO Creation workspace)
@@ -123,15 +123,15 @@ export default function CompanyGRNListPage() {
     () => purchaseRequisitionService.list(),
     [],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'company-grn:reqs', cacheTtlMs: 30000 }
   );
 
   // Load Dispatch Notes from dispatchNoteService
   const { data: dnData, forceRefresh: forceRefreshDNs } = useServiceData(
-    () => dispatchNoteService.list({ limit: 1000 }),
+    () => dispatchNoteService.list({ limit: 100 }),
     { dispatchNotes: [], total: 0 },
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'company-grn:dns', cacheTtlMs: 30000 }
   );
   const dispatchNotes = dnData.dispatchNotes || [];
 
@@ -140,7 +140,7 @@ export default function CompanyGRNListPage() {
     () => invoiceService.list({ limit: 100 }),
     [],
     [],
-    { cacheKey: 'company-grn:invoices', cacheTtlMs: 15000 }
+    { cacheKey: 'company-grn:invoices', cacheTtlMs: 30000 }
   );
 
   // Map of PO ID/Number to Inbound Dispatch / Invoice
@@ -169,7 +169,7 @@ export default function CompanyGRNListPage() {
   // Auto-switch tab and invalidate queries when arriving with recorded tab state
   useEffect(() => {
     const tab = searchParams.get('tab') || location.state?.tab;
-    const filter = location.state?.filter;
+    // Only sync filter tab state
     if (tab === 'recorded' || tab === 'grn' || filter === 'GRN') {
       setKpiFilter('GRN');
     } else if (tab === 'pending' || filter === 'PENDING') {
@@ -177,11 +177,7 @@ export default function CompanyGRNListPage() {
     } else if (tab === 'all' || filter === 'ALL') {
       setKpiFilter('ALL');
     }
-    // Always trigger fresh refetch when landing on GRN management page
-    queryClient.invalidateQueries({ queryKey: ['svc'] });
-    forceRefreshGrns();
-    forceRefreshPOs();
-  }, [searchParams, location.state, queryClient, forceRefreshGrns, forceRefreshPOs]);
+  }, [searchParams, location.state]);
 
   // Real-time synchronization across tabs & components
   useEffect(() => {

@@ -116,10 +116,11 @@ export default function CreatePurchaseInvoicePage() {
   const [showModeModal, setShowModeModal] = useState<boolean>(false);
 
   // Invoices list for management table
-  const { data: invoicesList, loading: invoicesLoading, refetch: refetchInvoices } = useServiceData(
-    () => invoiceService.list(),
+  const { data: invoicesList, loading: invoicesLoading, reload: refetchInvoices } = useServiceData(
+    () => invoiceService.list({ limit: 100 }),
     [] as APInvoice[],
-    []
+    [],
+    { cacheKey: 'create-invoice:invoices', cacheTtlMs: 30000 }
   );
 
   // Search & Filter State for Invoice Management Table
@@ -161,14 +162,16 @@ export default function CreatePurchaseInvoicePage() {
         }))
       ),
     [] as VendorOption[],
-    []
+    [],
+    { cacheKey: 'create-invoice:vendors', cacheTtlMs: 30000 }
   );
 
   // Load Purchase Orders
   const { data: poData } = useServiceData(
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
-    []
+    [],
+    { cacheKey: 'create-invoice:pos', cacheTtlMs: 30000 }
   );
   const poList = poData.orders || [];
 
@@ -176,7 +179,8 @@ export default function CreatePurchaseInvoicePage() {
   const { data: departments } = useServiceData(
     () => companySettingsService.listDepartments().then((deps) => deps.map((d) => d.name)),
     [] as string[],
-    []
+    [],
+    { cacheKey: 'create-invoice:departments', cacheTtlMs: 60000 }
   );
 
   // Cascade State: Supplier -> PO -> GRN
@@ -192,9 +196,10 @@ export default function CreatePurchaseInvoicePage() {
 
   // Dispatch Notes list for checking vendor dispatch status
   const { data: dnData } = useServiceData(
-    () => dispatchNoteService.list({ limit: 1000 }),
+    () => (selectedPoId ? dispatchNoteService.list({ poId: selectedPoId, limit: 50 }) : Promise.resolve({ dispatchNotes: [], total: 0 })),
     { dispatchNotes: [], total: 0 },
-    []
+    [selectedPoId],
+    { cacheKey: `create-invoice:dns:${selectedPoId || 'none'}`, cacheTtlMs: 30000 }
   );
   const dispatchNotes = dnData.dispatchNotes || [];
 

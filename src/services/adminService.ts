@@ -89,7 +89,7 @@ async function mockListUsers(): Promise<UserWithRoles[]> {
 
 async function apiListUsers(): Promise<UserWithRoles[]> {
   try {
-    const data = await apiRequest<{ users: UserWithRoles[] }>('/admin/users?limit=100');
+    const data = await apiRequest<{ users: UserWithRoles[] }>('/admin/users?limit=100', { cacheTtlMs: 30000 });
     const users = pickList<UserWithRoles & { role?: string }>(data, ['users']);
     return users.map((u) => ({
       ...u,

@@ -49,8 +49,9 @@ export default function VendorNotificationBell() {
       void load(false);
     }, 0);
 
-    // Fallback 30-second polling (SSE delivers instant updates)
-    const interval = setInterval(() => void load(true), 30000);
+    // Window focus refresh (SSE delivers real-time instant updates)
+    const onFocus = () => void load(true);
+    window.addEventListener('focus', onFocus);
 
     const triggerBounce = () => {
       setBouncing(true);
@@ -75,7 +76,7 @@ export default function VendorNotificationBell() {
 
     return () => {
       window.clearTimeout(timeout);
-      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
       clearTimeout(bounceTimer.current);
       clearTimeout(refreshTimer.current);
       unsubscribe();

@@ -37,10 +37,10 @@ export default function VendorInvoicesPage() {
   );
 
   const { data: dnData, loading: dnLoading, error: dnError, forceRefresh: forceRefreshDN } = useServiceData(
-    () => dispatchNoteService.list({ limit: 1000 }),
+    () => dispatchNoteService.list({ limit: 100 }),
     { dispatchNotes: [] as DispatchNote[], total: 0 },
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'vendor:dns', cacheTtlMs: 30000 }
   );
 
   const dispatchNotes = useMemo(() => {

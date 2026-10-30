@@ -227,7 +227,7 @@ async function mockListVendorContracts(): Promise<ContractListResponse> {
 
 async function apiListVendorContracts(): Promise<ContractListResponse> {
   try {
-    const data = await apiRequest<{ contracts: Contract[]; total?: number }>('/contracts/vendor/my-contracts', { cacheTtlMs: 0 });
+    const data = await apiRequest<{ contracts: Contract[]; total?: number }>('/contracts/vendor/my-contracts', { cacheTtlMs: 30000 });
     const contracts = data?.contracts || [];
     return { contracts, total: data?.total ?? contracts.length, page: 1, limit: 20, pages: 1 };
   } catch (err) {
@@ -248,7 +248,7 @@ async function mockGetVendorContract(id: string): Promise<{ contract: Contract }
 
 async function apiGetVendorContract(id: string): Promise<{ contract: Contract }> {
   try {
-    const data = await apiRequest<{ contract: Contract }>(`/contracts/vendor/my-contracts/${id}`, { cacheTtlMs: 0 });
+    const data = await apiRequest<{ contract: Contract }>(`/contracts/vendor/my-contracts/${id}`, { cacheTtlMs: 30000 });
     return data;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
@@ -276,7 +276,7 @@ async function mockListContracts(params?: Record<string, string>): Promise<Contr
 async function apiListContracts(params?: Record<string, string>): Promise<ContractListResponse> {
   try {
     const query = params ? '?' + new URLSearchParams(params).toString() : '';
-    const data = await apiRequest<ContractListResponse>(`/contracts${query}`, { cacheTtlMs: 0 });
+    const data = await apiRequest<ContractListResponse>(`/contracts${query}`, { cacheTtlMs: 30000 });
     return data;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {

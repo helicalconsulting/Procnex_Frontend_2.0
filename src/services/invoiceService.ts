@@ -40,10 +40,10 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
     if (params?.poId) query.set('poId', params.poId);
     if (params?.vendorId) query.set('vendorId', params.vendorId);
     if (params?.search) query.set('search', params.search);
-    if (params?.limit) query.set('limit', String(params.limit));
+    query.set('limit', String(params?.limit || 100));
 
-    const url = query.toString() ? `/invoices?${query.toString()}` : '/invoices';
-    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url, { cacheTtlMs: 15000 });
+    const url = `/invoices?${query.toString()}`;
+    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url, { cacheTtlMs: 30000 });
     if (!data.invoices || data.invoices.length === 0) {
       return [];
     }

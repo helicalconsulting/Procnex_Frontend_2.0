@@ -30,7 +30,6 @@ import {
 import { useBranding } from '../../context/BrandingContext';
 import heliflowLogo from '../../assets/heliflow.png';
 import { useNavigationMenu } from '../../hooks/useRoleAccess';
-import { useRoutePrefetch } from '../../hooks/useRoutePrefetch';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { isVendor } from '../../utils/rbac';
@@ -158,7 +157,6 @@ export default function Sidebar({
   const navigate = useNavigate();
   const { roles } = useAuth();
   const menuItems = useNavigationMenu();
-  const prefetch = useRoutePrefetch();
   const { companyName, logoUrl } = useBranding();
   const { isFrench } = useLanguage();
   const sidebarRef = useRef<HTMLElement>(null);
@@ -408,7 +406,6 @@ export default function Sidebar({
                     onClick={() => {
                       onMobileClose();
                     }}
-                    onMouseEnter={prefetch(item.path)}
                   >
                     {isActive && (
                       <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-[var(--shell-accent)]" />
