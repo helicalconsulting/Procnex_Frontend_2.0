@@ -5,7 +5,7 @@
  * - Vendor tokens → /api/vendors/stream
  * Dispatches real-time events to the UI so notifications appear instantly.
  */
-import { API_BASE } from '../api/client';
+import { API_BASE, clearAllApiCache } from '../api/client';
 
 type SSEEventHandler = (data: unknown) => void;
 
@@ -158,6 +158,10 @@ class SSEClient {
   private handleSSEMessage(event: MessageEvent): void {
     try {
       const parsed = JSON.parse(event.data);
+
+      // On any real-time event from backend, bust the in-memory apiCache
+      // so any refetch immediately queries the fresh data from server
+      clearAllApiCache();
 
       // Some backend events embed a { type, data } envelope
       const typeFromData = parsed?.type;

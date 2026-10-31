@@ -403,6 +403,11 @@ export default function ApprovalsPage() {
   useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData || chainModal || viewerInvoice || printPO));
   const perPage = 8;
 
+  // Pre-warm saved signatures cache on ApprovalsPage mount
+  useEffect(() => {
+    signatureService.list().catch(() => {});
+  }, []);
+
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
   const defaultVisible = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
   const [columnOrder, setColumnOrder] = useState<string[]>(defaultOrder);
@@ -905,7 +910,15 @@ export default function ApprovalsPage() {
           onClose={() => setActionModal(null)}
           onConfirm={async (signatureDataUrl: string, comment?: string) => {
             const req = actionModal.request;
-            const targetModule = req.module === 'Purchase Order' ? 'PurchaseOrders' : (req.module === 'Purchase Invoice' ? 'AccountsPayable' : req.module);
+            const m = (req.module || '').toLowerCase();
+            const targetModule =
+              m.includes('order') || m.includes('po')
+                ? 'PurchaseOrders'
+                : (m.includes('invoice') || m.includes('payable')
+                  ? 'AccountsPayable'
+                  : (m.includes('payment') || m.includes('voucher')
+                    ? 'Payments'
+                    : req.module));
             const refsToSign = Array.from(new Set([req.referenceNumber, String(req.id), req.referenceId].filter(Boolean) as string[]));
             for (const ref of refsToSign) {
               await signatureService.signDocument({

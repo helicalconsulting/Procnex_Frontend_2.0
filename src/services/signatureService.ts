@@ -78,7 +78,9 @@ function readSigs(): SavedSignature[] {
 }
 
 function writeSigs(sigs: SavedSignature[]) {
-  localStorage.setItem(getSigStorageKey(), JSON.stringify(sigs));
+  try {
+    localStorage.setItem(getSigStorageKey(), JSON.stringify(sigs));
+  } catch {}
 }
 
 function readDocSigs(): DocumentSignatureRecord[] {
@@ -91,11 +93,75 @@ function readDocSigs(): DocumentSignatureRecord[] {
 }
 
 function writeDocSigs(records: DocumentSignatureRecord[]) {
-  localStorage.setItem(getDocSigStorageKey(), JSON.stringify(records));
+  try {
+    localStorage.setItem(getDocSigStorageKey(), JSON.stringify(records));
+  } catch {}
+}
+
+function cacheNamedSignatures(sigs: Array<{ name?: string; signedByName?: string; dataUrl?: string; userId?: string }>) {
+  if (typeof window === 'undefined') return;
+  for (const s of sigs) {
+    const n = (s.name || s.signedByName || '').toLowerCase();
+    const url = s.dataUrl;
+    if (!url) continue;
+    try {
+      if (n.includes('mahi') || s.userId === '6a7d5a46bab343663a43aaad') {
+        localStorage.setItem('heliflow_sig_mahi', url);
+      }
+      if (n.includes('nischal') || s.userId === '6a4a8823de28b3ac89d1a4cb') {
+        localStorage.setItem('heliflow_sig_nischal', url);
+      }
+      if (n.includes('kanika') || n.includes('pari')) {
+        localStorage.setItem('heliflow_sig_kanika', url);
+      }
+    } catch {}
+  }
+}
+
+// In-Memory Fast Caches for 0ms Instant Rendering
+let cachedSignatures: SavedSignature[] | null = null;
+let inFlightListPromise: Promise<SavedSignature[]> | null = null;
+const docSigCache = new Map<string, { expiresAt: number; data: DocumentSignatureRecord[] }>();
+const inFlightDocSigPromises = new Map<string, Promise<DocumentSignatureRecord[]>>();
+
+function getCached(): SavedSignature[] {
+  if (cachedSignatures && cachedSignatures.length > 0) {
+    return cachedSignatures;
+  }
+  const fromStorage = readSigs();
+  if (fromStorage.length > 0) {
+    cachedSignatures = fromStorage;
+    cacheNamedSignatures(fromStorage);
+    return fromStorage;
+  }
+  return [];
+}
+
+function getCachedDocSignatures(module: string, referenceId: string): DocumentSignatureRecord[] {
+  const norm = (module || '').trim();
+  const mappedModule = MODULE_MAP[norm] || MODULE_MAP[norm.toUpperCase()] || (norm.toUpperCase().includes('PURCHASE') ? 'PURCHASE_ORDER' : norm.toUpperCase());
+  const cacheKey = `${mappedModule}:${referenceId}`;
+  const entry = docSigCache.get(cacheKey);
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.data;
+  }
+  const allDocSigs = readDocSigs();
+  const matching = allDocSigs.filter(
+    (d) =>
+      (d.module === mappedModule || d.module === module || module.toLowerCase().includes(d.module.toLowerCase())) &&
+      String(d.referenceId) === String(referenceId)
+  );
+  if (matching.length > 0) {
+    docSigCache.set(cacheKey, { expiresAt: Date.now() + 60000, data: matching });
+    return matching;
+  }
+  return [];
 }
 
 async function mockList(): Promise<SavedSignature[]> {
-  await new Promise((r) => setTimeout(r, 200));
+  const cached = getCached();
+  if (cached.length > 0) return cached;
+  await new Promise((r) => setTimeout(r, 100));
   return readSigs();
 }
 
@@ -111,16 +177,23 @@ async function mockCreate(data: { name: string; dataUrl: string; type: 'drawn' |
     isDefault: sigs.length === 0,
     createdAt: new Date().toISOString(),
   };
-  writeSigs([sig, ...sigs]);
+  const updated = [sig, ...sigs];
+  writeSigs(updated);
+  cachedSignatures = updated;
+  cacheNamedSignatures(updated);
   return sig;
 }
 
 async function mockDelete(id: string | number): Promise<void> {
-  writeSigs(readSigs().filter((s) => s.id !== id));
+  const updated = readSigs().filter((s) => s.id !== id);
+  writeSigs(updated);
+  cachedSignatures = updated;
 }
 
 async function mockSetDefault(id: string | number): Promise<void> {
-  writeSigs(readSigs().map((s) => ({ ...s, isDefault: s.id === id })));
+  const updated = readSigs().map((s) => ({ ...s, isDefault: s.id === id }));
+  writeSigs(updated);
+  cachedSignatures = updated;
 }
 
 async function mockSignDocument(payload: SignDocumentPayload): Promise<DocumentSignatureRecord> {
@@ -151,15 +224,59 @@ async function mockGetDocumentSignatures(module: string, referenceId: string): P
   return readDocSigs().filter((d) => (d.module === module || module.toLowerCase().includes(d.module.toLowerCase()) || d.module.toLowerCase().includes(module.toLowerCase())) && String(d.referenceId) === String(referenceId));
 }
 
-async function apiList(): Promise<SavedSignature[]> {
-  return apiRequest<SavedSignature[]>('/signatures');
+async function apiList(forceRefresh = false): Promise<SavedSignature[]> {
+  if (!forceRefresh && cachedSignatures && cachedSignatures.length > 0) {
+    if (!inFlightListPromise) {
+      inFlightListPromise = apiRequest<SavedSignature[]>('/signatures', { cacheTtlMs: 30000 })
+        .then((sigs) => {
+          if (Array.isArray(sigs) && sigs.length > 0) {
+            cachedSignatures = sigs;
+            writeSigs(sigs);
+            cacheNamedSignatures(sigs);
+          }
+          return sigs;
+        })
+        .catch(() => cachedSignatures || [])
+        .finally(() => { inFlightListPromise = null; });
+    }
+    return cachedSignatures;
+  }
+
+  if (inFlightListPromise) return inFlightListPromise;
+
+  const local = getCached();
+  inFlightListPromise = apiRequest<SavedSignature[]>('/signatures', { cacheTtlMs: 30000 })
+    .then((sigs) => {
+      if (Array.isArray(sigs)) {
+        cachedSignatures = sigs;
+        writeSigs(sigs);
+        cacheNamedSignatures(sigs);
+        return sigs;
+      }
+      return local;
+    })
+    .catch((err) => {
+      console.warn('Failed to fetch signatures from API, using cached:', err);
+      return local;
+    })
+    .finally(() => {
+      inFlightListPromise = null;
+    });
+
+  return inFlightListPromise;
 }
 
 async function apiCreate(data: { name: string; dataUrl: string; type: 'drawn' | 'uploaded' }): Promise<SavedSignature> {
-  return apiRequest<SavedSignature>('/signatures', {
+  const created = await apiRequest<SavedSignature>('/signatures', {
     method: 'POST',
     body: JSON.stringify(data),
   });
+  const current = getCached();
+  const updated = [created, ...current.filter((s) => s.id !== created.id)];
+  cachedSignatures = updated;
+  writeSigs(updated);
+  cacheNamedSignatures(updated);
+  return created;
 }
 
 async function apiDelete(id: string | number): Promise<void> {
@@ -167,6 +284,10 @@ async function apiDelete(id: string | number): Promise<void> {
     method: 'DELETE',
     headers: authHeaders(),
   });
+  const current = getCached();
+  const updated = current.filter((s) => s.id !== id);
+  cachedSignatures = updated;
+  writeSigs(updated);
 }
 
 async function apiSetDefault(id: string | number): Promise<void> {
@@ -174,6 +295,10 @@ async function apiSetDefault(id: string | number): Promise<void> {
     method: 'PUT',
     headers: authHeaders(),
   });
+  const current = getCached();
+  const updated = current.map((s) => ({ ...s, isDefault: s.id === id }));
+  cachedSignatures = updated;
+  writeSigs(updated);
 }
 
 const MODULE_MAP: Record<string, string> = {
@@ -199,19 +324,125 @@ const MODULE_MAP: Record<string, string> = {
 async function apiSignDocument(payload: SignDocumentPayload): Promise<DocumentSignatureRecord> {
   const norm = (payload.module || '').trim();
   const mappedModule = MODULE_MAP[norm] || MODULE_MAP[norm.toUpperCase()] || (norm.toUpperCase().includes('PURCHASE') ? 'PURCHASE_ORDER' : norm.toUpperCase());
-  return apiRequest<DocumentSignatureRecord>('/signatures/sign', {
-    method: 'POST',
-    body: JSON.stringify({
-      ...payload,
-      module: mappedModule,
-    }),
+
+  // Optimistic local persistence for 0ms instant display
+  const userStr = typeof window !== 'undefined' ? localStorage.getItem('heliflow_user') : null;
+  const user = userStr ? JSON.parse(userStr) : null;
+  const userName = user?.name || user?.fullName || 'Authorized Approver';
+
+  const optimisticRecord: DocumentSignatureRecord = {
+    id: `opt_${Date.now()}`,
+    module: mappedModule,
+    referenceId: String(payload.referenceId),
+    signatureId: payload.signatureId,
+    signedBy: userName,
+    signedAt: new Date().toISOString(),
+    dataUrl: payload.dataUrl || '',
+    levelNumber: payload.levelNumber || 1,
+    comments: payload.comments,
+  };
+
+  // 1. Write to local doc signatures
+  const existingDocSigs = readDocSigs().filter(
+    (d) => !(d.module === mappedModule && String(d.referenceId) === String(payload.referenceId) && Number(d.levelNumber) === Number(payload.levelNumber))
+  );
+  writeDocSigs([...existingDocSigs, optimisticRecord]);
+
+  // 2. Update in-memory cache
+  const cacheKey = `${mappedModule}:${payload.referenceId}`;
+  const currCache = docSigCache.get(cacheKey)?.data || [];
+  docSigCache.set(cacheKey, {
+    expiresAt: Date.now() + 60000,
+    data: [...currCache.filter((d) => Number(d.levelNumber) !== Number(payload.levelNumber)), optimisticRecord],
   });
+
+  // 3. Pre-seed document-specific approvers storage so documents open with 0ms delay
+  const ref = payload.referenceId;
+  const approverItem = {
+    levelNumber: payload.levelNumber || 1,
+    level: `Level ${payload.levelNumber || 1}`,
+    name: userName,
+    approverName: userName,
+    signedByName: userName,
+    status: 'APPROVED',
+    signatureUrl: payload.dataUrl,
+    dataUrl: payload.dataUrl,
+    date: new Date().toISOString().slice(0, 10),
+    comments: payload.comments,
+  };
+
+  try {
+    const updateStorageList = (key: string) => {
+      const existing = sessionStorage.getItem(key) || localStorage.getItem(key);
+      const list = existing ? JSON.parse(existing) : [];
+      const updated = Array.isArray(list)
+        ? [...list.filter((x: any) => Number(x.levelNumber) !== Number(payload.levelNumber)), approverItem]
+        : [approverItem];
+      sessionStorage.setItem(key, JSON.stringify(updated));
+      localStorage.setItem(key, JSON.stringify(updated));
+    };
+
+    if (mappedModule === 'PURCHASE_ORDER') {
+      updateStorageList(`approvers_${ref}`);
+    } else if (mappedModule === 'INVOICE') {
+      updateStorageList(`invoice_approvers_${ref}`);
+      updateStorageList(`voucher_approvers_${ref}`);
+    }
+  } catch {}
+
+  // 4. Send to API with skipCacheBust: true to keep document cache intact
+  try {
+    const res = await apiRequest<DocumentSignatureRecord>('/signatures/sign', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        module: mappedModule,
+      }),
+      skipCacheBust: true,
+    });
+    return res;
+  } catch (err) {
+    console.warn('API document signing recorded locally:', err);
+    return optimisticRecord;
+  }
 }
 
 async function apiGetDocumentSignatures(module: string, referenceId: string): Promise<DocumentSignatureRecord[]> {
   const norm = (module || '').trim();
   const mappedModule = MODULE_MAP[norm] || MODULE_MAP[norm.toUpperCase()] || (norm.toUpperCase().includes('PURCHASE') ? 'PURCHASE_ORDER' : norm.toUpperCase());
-  return apiRequest<DocumentSignatureRecord[]>(`/signatures/document/${mappedModule}/${referenceId}`);
+  const cacheKey = `${mappedModule}:${referenceId}`;
+
+  // Check memory cache
+  const cached = docSigCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
+  // Deduplicate in-flight requests for the exact same module & reference
+  if (inFlightDocSigPromises.has(cacheKey)) {
+    return inFlightDocSigPromises.get(cacheKey)!;
+  }
+
+  const localCached = getCachedDocSignatures(module, referenceId);
+
+  const fetchPromise = apiRequest<DocumentSignatureRecord[]>(`/signatures/document/${mappedModule}/${referenceId}`, { cacheTtlMs: 30000 })
+    .then((serverSigs) => {
+      const records = Array.isArray(serverSigs) ? serverSigs : [];
+      // Merge with local signatures
+      const existing = readDocSigs();
+      const combined = [...existing.filter((d) => !(d.module === mappedModule && String(d.referenceId) === String(referenceId))), ...records];
+      writeDocSigs(combined);
+      docSigCache.set(cacheKey, { expiresAt: Date.now() + 60000, data: records.length > 0 ? records : localCached });
+      cacheNamedSignatures(records);
+      return records.length > 0 ? records : localCached;
+    })
+    .catch(() => localCached)
+    .finally(() => {
+      inFlightDocSigPromises.delete(cacheKey);
+    });
+
+  inFlightDocSigPromises.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 export const signatureService = {
@@ -221,4 +452,14 @@ export const signatureService = {
   setDefault: USE_MOCK ? mockSetDefault : apiSetDefault,
   signDocument: USE_MOCK ? mockSignDocument : apiSignDocument,
   getDocumentSignatures: USE_MOCK ? mockGetDocumentSignatures : apiGetDocumentSignatures,
+  getCached,
+  getCachedDocSignatures,
 };
+
+// Auto pre-warm on module load in browser
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    signatureService.list().catch(() => {});
+  }, 50);
+}
+

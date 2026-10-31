@@ -82,7 +82,8 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
       const cached =
         (targetRef ? sessionStorage.getItem(`approvers_${targetRef}`) : null) ||
         (data.id ? sessionStorage.getItem(`approvers_${data.id}`) : null) ||
-        (targetRef ? localStorage.getItem(`approvers_${targetRef}`) : null);
+        (targetRef ? localStorage.getItem(`approvers_${targetRef}`) : null) ||
+        (data.id ? localStorage.getItem(`approvers_${data.id}`) : null);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -90,6 +91,26 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
           const hasDuplicates = new Set(names).size < names.length;
           if (!hasDuplicates) return parsed;
         }
+      }
+    } catch {}
+
+    try {
+      const localSigs = signatureService.getCachedDocSignatures('PurchaseOrders', targetRef || String(data.id));
+      if (localSigs.length > 0) {
+        return localSigs.map((d: any, i: number) => ({
+          levelNumber: d.levelNumber || i + 1,
+          level: `Level ${d.levelNumber || i + 1}`,
+          name: d.signedByName || d.signedBy?.fullName || `Level ${i + 1} Approver`,
+          approverName: d.signedByName || d.signedBy?.fullName || `Level ${i + 1} Approver`,
+          signedByName: d.signedByName || d.signedBy?.fullName || `Level ${i + 1} Approver`,
+          role: d.role || d.requiredRole || `Level ${i + 1} Approver`,
+          requiredRole: d.role || d.requiredRole || `Level ${i + 1} Approver`,
+          date: d.signedAt ? new Date(d.signedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+          actionDate: d.signedAt ? new Date(d.signedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+          status: 'APPROVED',
+          signatureUrl: d.dataUrl,
+          dataUrl: d.dataUrl,
+        }));
       }
     } catch {}
 
@@ -601,8 +622,14 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
 
           setApproversList(mapped);
           try {
-            if (targetRef) sessionStorage.setItem(`approvers_${targetRef}`, JSON.stringify(mapped));
-            if (data.id) sessionStorage.setItem(`approvers_${data.id}`, JSON.stringify(mapped));
+            if (targetRef) {
+              sessionStorage.setItem(`approvers_${targetRef}`, JSON.stringify(mapped));
+              localStorage.setItem(`approvers_${targetRef}`, JSON.stringify(mapped));
+            }
+            if (data.id) {
+              sessionStorage.setItem(`approvers_${data.id}`, JSON.stringify(mapped));
+              localStorage.setItem(`approvers_${data.id}`, JSON.stringify(mapped));
+            }
           } catch {}
         } else {
           const fallbackList = sortedDocSigs.length > 0
@@ -624,8 +651,14 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
 
           setApproversList(fallbackList);
           try {
-            if (targetRef) sessionStorage.setItem(`approvers_${targetRef}`, JSON.stringify(fallbackList));
-            if (data.id) sessionStorage.setItem(`approvers_${data.id}`, JSON.stringify(fallbackList));
+            if (targetRef) {
+              sessionStorage.setItem(`approvers_${targetRef}`, JSON.stringify(fallbackList));
+              localStorage.setItem(`approvers_${targetRef}`, JSON.stringify(fallbackList));
+            }
+            if (data.id) {
+              sessionStorage.setItem(`approvers_${data.id}`, JSON.stringify(fallbackList));
+              localStorage.setItem(`approvers_${data.id}`, JSON.stringify(fallbackList));
+            }
           } catch {}
         }
       } catch (err) {

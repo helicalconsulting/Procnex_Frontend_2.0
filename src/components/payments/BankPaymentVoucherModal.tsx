@@ -308,7 +308,7 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
         }
       }
     }
-    if (bestCached && bestCached.length >= 3) return bestCached;
+    if (bestCached && bestCached.length > 0) return bestCached;
   } catch {}
 
   const sigMahi = localStorage.getItem('heliflow_sig_mahi') || undefined;

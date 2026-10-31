@@ -370,6 +370,9 @@ export default function RFQPage() {
 
     const unsubLevel = sseClient.on('approval_level_complete', handleRefresh);
     const unsubChain = sseClient.on('approval_chain_complete', handleRefresh);
+    const unsubReq = sseClient.on('approval_required', handleRefresh);
+    const unsubUpd = sseClient.on('approval_updated', handleRefresh);
+    const unsubInit = sseClient.on('approval_initiated', handleRefresh);
     const unsubNotif = sseClient.on('notification', handleRefresh);
     const unsubRfqStatus = sseClient.on('rfq_status_changed', handleRefresh);
 
@@ -379,6 +382,9 @@ export default function RFQPage() {
     return () => {
       unsubLevel();
       unsubChain();
+      unsubReq();
+      unsubUpd();
+      unsubInit();
       unsubNotif();
       unsubRfqStatus();
       window.removeEventListener('heliflow:approval-updated', handleRefresh);
@@ -1024,7 +1030,7 @@ export default function RFQPage() {
                     );
 
                     // User can act on the RFQ if document is in approval/re-review and user has an active pending approval to act on
-                    const canUserActOnRFQ = !isApprovedDoc && isDocInApproval && (Boolean(pendingApproval?.canAct) || Boolean(rfq.canUserAct)) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
+                    const canUserActOnRFQ = !isApprovedDoc && isDocInApproval && (pendingApproval ? Boolean(pendingApproval?.canAct) : Boolean(rfq.canUserAct)) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
                     const canEditThisRFQ = isCreator || isUserAdmin;
 
                     return (
@@ -1154,7 +1160,7 @@ export default function RFQPage() {
                   rfq.status === 'RETURNED' ||
                   (rfq as any)._isReturnedByMe
                 );
-                const canUserActOnRFQ = !isApprovedDoc && isDocInApproval && (Boolean(pendingApproval?.canAct) || Boolean(rfq.canUserAct)) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
+                const canUserActOnRFQ = !isApprovedDoc && isDocInApproval && (pendingApproval ? Boolean(pendingApproval?.canAct) : Boolean(rfq.canUserAct)) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
                 const canEditThisRFQ = isCreator || isUserAdmin;
 
                 return (

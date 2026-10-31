@@ -46,10 +46,40 @@ export function DigitalSignatureApprovalModal({
   initialComment = '',
   actionType = 'approve',
 }: DigitalSignatureApprovalModalProps) {
-  const [activeTab, setActiveTab] = useState<'saved' | 'draw' | 'upload'>('saved');
-  const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>([]);
-  const [selectedSigId, setSelectedSigId] = useState<string | number | null>(null);
-  const [selectedDataUrl, setSelectedDataUrl] = useState<string>('');
+  const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>(() => {
+    const cached = signatureService.getCached();
+    if (cached.length === 0) return [];
+    const seen = new Set<string>();
+    const uniqueSigs: SavedSignature[] = [];
+    for (const s of cached) {
+      if (!s.dataUrl || seen.has(s.dataUrl)) continue;
+      seen.add(s.dataUrl);
+      uniqueSigs.push(s);
+    }
+    const firstDefaultIndex = uniqueSigs.findIndex((s) => s.isDefault);
+    return uniqueSigs.map((s, idx) => ({
+      ...s,
+      isDefault: firstDefaultIndex !== -1 ? idx === firstDefaultIndex : idx === 0,
+    }));
+  });
+
+  const [activeTab, setActiveTab] = useState<'saved' | 'draw' | 'upload'>(() => {
+    const cached = signatureService.getCached();
+    return cached.length > 0 ? 'saved' : 'draw';
+  });
+
+  const [selectedSigId, setSelectedSigId] = useState<string | number | null>(() => {
+    const cached = signatureService.getCached();
+    const def = cached.find((s) => s.isDefault) || cached[0];
+    return def ? def.id : null;
+  });
+
+  const [selectedDataUrl, setSelectedDataUrl] = useState<string>(() => {
+    const cached = signatureService.getCached();
+    const def = cached.find((s) => s.isDefault) || cached[0];
+    return def ? def.dataUrl : '';
+  });
+
   const [comment, setComment] = useState(initialComment);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -62,7 +92,7 @@ export function DigitalSignatureApprovalModal({
   const [history, setHistory] = useState<ImageData[]>([]);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
 
-  // Load saved signatures
+  // Load / Sync saved signatures in background
   useEffect(() => {
     if (!open) return;
     let isMounted = true;
@@ -91,20 +121,20 @@ export function DigitalSignatureApprovalModal({
         setSavedSignatures(normalizedSigs);
         const def = normalizedSigs.find((s) => s.isDefault) || normalizedSigs[0];
         if (def) {
-          setSelectedSigId(def.id);
-          setSelectedDataUrl(def.dataUrl);
-          setActiveTab('saved');
-        } else {
+          setSelectedSigId((prev) => prev ?? def.id);
+          setSelectedDataUrl((prev) => (prev ? prev : def.dataUrl));
+          setActiveTab((prev) => (prev === 'saved' || !prev ? 'saved' : prev));
+        } else if (normalizedSigs.length === 0) {
           setActiveTab('draw');
         }
       } catch {
-        if (isMounted) setActiveTab('draw');
+        if (isMounted && savedSignatures.length === 0) setActiveTab('draw');
       }
     })();
     return () => {
       isMounted = false;
     };
-  }, [open]);
+  }, [open, savedSignatures.length]);
 
   // Setup Canvas when draw tab is active
   useEffect(() => {

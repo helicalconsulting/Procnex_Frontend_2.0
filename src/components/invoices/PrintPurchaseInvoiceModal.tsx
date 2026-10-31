@@ -133,10 +133,30 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
       const cached =
         (targetRef ? sessionStorage.getItem(`invoice_approvers_${targetRef}`) : null) ||
         (data.id ? sessionStorage.getItem(`invoice_approvers_${data.id}`) : null) ||
-        (targetRef ? localStorage.getItem(`invoice_approvers_${targetRef}`) : null);
+        (targetRef ? localStorage.getItem(`invoice_approvers_${targetRef}`) : null) ||
+        (data.id ? localStorage.getItem(`invoice_approvers_${data.id}`) : null);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+
+    try {
+      const localSigs = signatureService.getCachedDocSignatures('AccountsPayable', targetRef || String(data.id));
+      if (localSigs.length > 0) {
+        return localSigs.map((d: any, i: number) => ({
+          levelNumber: d.levelNumber || i + 1,
+          level: `Level ${d.levelNumber || i + 1}`,
+          name: d.signedByName || d.signedBy?.fullName || (i === 0 ? 'Mahi Agarwal' : 'Nischal Agarwal'),
+          approverName: d.signedByName || d.signedBy?.fullName || (i === 0 ? 'Mahi Agarwal' : 'Nischal Agarwal'),
+          signedByName: d.signedByName || d.signedBy?.fullName || (i === 0 ? 'Mahi Agarwal' : 'Nischal Agarwal'),
+          role: i === 0 ? 'Purchase Clerk' : 'Purchase Manager',
+          requiredRole: i === 0 ? 'Purchase Clerk' : 'Purchase Manager',
+          date: d.signedAt ? new Date(d.signedAt).toISOString().slice(0, 10) : formatDocDate(data.invoiceDate),
+          status: 'APPROVED',
+          signatureUrl: d.dataUrl,
+          dataUrl: d.dataUrl,
+        }));
       }
     } catch {}
 
@@ -471,8 +491,14 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
 
           setApproversList(mapped);
           try {
-            if (targetRef) sessionStorage.setItem(`invoice_approvers_${targetRef}`, JSON.stringify(mapped));
-            if (data.id) sessionStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(mapped));
+            if (targetRef) {
+              sessionStorage.setItem(`invoice_approvers_${targetRef}`, JSON.stringify(mapped));
+              localStorage.setItem(`invoice_approvers_${targetRef}`, JSON.stringify(mapped));
+            }
+            if (data.id) {
+              sessionStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(mapped));
+              localStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(mapped));
+            }
           } catch {}
         } else {
           const sigL1 = isApproved ? (docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi') || sortedDocSigs[0]?.dataUrl || defaultSigUrl) : undefined;
@@ -506,8 +532,14 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
 
           setApproversList(fallbackList);
           try {
-            if (targetRef) sessionStorage.setItem(`invoice_approvers_${targetRef}`, JSON.stringify(fallbackList));
-            if (data.id) sessionStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(fallbackList));
+            if (targetRef) {
+              sessionStorage.setItem(`invoice_approvers_${targetRef}`, JSON.stringify(fallbackList));
+              localStorage.setItem(`invoice_approvers_${targetRef}`, JSON.stringify(fallbackList));
+            }
+            if (data.id) {
+              sessionStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(fallbackList));
+              localStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(fallbackList));
+            }
           } catch {}
         }
       } catch {
