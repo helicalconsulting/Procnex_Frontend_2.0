@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Trash2,
   Printer,
+  FileText,
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
@@ -39,6 +40,7 @@ import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import TablePagination from '../../components/shared/TablePagination';
 import { PrintGRNModal } from '../../components/grn/PrintGRNModal';
+import { PrintPurchaseInvoiceModal } from '../../components/invoices/PrintPurchaseInvoiceModal';
 import { cn } from '../../lib/utils';
 
 function isFrom16SeptOnwards(dateVal?: string): boolean {
@@ -91,9 +93,10 @@ export default function GRNListPage() {
   const [kpiFilter, setKpiFilter] = useState<'ALL' | 'PENDING' | 'GRN'>('ALL');
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
   const [selectedInvoiceModal, setSelectedInvoiceModal] = useState<any>(null);
+  const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [grnToPrint, setGrnToPrint] = useState<any | null>(null);
 
-  const handleViewInvoice = (po: any) => {
+  const getInvoicePayload = (po: any) => {
     const targetPoId = String(po?.id || '').toLowerCase();
     const targetPoNum = String(po?.poNumber || po?.purchaseOrder?.poNumber || '').toLowerCase();
 
@@ -108,8 +111,15 @@ export default function GRNListPage() {
       );
     });
 
-    const rawItems = (po?.items && po.items.length > 0) ? po.items : (po?.purchaseOrder?.items || []);
-    const items = rawItems.length > 0 ? rawItems : [
+    const rawItems = (matchedInvoice?.items && matchedInvoice.items.length > 0)
+      ? matchedInvoice.items
+      : (matchedInvoice?.lineItems && matchedInvoice.lineItems.length > 0)
+        ? matchedInvoice.lineItems
+        : (po?.items && po.items.length > 0)
+          ? po.items
+          : (po?.purchaseOrder?.items || []);
+
+    const items = (rawItems.length > 0 ? rawItems : [
       {
         id: 'inv_item_1',
         itemName: po?.title || po?.poNumber || 'Purchased Materials / Services',
@@ -117,19 +127,50 @@ export default function GRNListPage() {
         unitPrice: Number(po?.totalAmount || po?.amount || matchedInvoice?.amount || 0),
         totalPrice: Number(po?.totalAmount || po?.amount || matchedInvoice?.amount || 0),
       }
-    ];
+    ]).map((it: any, idx: number) => {
+      const qty = Number(it.quantity || it.orderedQty || it.qty || 1);
+      const price = Number(it.unitPrice || it.rate || it.price || 0);
+      const total = Number(it.totalPrice || it.total || it.amount || (qty * price) || 0);
+      return {
+        id: it.id || idx + 1,
+        itemCode: it.itemCode || it.code || `ITM-${String(idx + 1).padStart(3, '0')}`,
+        itemName: it.itemName || it.name || it.description || (it.title ? it.title : `Line Item ${idx + 1}`),
+        name: it.itemName || it.name || it.description || (it.title ? it.title : `Line Item ${idx + 1}`),
+        description: it.description || '',
+        quantity: qty,
+        unitPrice: price,
+        totalPrice: total,
+        unit: it.unit || 'Pcs',
+        poNumber: it.poNumber || po?.poNumber || po?.purchaseOrder?.poNumber || matchedInvoice?.poNumber || '—',
+        department: it.department || po?.department || po?.purchaseOrder?.department || 'Procurement',
+      };
+    });
 
-    setSelectedInvoiceModal({
+    return {
+      id: matchedInvoice?.id || po?.id,
       invoiceNumber: matchedInvoice?.invoiceNumber || po?.dispatchNoteNumber || po?.vendorDispatchNoteNumber || `INV-${po?.poNumber || po?.id || '2026-001'}`,
       poNumber: po?.poNumber || po?.purchaseOrder?.poNumber || matchedInvoice?.poNumber || '—',
       vendorName: po?.vendor?.name || po?.vendorName || matchedInvoice?.vendorName || user?.fullName || 'Supplier',
       amount: Number(matchedInvoice?.amount || po?.totalAmount || po?.grandTotal || 0),
       dueDate: matchedInvoice?.dueDate || new Date().toISOString().slice(0, 10),
       submittedAt: matchedInvoice?.submittedAt || (po?.createdAt ? String(po.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
+      invoiceDate: matchedInvoice?.invoiceDate || matchedInvoice?.submittedAt || (po?.createdAt ? String(po.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
       status: matchedInvoice?.status || 'INVOICED',
+      paymentTerms: matchedInvoice?.paymentTerms || po?.paymentTerms || po?.purchaseOrder?.paymentTerms || 'Net 30',
+      department: matchedInvoice?.department || po?.department || po?.purchaseOrder?.department || 'Procurement',
+      currency: (matchedInvoice as any)?.currency || (po as any)?.currency || companyDefaultCurrency,
       items,
       po,
-    });
+      purchaseOrder: po?.purchaseOrder || po,
+    };
+  };
+
+  const handleViewInvoice = (po: any) => {
+    setSelectedInvoiceModal(getInvoicePayload(po));
+  };
+
+  const handlePrintInvoiceDirect = (po: any) => {
+    setInvoiceToPrint(getInvoicePayload(po));
   };
 
   // Column Customizer state for PO table and GRN table
@@ -240,13 +281,31 @@ export default function GRNListPage() {
 
   const invoicedPoNumbers = useMemo(() => {
     const set = new Set<string>();
-    (invoicesList || []).forEach((inv) => {
-      if (inv.poNumber) set.add(String(inv.poNumber).toLowerCase());
-      if (inv.id) set.add(String(inv.id).toLowerCase());
-      if (inv.invoiceNumber) set.add(String(inv.invoiceNumber).toLowerCase());
+    (invoicesList || []).forEach((inv: any) => {
+      const s = String(inv.status || '').toUpperCase();
+      if (s === 'REJECTED' || s === 'CANCELLED') return;
+      if (inv.poNumber) set.add(String(inv.poNumber).toLowerCase().trim());
+      if (inv.poId) set.add(String(inv.poId).toLowerCase().trim());
+      if (inv.purchaseOrder?.id) set.add(String(inv.purchaseOrder.id).toLowerCase().trim());
+      if (inv.purchaseOrder?.poNumber) set.add(String(inv.purchaseOrder.poNumber).toLowerCase().trim());
+      if (inv.id) set.add(String(inv.id).toLowerCase().trim());
+      if (inv.invoiceNumber) set.add(String(inv.invoiceNumber).toLowerCase().trim());
     });
     return set;
   }, [invoicesList]);
+
+  const dispatchedPoNumbers = useMemo(() => {
+    const set = new Set<string>();
+    (grns || []).forEach((g: any) => {
+      const s = String(g.status || '').toUpperCase();
+      if (s === 'CANCELLED') return;
+      if (g.poNumber) set.add(String(g.poNumber).toLowerCase().trim());
+      if (g.poId) set.add(String(g.poId).toLowerCase().trim());
+      if (g.purchaseOrder?.id) set.add(String(g.purchaseOrder.id).toLowerCase().trim());
+      if (g.purchaseOrder?.poNumber) set.add(String(g.purchaseOrder.poNumber).toLowerCase().trim());
+    });
+    return set;
+  }, [grns]);
 
   const modalItems = useMemo(() => {
     if (!selectedGrn) return [];
@@ -645,14 +704,21 @@ export default function GRNListPage() {
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {(() => {
-                              const poNumLower = String(po?.poNumber || '').toLowerCase();
-                              const poIdLower = String(po?.id || '').toLowerCase();
+                              const poNumLower = String(po?.poNumber || '').toLowerCase().trim();
+                              const poIdLower = String(po?.id || '').toLowerCase().trim();
 
                               const isAlreadyInvoiced =
                                 statusStr === 'INVOICED' ||
                                 statusStr === 'CLOSED' ||
                                 (poNumLower && invoicedPoNumbers.has(poNumLower)) ||
                                 (poIdLower && invoicedPoNumbers.has(poIdLower));
+
+                              const isAlreadyDispatched =
+                                statusStr === 'DISPATCHED' ||
+                                statusStr === 'IN_TRANSIT' ||
+                                statusStr === 'RECEIVED' ||
+                                (poNumLower && dispatchedPoNumbers.has(poNumLower)) ||
+                                (poIdLower && dispatchedPoNumbers.has(poIdLower));
 
                               if (isAlreadyInvoiced) {
                                 return (
@@ -669,6 +735,42 @@ export default function GRNListPage() {
                                     >
                                       <Eye className="size-3.5" /> View Invoice
                                     </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handlePrintInvoiceDirect(po)}
+                                      className="h-8 text-xs font-medium gap-1.5 px-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent whitespace-nowrap"
+                                      title="Print Tax Invoice Document"
+                                    >
+                                      <Printer className="size-3.5" /> Print
+                                    </Button>
+                                  </div>
+                                );
+                              }
+
+                              if (isAlreadyDispatched) {
+                                return (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Badge tone="primary" className="h-8 text-xs font-medium gap-1.5 px-2.5 rounded-lg whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300">
+                                      <Truck className="size-3.5" /> Dispatched
+                                    </Badge>
+                                    {po.vendorFulfillmentAllowed !== 'DISPATCH_ONLY' && (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
+                                          const targetPoId = po.id || po.poNumber;
+                                          if (isVendor) {
+                                            navigate(`/vendor/create-invoice?poId=${targetPoId}`, { state: { po } });
+                                          } else {
+                                            navigate(`/procurement/create-grn?poId=${targetPoId}`, { state: { po } });
+                                          }
+                                        }}
+                                        className="h-8 text-xs font-medium gap-1.5 px-3 rounded-lg shadow-xs whitespace-nowrap"
+                                        title="Create Invoice for Dispatched Order"
+                                      >
+                                        <FileText className="size-3.5" /> Generate Invoice
+                                      </Button>
+                                    )}
                                   </div>
                                 );
                               }
@@ -679,14 +781,18 @@ export default function GRNListPage() {
                                   onClick={() => {
                                     const targetPoId = po.id || po.poNumber;
                                     if (isVendor) {
-                                      navigate(`/vendor/create-invoice?poId=${targetPoId}`, { state: { po } });
+                                      if (po.vendorFulfillmentAllowed === 'INVOICE_ONLY') {
+                                        navigate(`/vendor/create-invoice?poId=${targetPoId}`, { state: { po } });
+                                      } else {
+                                        navigate(`/vendor/create-dispatch-note?poId=${targetPoId}`, { state: { po } });
+                                      }
                                     } else {
                                       navigate(`/procurement/create-grn?poId=${targetPoId}`, { state: { po } });
                                     }
                                   }}
                                   className="h-8 text-xs font-medium gap-1.5 px-3 rounded-lg shadow-xs whitespace-nowrap"
                                 >
-                                  <Truck className="size-3.5" /> Generate Dispatch Note / Invoice
+                                  <Truck className="size-3.5" /> {po.vendorFulfillmentAllowed === 'INVOICE_ONLY' ? 'Generate Invoice' : 'Generate Dispatch Note'}
                                 </Button>
                               );
                             })()}
@@ -841,6 +947,15 @@ export default function GRNListPage() {
                                   title="View Created Invoice"
                                 >
                                   <Eye className="size-3.5" /> View Invoice
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handlePrintInvoiceDirect(poObj || grn)}
+                                  className="h-8 text-xs font-medium gap-1.5 px-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent whitespace-nowrap"
+                                  title="Print Tax Invoice Document"
+                                >
+                                  <Printer className="size-3.5" /> Print
                                 </Button>
                               </div>
                             ) : (
@@ -1065,7 +1180,14 @@ export default function GRNListPage() {
             </div>
 
             <DialogFooter className="gap-2">
-              <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setInvoiceToPrint(selectedInvoiceModal);
+                }}
+                className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-medium"
+              >
                 <Printer className="size-3.5" /> Print Invoice
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setSelectedInvoiceModal(null)}>
@@ -1075,6 +1197,14 @@ export default function GRNListPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {invoiceToPrint && (
+        <PrintPurchaseInvoiceModal
+          data={invoiceToPrint}
+          invoice={invoiceToPrint}
+          onClose={() => setInvoiceToPrint(null)}
+        />
+      )}
 
       {grnToPrint && (
         <PrintGRNModal

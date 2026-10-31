@@ -176,6 +176,22 @@ function resolvePaymentAttachments(paymentId?: string, invoiceRef?: string, rawA
   return list;
 }
 
+function cleanRemarks(text?: string): string {
+  if (!text) return '';
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const bankLines = lines.filter((l) => l.startsWith('Bank:'));
+  const otherLines = lines.filter((l) => !l.startsWith('Bank:'));
+  const result: string[] = [];
+  if (bankLines.length > 0) {
+    bankLines.sort((a, b) => b.length - a.length);
+    result.push(bankLines[0]);
+  }
+  for (const line of otherLines) {
+    if (!result.includes(line)) result.push(line);
+  }
+  return result.join('\n');
+}
+
 function mapPayment(payment: ServicePayment): Payment {
   const statusMap: Record<string, PaymentStatus> = {
     DRAFT: 'DRAFT',
@@ -206,7 +222,7 @@ function mapPayment(payment: ServicePayment): Payment {
     date: payment.paidAt,
     status: resolvedStatus,
     approvedBy: payment.approvedBy || '—',
-    remarks: payment.remarks || '',
+    remarks: cleanRemarks(payment.remarks || ''),
     attachments: atts.length > 0 ? atts : undefined,
     items: payment.items,
     invoices: payment.invoices,
@@ -222,16 +238,34 @@ function StatusBadge({
   status,
   currentLevel,
   hasApprovedPriorLevel,
+  canAct,
 }: {
   status: PaymentStatus;
   currentLevel?: number;
   hasApprovedPriorLevel?: boolean;
+  canAct?: boolean;
 }) {
-  if (status === 'PENDING' && hasApprovedPriorLevel) {
+  if (status === 'PENDING') {
+    if (canAct) {
+      return (
+        <Badge tone="warning">
+          <Clock className="size-3" />
+          Pending
+        </Badge>
+      );
+    }
+    if (hasApprovedPriorLevel) {
+      return (
+        <Badge tone="info" className="bg-sky-500/10 text-sky-600 border-sky-500/20 dark:text-sky-300">
+          <CheckCircle2 className="size-3" />
+          L{Math.max(1, (currentLevel || 2) - 1)} Approved
+        </Badge>
+      );
+    }
     return (
-      <Badge tone="success">
-        <CheckCircle2 className="size-3" />
-        Approved
+      <Badge tone="warning">
+        <Clock className="size-3" />
+        Pending
       </Badge>
     );
   }
@@ -377,56 +411,50 @@ export default function PaymentsPage() {
         const reqRole = rawRole && rawRole !== 'Approver'
           ? rawRole
           : currentLevel === 1
-          ? 'Purchase Clerk'
-          : 'Purchase Manager';
+          ? 'Purchase Manager'
+          : 'Purchase Clerk';
         const allApproved = rows.length > 0 && rows.every((r) => r.status === 'APPROVED');
 
-        const isL1User = isRoleMatching('Purchase Clerk', authRoles);
-        const isL2User = isRoleMatching('Purchase Manager', authRoles);
+        const isUserMatchingPendingStep = pendingRow
+          ? isRoleMatching(reqRole, authRoles) ||
+            (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
+            ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
+            (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
+            (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase())
+          : false;
 
-        // Has current user (or their role) approved a prior level?
+        const canAct =
+          !allApproved &&
+          (activeApp?.status === 'PENDING' || activeApp?.status === 'RETURNED' || Boolean(pendingRow)) &&
+          isUserMatchingPendingStep;
+
+        // Has current user (or their role) approved a strictly prior level (< currentLevel)?
         const hasApprovedPriorLevel =
-          allApproved ||
-          (currentLevel > 1 && isL1User && !isL2User) ||
-          rows.some(
-            (r) =>
-              r.status === 'APPROVED' &&
-              (
-                isRoleMatching(r.requiredRole, authRoles) ||
-                (user?.id && r.approverId && String(r.approverId) === String(user.id)) ||
-                ((user as any)?._id && r.approverId && String(r.approverId) === String((user as any)._id)) ||
-                (user?.name && r.approverName && r.approverName.toLowerCase() === user.name.toLowerCase()) ||
-                (user?.email && (r as any).approverEmail && (r as any).approverEmail.toLowerCase() === user.email.toLowerCase())
-              )
-          );
+          !canAct &&
+          rows.some((r) => {
+            if (r.status !== 'APPROVED') return false;
+            const rLevel = Number(r.currentLevel || r.levelNumber || r.level?.levelNumber) || 1;
+            if (rLevel >= currentLevel) return false;
+            return (
+              (user?.id && r.approverId && String(r.approverId) === String(user.id)) ||
+              ((user as any)?._id && r.approverId && String(r.approverId) === String((user as any)._id)) ||
+              (user?.name && r.approverName && r.approverName.toLowerCase() === user.name.toLowerCase()) ||
+              (user?.email && (r as any).approverEmail && (r as any).approverEmail.toLowerCase() === user.email.toLowerCase()) ||
+              (isRoleMatching(r.requiredRole, authRoles) && !isUserMatchingPendingStep)
+            );
+          });
 
         if (activeApp) {
-          const isUserMatchingPendingStep = pendingRow
-            ? isRoleMatching(reqRole, authRoles) ||
-              (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
-              ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
-              (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
-              (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase())
-            : false;
-          const canAct =
-            !allApproved &&
-            (activeApp.status === 'PENDING' || activeApp.status === 'RETURNED' || Boolean(pendingRow)) &&
-            isUserMatchingPendingStep;
-
           let status: PaymentStatus;
           if (rejectedRow) {
             status = 'CANCELLED';
           } else if (returnedRow) {
             status = 'RETURNED';
-          } else if (allApproved || base.status === 'COMPLETED' || base.status === 'CONFIRMED' || base.status === 'APPROVED') {
-            status = 'CONFIRMED';
           } else if (pendingRow || activeApp.status === 'PENDING') {
-            if (hasApprovedPriorLevel && !isUserMatchingPendingStep) {
-              status = 'CONFIRMED';
-            } else {
-              status = 'PENDING';
-            }
-          } else if (activeApp.status === 'APPROVED') {
+            status = 'PENDING';
+          } else if (allApproved || (rows.length === 0 && (base.status === 'COMPLETED' || base.status === 'CONFIRMED' || base.status === 'APPROVED'))) {
+            status = 'CONFIRMED';
+          } else if (activeApp.status === 'APPROVED' && allApproved) {
             status = 'CONFIRMED';
           } else {
             status = base.status;
@@ -444,14 +472,15 @@ export default function PaymentsPage() {
           };
         }
 
-        const canAct = base.status === 'PENDING' && isL1User;
+        const isL1User = isRoleMatching('Purchase Manager', authRoles);
+        const canActFallback = base.status === 'PENDING' && isL1User;
 
         return {
           ...base,
           currentLevel: 1,
           totalLevels: 2,
-          requiredRole: 'Purchase Clerk',
-          canAct,
+          requiredRole: 'Purchase Manager',
+          canAct: canActFallback,
           hasApprovedPriorLevel: false,
         };
       });
@@ -678,33 +707,18 @@ export default function PaymentsPage() {
               signatureUrl,
             };
           });
-          // Ensure Level 3 is included if only 2 levels were in the chain
-          if (mapped.length === 2 && (uniqueDocSigs.length >= 3 || uniqueDocSigs.some(d => Number(d.levelNumber) === 3 || (d.signedByName || '').toLowerCase().includes('nischal')) || localStorage.getItem('heliflow_sig_nischal') || isVoucherConfirmed)) {
-            const sigL3 = getSigForLevel(3) || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : localStorage.getItem('heliflow_sig_nischal') || undefined);
-            mapped.push({
-              level: 'Level 3',
-              name: uniqueDocSigs.find(d => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal',
-              role: 'General Manager',
-              date: selectedPrintVoucher.date,
-              status: isVoucherConfirmed ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isVoucherConfirmed ? 'Approved & Digitally Signed' : 'Awaiting Level 3 Approval',
-              signatureUrl: isVoucherConfirmed ? sigL3 : undefined,
-            });
-          }
           setVoucherApprovers(mapped);
         } else {
           const sigL1 = getSigForLevel(1, null, selectedPrintVoucher.approvedBy) || (currentLvl > 1 || isVoucherConfirmed ? (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined) : undefined);
           const sigL2 = getSigForLevel(2);
-          const sigL3 = getSigForLevel(3) || (isVoucherConfirmed ? (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : localStorage.getItem('heliflow_sig_nischal') || undefined) : undefined);
 
           const isL1Approved = currentLvl > 1 || isVoucherConfirmed;
           const isL2Approved = currentLvl > 2 || isVoucherConfirmed;
-          const isL3Approved = isVoucherConfirmed;
 
           setVoucherApprovers([
             {
               level: 'Level 1',
-              name: isL1Approved ? (selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : 'Kanika Agarwal') : 'Kanika Agarwal',
+              name: isL1Approved ? (selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : 'Purchase Manager') : 'Purchase Manager',
               role: 'Purchase Manager',
               date: selectedPrintVoucher.date,
               status: isL1Approved ? ('APPROVED' as const) : ('PENDING' as const),
@@ -713,21 +727,12 @@ export default function PaymentsPage() {
             },
             {
               level: 'Level 2',
-              name: isL2Approved ? 'Mahi Agarwal' : 'Mahi Agarwal',
+              name: isL2Approved ? 'Purchase Clerk' : 'Purchase Clerk',
               role: 'Purchase Clerk',
               date: selectedPrintVoucher.date,
               status: isL2Approved ? ('APPROVED' as const) : ('PENDING' as const),
               comments: isL2Approved ? 'Approved & Digitally Signed' : 'Awaiting Level 2 Approval',
               signatureUrl: isL2Approved ? sigL2 : undefined,
-            },
-            {
-              level: 'Level 3',
-              name: isL3Approved ? 'Nischal Agarwal' : 'Nischal Agarwal',
-              role: 'General Manager',
-              date: selectedPrintVoucher.date,
-              status: isL3Approved ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isL3Approved ? 'Approved & Digitally Signed' : 'Awaiting Level 3 Approval',
-              signatureUrl: isL3Approved ? sigL3 : undefined,
             },
           ]);
         }
@@ -850,21 +855,21 @@ export default function PaymentsPage() {
     const isMultiLevel = (target.totalLevels || 2) > 1;
     const returnTarget = (target.currentLevel || 1) > 1 ? actionReturnTarget : 'ORIGINATOR';
     const optimisticStatus: PaymentStatus = act === 'confirm'
-      ? 'CONFIRMED'
+      ? (isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED')
       : act === 'cancel' ? 'CANCELLED' : act === 'return' ? 'RETURNED' : 'RETRIED';
 
     const updatedPayment: Payment = {
       ...target,
       status: optimisticStatus,
       currentLevel: act === 'return'
-        ? (returnTarget === 'LEVEL_1' ? 1 : 1)
+        ? 1
         : (isLevel1 && isMultiLevel ? 2 : target.currentLevel),
       requiredRole: act === 'return'
-        ? (returnTarget === 'LEVEL_1' ? 'Purchase Clerk' : target.requiredRole)
-        : (isLevel1 && isMultiLevel ? 'Purchase Manager' : target.requiredRole),
+        ? 'Purchase Manager'
+        : (isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole),
       canAct: false,
       hasApprovedPriorLevel: act === 'confirm',
-      approvedBy: isLevel1 ? 'Purchase Clerk' : 'Purchase Manager',
+      approvedBy: isLevel1 ? 'Purchase Manager' : 'Purchase Clerk',
       comments: comment || target.comments,
     };
 
@@ -991,12 +996,12 @@ export default function PaymentsPage() {
 
       const updatedPayment: Payment = {
         ...target,
-        status: 'CONFIRMED',
+        status: isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED',
         currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
-        requiredRole: isLevel1 && isMultiLevel ? 'Purchase Manager' : target.requiredRole,
+        requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
         canAct: false,
         hasApprovedPriorLevel: true,
-        approvedBy: isLevel1 ? 'Purchase Clerk' : 'Purchase Manager',
+        approvedBy: isLevel1 ? 'Purchase Manager' : 'Purchase Clerk',
         comments: comment || target.comments,
       };
 
@@ -1352,6 +1357,7 @@ export default function PaymentsPage() {
                                 status={payment.status}
                                 currentLevel={payment.currentLevel}
                                 hasApprovedPriorLevel={payment.hasApprovedPriorLevel}
+                                canAct={payment.canAct}
                               />
                             </td>
                           );
@@ -1468,6 +1474,7 @@ export default function PaymentsPage() {
                     status={payment.status}
                     currentLevel={payment.currentLevel}
                     hasApprovedPriorLevel={payment.hasApprovedPriorLevel}
+                    canAct={payment.canAct}
                   />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
@@ -1783,6 +1790,7 @@ export default function PaymentsPage() {
                   status={detailPayment.status}
                   currentLevel={detailPayment.currentLevel}
                   hasApprovedPriorLevel={detailPayment.hasApprovedPriorLevel}
+                  canAct={detailPayment.canAct}
                 />
               </div>
               <DialogDescription className="text-sm font-medium text-muted-foreground">
@@ -1853,8 +1861,8 @@ export default function PaymentsPage() {
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Remarks
                     </div>
-                    <div className="mt-1 font-normal text-muted-foreground break-words leading-relaxed">
-                      {detailPayment.remarks || '—'}
+                    <div className="mt-1 font-normal text-muted-foreground break-words leading-relaxed whitespace-pre-line">
+                      {cleanRemarks(detailPayment.remarks) || '—'}
                     </div>
                   </div>
                 </div>

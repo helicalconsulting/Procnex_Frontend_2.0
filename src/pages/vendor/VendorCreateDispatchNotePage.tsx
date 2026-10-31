@@ -4,14 +4,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { dispatchNoteService, type DispatchNoteItem } from '../../services/dispatchNoteService';
+import { grnService } from '../../services/grnService';
 import {
   ArrowLeft,
   Truck,
   PackageCheck,
   Send,
-  Upload,
-  Paperclip,
-  X,
   Save,
   Printer,
   Calendar,
@@ -21,6 +19,7 @@ import {
   Plus,
   Trash2,
   Check,
+  CheckCircle2,
   AlertCircle,
   Phone,
   Mail,
@@ -74,6 +73,54 @@ export default function VendorCreateDispatchNotePage() {
   );
   const poList = useMemo(() => poData.orders || [], [poData.orders]);
 
+  // Load existing dispatch notes & GRNs to prevent duplicate dispatch note creation
+  const { data: dnData } = useServiceData(
+    () => dispatchNoteService.list({ limit: 100 }),
+    { dispatchNotes: [] as any[], total: 0 },
+    [],
+    { cacheKey: 'vendor:dns', cacheTtlMs: 30000 }
+  );
+  const { data: grnData } = useServiceData(
+    () => grnService.list({ limit: 100 }),
+    { grns: [] as any[], total: 0 },
+    []
+  );
+
+  // Set of all PO IDs and PO Numbers that already have a dispatch note created
+  const dispatchedPoKeys = useMemo(() => {
+    const keys = new Set<string>();
+
+    const checkAndAdd = (poId?: string, poNum?: string, status?: string) => {
+      const s = String(status || '').toUpperCase();
+      if (s === 'CANCELLED') return;
+      if (poId) keys.add(String(poId).trim().toLowerCase());
+      if (poNum) keys.add(String(poNum).trim().toLowerCase());
+    };
+
+    const dns = Array.isArray(dnData) ? dnData : (dnData as any)?.dispatchNotes || [];
+    dns.forEach((dn: any) => {
+      checkAndAdd(dn.poId || dn.purchaseOrder?.id, dn.poNumber || dn.purchaseOrder?.poNumber, dn.status);
+    });
+
+    const grns = grnData?.grns || [];
+    grns.forEach((g: any) => {
+      checkAndAdd(g.poId || g.purchaseOrder?.id, g.poNumber || g.purchaseOrder?.poNumber, g.status);
+    });
+
+    return keys;
+  }, [dnData, grnData]);
+
+  const isPoAlreadyDispatched = useCallback((po: any): boolean => {
+    if (!po) return false;
+    const s = String(po.status || '').toUpperCase();
+    if (s === 'DISPATCHED' || s === 'IN_TRANSIT' || s === 'RECEIVED' || s === 'CLOSED') return true;
+    const poId = String(po.id || '').trim().toLowerCase();
+    const poNum = String(po.poNumber || '').trim().toLowerCase();
+    if (poId && dispatchedPoKeys.has(poId)) return true;
+    if (poNum && dispatchedPoKeys.has(poNum)) return true;
+    return false;
+  }, [dispatchedPoKeys]);
+
   // Form State
   const [selectedPoId, setSelectedPoId] = useState<string>(() => poIdParam || '');
   const [dispatchNoteNumber, setDispatchNoteNumber] = useState<string>(
@@ -99,7 +146,6 @@ export default function VendorCreateDispatchNotePage() {
   const [totalPackages, setTotalPackages] = useState<number | ''>(1);
   const [totalWeight, setTotalWeight] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-  const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
 
   // Line items state
   const [lineItems, setLineItems] = useState<LineItemState[]>([]);
@@ -124,6 +170,14 @@ export default function VendorCreateDispatchNotePage() {
   }, [selectedPoId, poList]);
 
   const isInvoiceOnly = selectedPO?.vendorFulfillmentAllowed === 'INVOICE_ONLY';
+
+  // Check if current selected PO is already dispatched
+  const isAlreadyDispatched = useMemo(() => {
+    if (!selectedPO && !selectedPoId) return false;
+    if (selectedPO) return isPoAlreadyDispatched(selectedPO);
+    const idLower = String(selectedPoId).trim().toLowerCase();
+    return dispatchedPoKeys.has(idLower);
+  }, [selectedPO, selectedPoId, isPoAlreadyDispatched, dispatchedPoKeys]);
 
   // Sync PO Param
   useEffect(() => {
@@ -209,18 +263,6 @@ export default function VendorCreateDispatchNotePage() {
   // Remove Item
   const handleRemoveItem = (id: string) => {
     setLineItems((prev) => (prev.length > 1 ? prev.filter((i) => i.id !== id) : prev));
-  };
-
-  // File Upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map((file, idx) => ({
-        id: `att_${Date.now()}_${idx}`,
-        name: file.name,
-        size: `${(file.size / 1024).toFixed(1)} KB`,
-      }));
-      setAttachments((prev) => [...prev, ...newFiles]);
-    }
   };
 
   // Email validator with strict checks before and after @
@@ -356,6 +398,10 @@ export default function VendorCreateDispatchNotePage() {
       setErrorMsg('This Purchase Order is configured for Direct Invoicing only. Dispatch note creation is not permitted for this order.');
       return false;
     }
+    if (isAlreadyDispatched) {
+      setErrorMsg(`A dispatch note has already been created for Purchase Order ${selectedPO?.poNumber || selectedPoId}. Duplicate dispatch notes are strictly not allowed.`);
+      return false;
+    }
     if (!dispatchNoteNumber.trim()) {
       setErrorMsg('Dispatch Note Number is required.');
       return false;
@@ -409,6 +455,10 @@ export default function VendorCreateDispatchNotePage() {
       setErrorMsg('This Purchase Order is configured for Direct Invoicing only. Dispatch note creation is not permitted for this order.');
       return;
     }
+    if (isAlreadyDispatched) {
+      setErrorMsg(`A dispatch note has already been created for Purchase Order ${selectedPO?.poNumber || selectedPoId}. Duplicate dispatch notes are strictly not allowed.`);
+      return;
+    }
     if (!validateForm()) return;
 
     if (isDraft) setSavingDraft(true);
@@ -445,7 +495,6 @@ export default function VendorCreateDispatchNotePage() {
         totalWeight: totalWeight || undefined,
         notes,
         items: itemsPayload,
-        attachments,
         isDraft,
       });
 
@@ -554,6 +603,30 @@ export default function VendorCreateDispatchNotePage() {
           </div>
         )}
 
+        {/* Duplicate Dispatch Warning Banner */}
+        {isAlreadyDispatched && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 shrink-0">
+                <Truck className="size-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Dispatch Note Already Created for this Purchase Order</p>
+                <p className="text-xs text-rose-700/90 dark:text-rose-300/80 mt-0.5">
+                  A dispatch note has already been recorded for <strong>{selectedPO?.poNumber || selectedPoId}</strong>. Duplicate dispatch notes for the same Purchase Order are not allowed.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-700 text-white shrink-0 gap-1.5"
+              onClick={() => navigate(getVendorPath('/vendor/invoices?tab=dispatches'))}
+            >
+              <Truck className="size-4" /> View Existing Dispatches
+            </Button>
+          </div>
+        )}
+
         {/* Section 01: Order & Dispatch Identification */}
         <Card className="p-6 border border-border/80 shadow-xs space-y-6">
           <div className="flex items-center gap-2 pb-3 border-b border-border/60">
@@ -574,11 +647,21 @@ export default function VendorCreateDispatchNotePage() {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium"
               >
                 <option value="">-- Select Purchase Order to Dispatch --</option>
-                {poList.map((po) => (
-                  <option key={po.id} value={po.id}>
-                    {po.poNumber} — {formatAmount(po.totalAmount, companyDefaultCurrency)} ({po.status}){po.vendorFulfillmentAllowed === 'INVOICE_ONLY' ? ' [Invoice Only]' : ''}
+                {poList.map((po) => {
+                  const alreadyDispatched = isPoAlreadyDispatched(po);
+                  return (
+                    <option key={po.id} value={po.id} disabled={alreadyDispatched}>
+                      {po.poNumber} — {formatAmount(po.totalAmount, companyDefaultCurrency)} ({po.status})
+                      {po.vendorFulfillmentAllowed === 'INVOICE_ONLY' ? ' [Invoice Only]' : ''}
+                      {alreadyDispatched ? ' [Dispatch Note Already Created]' : ''}
+                    </option>
+                  );
+                })}
+                {selectedPoId && !poList.some((po) => String(po.id) === String(selectedPoId)) && (
+                  <option value={selectedPoId} disabled={isAlreadyDispatched}>
+                    {selectedPO?.poNumber || selectedPoId}{isAlreadyDispatched ? ' [Dispatch Note Already Created]' : ''}
                   </option>
-                ))}
+                )}
               </select>
             </div>
 
@@ -986,7 +1069,7 @@ export default function VendorCreateDispatchNotePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2 p-6 border border-border/80 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-foreground uppercase tracking-wider pb-2 border-b border-border/60">
-              Delivery Remarks & Scanned Delivery Challan
+              Delivery Remarks & Special Instructions
             </h3>
 
             <div>
@@ -994,50 +1077,12 @@ export default function VendorCreateDispatchNotePage() {
                 Special Delivery / Handling Instructions
               </label>
               <Textarea
-                rows={3}
+                rows={4}
                 placeholder="Add any instructions for warehouse receiving dock, unloading notes, or temperature handling requirements..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="text-sm bg-background"
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Attachments (Scanned Challan / LR Copy)
-              </label>
-              <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-border/70 rounded-xl hover:border-primary/50 cursor-pointer bg-muted/20 transition-colors">
-                <Upload className="size-6 text-muted-foreground mb-1.5" />
-                <span className="text-xs font-semibold text-foreground">Click to upload document</span>
-                <span className="text-[11px] text-muted-foreground">PDF, PNG, JPG (up to 10MB)</span>
-                <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
-              </label>
-
-              {attachments.length > 0 && (
-                <div className="space-y-2 mt-3">
-                  {attachments.map((att) => (
-                    <div
-                      key={att.id}
-                      className="flex items-center justify-between p-2.5 bg-muted/40 border border-border/60 rounded-lg text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Paperclip className="size-4 text-primary" />
-                        <span className="font-semibold text-foreground">{att.name}</span>
-                        <span className="text-muted-foreground">({att.size})</span>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
-                        className="size-6 text-destructive"
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </Card>
 
@@ -1073,7 +1118,8 @@ export default function VendorCreateDispatchNotePage() {
               <Button
                 type="button"
                 onClick={() => handleSubmit(false)}
-                disabled={submitting || savingDraft || isInvoiceOnly}
+                disabled={submitting || savingDraft || isInvoiceOnly || isAlreadyDispatched}
+                title={isAlreadyDispatched ? 'A dispatch note has already been created for this Purchase Order' : undefined}
                 className="w-full py-2.5 gap-2 shadow-sm font-bold"
               >
                 <Send className="size-4" /> {submitting ? 'Submitting Challan…' : 'Submit Dispatch Note'}
@@ -1082,7 +1128,8 @@ export default function VendorCreateDispatchNotePage() {
                 type="button"
                 variant="outline"
                 onClick={() => handleSubmit(true)}
-                disabled={submitting || savingDraft || isInvoiceOnly}
+                disabled={submitting || savingDraft || isInvoiceOnly || isAlreadyDispatched}
+                title={isAlreadyDispatched ? 'A dispatch note has already been created for this Purchase Order' : undefined}
                 className="w-full py-2.5 gap-2 font-medium"
               >
                 <Save className="size-4" /> {savingDraft ? 'Saving Draft…' : 'Save Draft'}

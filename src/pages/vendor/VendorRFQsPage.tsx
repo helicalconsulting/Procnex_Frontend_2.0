@@ -76,6 +76,7 @@ interface VendorRFQ {
   department: string;
   rfqType?: 'RFQ' | 'TENDER' | 'CUSTOM';
   needsResubmit?: boolean;
+  hasSubmittedQuotation?: boolean;
   latestQuotationId?: string | null;
   customFields?: (Pick<RFQCustomField, 'id' | 'fieldName' | 'fieldType' | 'required'> & { weightage?: number })[];
   evaluationCategories?: EvalCategoryInfo[];
@@ -135,6 +136,7 @@ function mapVendorRfq(r: RFQ & {
     CLOSED: 'CLOSED',
     CANCELLED: 'CANCELLED',
     REJECTED: 'REJECTED',
+    EXPIRED: 'EXPIRED',
   };
   let status: RFQStatus = statusMap[r.status] || 'OPEN';
 
@@ -142,7 +144,10 @@ function mapVendorRfq(r: RFQ & {
     r.status === 'PO_CREATED' ||
     r.status === 'AWARDED' ||
     r.status === 'ACCEPTED' ||
+    r.status === 'CLOSED' ||
+    r.status === 'COMPLETED' ||
     Boolean(ext.selectedQuotationId) ||
+    Boolean((r as any).selectedQuotation) ||
     Boolean((r as any).isRfqAwarded);
 
   const isMyQuoteWon =
@@ -150,15 +155,23 @@ function mapVendorRfq(r: RFQ & {
     r.latestQuotationStatus === 'APPROVED' ||
     Boolean((r as any).isWinningVendor);
 
-  if (r.latestQuotationStatus === 'REJECTED' || r.status === 'REJECTED') {
+  const deadlineDate = ext.closingDate || (r as any).deadline;
+  const isDeadlinePassed = deadlineDate ? new Date(`${deadlineDate.slice(0, 10)}T23:59:59`).getTime() < Date.now() : false;
+  const hasSubmitted = Boolean(r.hasSubmittedQuotation || r.latestQuotationId);
+
+  if (r.status === 'EXPIRED') {
+    status = 'EXPIRED';
+  } else if (r.latestQuotationStatus === 'REJECTED' || r.status === 'REJECTED') {
     status = 'REJECTED';
   } else if (isMyQuoteWon) {
     // This vendor's OWN quotation was accepted
     status = 'ACCEPTED';
   } else if (hasWinner) {
     // RFQ was awarded to another vendor — this vendor never submitted or was not selected
-    status = r.hasSubmittedQuotation ? 'REJECTED' : 'EXPIRED';
-  } else if (r.hasSubmittedQuotation && !r.needsResubmit) {
+    status = hasSubmitted ? 'REJECTED' : 'EXPIRED';
+  } else if (!hasSubmitted && (isDeadlinePassed || r.status === 'CLOSED' || r.status === 'COMPLETED')) {
+    status = 'EXPIRED';
+  } else if (hasSubmitted && !r.needsResubmit) {
     status = 'SUBMITTED';
   }
   if (r.needsResubmit || r.latestQuotationStatus === 'RETURNED' || r.status === 'RETURNED') {
@@ -185,6 +198,7 @@ function mapVendorRfq(r: RFQ & {
     department: ext.department || '—',
     rfqType: r.rfqType || 'RFQ',
     needsResubmit: r.needsResubmit || false,
+    hasSubmittedQuotation: hasSubmitted,
     latestQuotationId: r.latestQuotationId || null,
     customFields: (r.customFields || []).map((cf: any) => {
       let parsed: any = {};
@@ -506,6 +520,7 @@ export default function VendorRFQsPage() {
 
   // Open quotation modal
   const openQuotModal = useCallback(async (rfq: VendorRFQ) => {
+    if (rfq.status === 'EXPIRED') return;
     const requestId = ++quoteRequest.current;
     let currentRfq = rfq;
     setQuoteLoading(true); setQuoteLoadError(null); setSubmitError(null);
@@ -753,7 +768,7 @@ export default function VendorRFQsPage() {
     }, 0);
   }, [quotModal, quotPrices, itemCurrencies, companyDefaultCurrency, currency, convert]);
 
-  const isQuotReadOnly = Boolean((['SUBMITTED', 'ACCEPTED', 'REJECTED', 'CLOSED', 'CANCELLED'].includes(quotModal?.status || '') || Boolean(quotModal?.latestQuotationId)) && !quotModal?.needsResubmit);
+  const isQuotReadOnly = Boolean((['SUBMITTED', 'ACCEPTED', 'REJECTED', 'CLOSED', 'CANCELLED', 'EXPIRED'].includes(quotModal?.status || '') || Boolean(quotModal?.latestQuotationId)) && !quotModal?.needsResubmit);
 
   const activePrevQuote = previousQuotationsList.find(q => q.snapshotKey === selectedPrevVersionId) || previousQuotation;
   const closeQuote = () => { if (submitting || isDeleting || showCustomPlanModal) return; quoteRequest.current += 1; setQuotModal(null); };
@@ -767,7 +782,7 @@ export default function VendorRFQsPage() {
 
   // Submit quotation (new or resubmit)
   const handleSubmitQuot = useCallback(async () => {
-    if (!quotModal || submitting || isQuotReadOnly || quoteLoading || quoteLoadError) return;
+    if (!quotModal || submitting || isQuotReadOnly || quoteLoading || quoteLoadError || quotModal.status === 'EXPIRED') return;
     setSubmitError(null);
     const leadDays = Number(quotLeadTime);
     if (!Number.isInteger(leadDays) || leadDays < 1) {
@@ -1052,10 +1067,16 @@ export default function VendorRFQsPage() {
                 <div className="rfq-register__dates"><span className="text-sm font-semibold">{quoteDate(rfq.deadline)}</span><span className={cn('text-xs', ['OPEN', 'RETURNED'].includes(rfq.status) ? `rfq-deadline--${deadline.cls}` : 'rfq-muted')}>{['OPEN', 'RETURNED'].includes(rfq.status) ? deadline.text : (rfq.status === 'EXPIRED' ? 'Bidding closed' : `Created ${quoteDate(rfq.createdAt)}`)}</span></div>
                 <div className="rfq-register__actions">
                   {rfq.status === 'OPEN' && <Button size="sm" onClick={() => openQuotModal(rfq)}><Send size={14} /> Submit Quote</Button>}
-                  {['SUBMITTED', 'ACCEPTED', 'REJECTED', 'CLOSED', 'CANCELLED'].includes(rfq.status) && (
+                  {rfq.status === 'RETURNED' && <Button size="sm" onClick={() => openQuotModal(rfq)}><RotateCcw size={14} /> Resubmit Quote</Button>}
+                  {rfq.status === 'EXPIRED' && (
+                    <Button variant="outline" size="sm" disabled className="opacity-60 cursor-not-allowed gap-1.5"><Clock size={14} /> Expired</Button>
+                  )}
+                  {(Boolean(rfq.latestQuotationId) || ['SUBMITTED', 'ACCEPTED', 'REJECTED'].includes(rfq.status)) && rfq.status !== 'RETURNED' && (
                     <Button variant="outline" size="sm" onClick={() => openQuotModal(rfq)}><Eye size={14} /> View Quote</Button>
                   )}
-                  {rfq.status === 'RETURNED' && <Button size="sm" onClick={() => openQuotModal(rfq)}><RotateCcw size={14} /> Resubmit Quote</Button>}
+                  {rfq.status === 'CANCELLED' && !rfq.latestQuotationId && (
+                    <Button variant="outline" size="sm" disabled className="opacity-60 cursor-not-allowed">Cancelled</Button>
+                  )}
                   <button className="rfq-details-link text-xs" aria-expanded={expanded} aria-controls={`rfq-details-${rfq.id}`} onClick={() => setExpandedRFQ(expanded ? null : rfq.id)}>{expanded ? 'Hide requirements' : 'View requirements'}<ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : undefined }} /></button>
                 </div>
               </div>
@@ -1157,6 +1178,11 @@ export default function VendorRFQsPage() {
                 <div className="vquot-modal__body">
                   <div className="rfq-quote-context"><strong className="text-base">{quotModal.title}</strong><span className="text-xs rfq-muted">{quotModal.buyerCompany} · Closes {quoteDate(quotModal.deadline)}</span></div>
                   {quoteLoading ? <FormSkeleton fields={4} /> : quoteLoadError ? <MessageStrip type="error">{quoteLoadError}</MessageStrip> : <>
+                  {quotModal.status === 'EXPIRED' && (
+                    <MessageStrip type="warning" compact style={{ marginBottom: 12 }}>
+                      Bidding has closed for this RFQ as a winner has already been selected or the deadline has expired.
+                    </MessageStrip>
+                  )}
                   {isQuotReadOnly && previousQuotation && <>
                     <div className={cn("rfq-quote-status", previousQuotation.status === 'REJECTED' && "rfq-quote-status--rejected")}>{previousQuotation.status === 'REJECTED' ? <X size={18} /> : <CheckCircle2 size={18} />}<div><strong className="vquot-modal__item-name">Quotation submitted · {previousQuotation.status || 'Submitted'}</strong><p className="text-xs">Submitted {quoteDate(previousQuotation.submittedAt)} · This quotation is read-only.</p></div></div>
                   </>}

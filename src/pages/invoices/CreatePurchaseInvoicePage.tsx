@@ -295,7 +295,8 @@ export default function CreatePurchaseInvoicePage() {
             const lower = r.toLowerCase();
             return lower === 'super admin' || lower === 'administrator' || lower.includes('admin');
           });
-          const canEditInvoice = (isReturned && (isOriginator || isAdmin)) || (statusKey === 'DRAFT' && (isOriginator || isAdmin));
+          const isDraft = statusKey === 'DRAFT' || statusKey === 'REGISTERED';
+          const canEditInvoice = (isDraft || isReturned) && (isOriginator || isAdmin || canCreateInvoice || !found.registeredById);
 
           openInvoiceEntry(found, canEditInvoice ? 'edit' : 'view');
           setIsCreating(true);
@@ -1689,7 +1690,7 @@ export default function CreatePurchaseInvoicePage() {
                           const lower = r.toLowerCase();
                           return lower === 'super admin' || lower === 'administrator' || lower.includes('admin');
                         });
-                        const canEditInvoice = isReturned && (isOriginator || isAdmin);
+                        const canEditInvoice = (isDraft || isReturned) && (isOriginator || isAdmin || canCreateInvoice || !inv.registeredById);
 
                         const tone =
                           isApproved
@@ -1728,7 +1729,7 @@ export default function CreatePurchaseInvoicePage() {
                             <td className="px-3 py-3.5">
                               <button
                                 className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline"
-                                onClick={() => openInvoiceEntry(inv, 'view')}
+                                onClick={() => openInvoiceEntry(inv, canEditInvoice ? 'edit' : 'view')}
                               >
                                 {inv.invoiceNumber}
                               </button>
@@ -2012,6 +2013,39 @@ export default function CreatePurchaseInvoicePage() {
                   >
                     <Eye size={15} /> Read-Only View
                   </span>
+                  {(() => {
+                    const currentInvoice = editingInvoiceId ? invoicesList.find((i) => String(i.id) === String(editingInvoiceId)) : null;
+                    const cStatus = String(currentInvoice?.status || 'DRAFT').toUpperCase();
+                    const cIsDraft = cStatus === 'DRAFT' || cStatus === 'REGISTERED';
+                    const cIsReturned = cStatus.includes('RETURN') || cStatus.includes('REVIEW') || cStatus === 'CHANGES_REQUESTED';
+                    const cIsAdmin = roles.some((r) => {
+                      const lower = r.toLowerCase();
+                      return lower === 'super admin' || lower === 'administrator' || lower.includes('admin');
+                    });
+                    const cIsOriginator = Boolean(
+                      user?.id && currentInvoice && (
+                        String(currentInvoice.registeredById) === String(user.id) ||
+                        String(currentInvoice.postedById) === String(user.id) ||
+                        String(currentInvoice.createdById) === String(user.id) ||
+                        String(currentInvoice.purchaseOrder?.rfq?.createdBy) === String(user.id)
+                      )
+                    );
+                    const canEditCurrent = (cIsDraft || cIsReturned) && (cIsAdmin || cIsOriginator || canCreateInvoice || !currentInvoice?.registeredById);
+
+                    if (canEditCurrent) {
+                      return (
+                        <button
+                          type="button"
+                          className="cpi-btn cpi-btn--outline"
+                          onClick={() => setIsReadOnly(false)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <Pencil size={15} /> Edit Invoice
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               ) : (
                 <div className="cpi-header-actions">

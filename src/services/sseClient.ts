@@ -87,13 +87,18 @@ class SSEClient {
    */
   private getStreamEndpoint(token: string): string | null {
     const payload = decodeTokenPayload(token);
-    const isVendor = payload?.type === 'vendor' || !!localStorage.getItem('heliflow_vendor_token');
+    const isVendor = payload?.type === 'vendor';
     const endpoint = isVendor ? '/vendors/stream' : '/dashboard/stream';
     return `${API_BASE}${endpoint}?token=${encodeURIComponent(token)}`;
   }
 
   connect(): void {
-    if (this.eventSource) return; // already connected
+    if (this.eventSource) {
+      if (this.eventSource.readyState === EventSource.OPEN || this.eventSource.readyState === EventSource.CONNECTING) {
+        return;
+      }
+      this.cleanup();
+    }
 
     const token =
       localStorage.getItem('heliflow_token') ||

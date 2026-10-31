@@ -7,7 +7,7 @@ import { invoiceService, type APInvoice as ServiceAPInvoice } from '../../servic
 import { localDataService } from '../../services/localDataService';
 import { approvalService } from '../../services/approvalService';
 import { sseClient } from '../../services/sseClient';
-import { apiRequest, invalidateApiCache } from '../../api/client';
+import { apiRequest, invalidateApiCache, clearAllApiCache } from '../../api/client';
 import type { ApprovalTableRow } from '../../types/viewModels';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
@@ -145,18 +145,30 @@ function StatusBadge({
   currentLevel,
   hasApprovedPriorLevel,
   isReturned,
+  canAct,
+  requiredRole,
 }: {
   status: APStatus;
   currentLevel?: number;
   hasApprovedPriorLevel?: boolean;
   isReturned?: boolean;
+  canAct?: boolean;
+  requiredRole?: string;
 }) {
   if (status === 'PENDING') {
+    if (canAct) {
+      return (
+        <Badge tone="warning">
+          <Clock className="size-3" />
+          Pending
+        </Badge>
+      );
+    }
     if (hasApprovedPriorLevel) {
       return (
-        <Badge tone="success">
+        <Badge tone="info" className="bg-sky-500/10 text-sky-600 border-sky-500/20 dark:text-sky-300">
           <CheckCircle2 className="size-3" />
-          Approved
+          L{Math.max(1, (currentLevel || 2) - 1)} Approved
         </Badge>
       );
     }
@@ -165,6 +177,14 @@ function StatusBadge({
         <Badge tone="warning">
           <RotateCcw className="size-3" />
           Returned (L{currentLevel || 1})
+        </Badge>
+      );
+    }
+    if (canAct === false) {
+      return (
+        <Badge tone="neutral" className="bg-muted text-muted-foreground border border-border/60">
+          <Clock className="size-3" />
+          Pending L{currentLevel || 1}
         </Badge>
       );
     }
@@ -185,28 +205,46 @@ function StatusBadge({
   );
 }
 
+const L1_ROLES = [
+  'purchaseclerk', 'purchase_clerk', 'procurementclerk', 'procurement_clerk',
+  'purchaseofficer', 'purchase_officer', 'procurementofficer', 'procurement_officer',
+  'buyer', 'l1user', 'l1_user', 'l1', 'approver1', 'approver_1', 'level1user', 'level1', 'level_1',
+  'poapprover1', 'po_approver_1', 'invoiceapprover1', 'purchaseinvoiceapprover1', 'paymentapprover1', 'paymentvoucherapprover1',
+  'analyst', 'analyst_user'
+];
+
+const L2_ROLES = [
+  'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement',
+  'financeapprover', 'finance_approver', 'financemanager', 'finance_manager', 'finance',
+  'accountspayable', 'accounts_payable', 'purchasehead', 'headofprocurement',
+  'l2user', 'l2_user', 'l2', 'approver2', 'approver_2', 'level2user', 'level2', 'level_2',
+  'poapprover2', 'invoiceapprover2', 'purchaseinvoiceapprover2', 'paymentapprover2', 'paymentvoucherapprover2',
+  'developer', 'developer_user', 'dev', 'softwareengineer'
+];
+
+const L3_ROLES = [
+  'generalmanager', 'general_manager', 'managingdirector', 'managing_director', 'director', 'executive',
+  'ceo', 'cfo', 'coo', 'vp', 'l3user', 'l3_user', 'l3', 'approver3', 'approver_3', 'level3user', 'level3',
+  'founder', 'co-founder', 'cofounder', 'owner'
+];
+
+const ADMIN_ROLES = [
+  'admin', 'administrator', 'superadmin', 'super_admin', 'systemadministrator', 'system_administrator'
+];
+
 const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean => {
   if (!requiredRole || !userRoles || userRoles.length === 0) return false;
   const stripPrefix = (str: string) =>
     str.replace(/^level\s*\d+(\s*of\s*\d+)?\s*:\s*/i, '').trim().toLowerCase().replace(/[\s_-]+/g, '');
   const reqClean = stripPrefix(requiredRole);
 
-  const aliases: Record<string, string[]> = {
-    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'procurement', 'buyer', 'analyst', 'purchaseclerk', 'purchase_clerk'],
-    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer', 'analyst'],
-    analyst: ['analyst', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'procurement', 'buyer', 'purchaseclerk'],
-    purchaseclerk: ['purchaseclerk', 'purchase_clerk', 'procurementclerk', 'procurement_clerk', 'buyer', 'analyst', 'purchasemanager', 'l1user'],
-    financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'developer'],
-    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'developer'],
-    developer: ['developer', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance'],
-    admin: ['admin', 'administrator', 'superadmin'],
-  };
-
   return userRoles.some((r) => {
     const usrClean = stripPrefix(r);
     if (reqClean === usrClean) return true;
-    if (aliases[reqClean] && aliases[reqClean].includes(usrClean)) return true;
-    if (aliases[usrClean] && aliases[usrClean].includes(reqClean)) return true;
+    if (L1_ROLES.includes(reqClean) && L1_ROLES.includes(usrClean)) return true;
+    if (L2_ROLES.includes(reqClean) && L2_ROLES.includes(usrClean)) return true;
+    if (L3_ROLES.includes(reqClean) && L3_ROLES.includes(usrClean)) return true;
+    if (ADMIN_ROLES.includes(reqClean) && ADMIN_ROLES.includes(usrClean)) return true;
     return false;
   });
 };
@@ -292,6 +330,17 @@ export default function AccountsPayablePage() {
         )
       );
       setDeleteConfirmInvoice(null);
+      clearAllApiCache();
+      window.dispatchEvent(
+        new CustomEvent('heliflow:invoice-deleted', {
+          detail: { id: deleteConfirmInvoice.id, invoiceNumber: deleteConfirmInvoice.invoiceNumber },
+        })
+      );
+      try {
+        const bc = new BroadcastChannel('heliflow_sync');
+        bc.postMessage({ type: 'INVOICE_DELETED', source: 'AccountsPayablePage', timestamp: Date.now() });
+        bc.close();
+      } catch {}
     } catch (err: any) {
       alert(err?.message || 'Failed to delete invoice');
     } finally {
@@ -442,21 +491,23 @@ export default function AccountsPayablePage() {
               )
           ) ||
           (currentLevel > 1 && (
-            isRoleMatching('Purchase Manager', authRoles) ||
             isRoleMatching('Purchase Clerk', authRoles) ||
             isRoleMatching('Analyst', authRoles) ||
-            isRoleMatching('L1 User', authRoles)
+            isRoleMatching('L1 User', authRoles) ||
+            isRoleMatching('Approver 1', authRoles)
           )) ||
           (currentLevel > 2 && (
-            isRoleMatching('Developer', authRoles) ||
+            isRoleMatching('Purchase Manager', authRoles) ||
+            isRoleMatching('Procurement Manager', authRoles) ||
             isRoleMatching('Finance Approver', authRoles) ||
             isRoleMatching('Finance Manager', authRoles) ||
-            isRoleMatching('L2 User', authRoles)
+            isRoleMatching('L2 User', authRoles) ||
+            isRoleMatching('Developer', authRoles)
           )) ||
           (currentLevel > 3 && (
-            isRoleMatching('Founder', authRoles) ||
             isRoleMatching('General Manager', authRoles) ||
-            isRoleMatching('L3 User', authRoles)
+            isRoleMatching('L3 User', authRoles) ||
+            isRoleMatching('Founder', authRoles)
           ));
 
         let status: APStatus;
@@ -561,7 +612,7 @@ export default function AccountsPayablePage() {
           const status = statusMap[inv.status] || (inv.status === 'DRAFT' ? 'DRAFT' : inv.status === 'APPROVED' ? 'APPROVED' : 'PENDING');
           const isActionable = status === 'PENDING' || status === 'RETURNED' || status === 'PENDING_APPROVAL';
           const isL1Role = isRoleMatching('Analyst', authRoles) || isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('L1 User', authRoles) || isRoleMatching('Approver 1', authRoles);
-          const effectiveCanAct = isActionable && (isL1Role || isRoleMatching('Purchase Manager', authRoles));
+          const effectiveCanAct = isActionable && isL1Role;
 
           const resolvedDept =
             inv.department ||
@@ -640,24 +691,75 @@ export default function AccountsPayablePage() {
   const debouncedRefresh = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
+      setOptimisticMap({});
+      optimisticMapRef.current = {};
+      clearAllApiCache();
       fetchInvoicesData({ silent: true });
-    }, 300);
+    }, 250);
   }, [fetchInvoicesData]);
 
   useEffect(() => {
+    // 1. Ensure SSE connection is active
+    sseClient.connect();
+
+    // 2. Fetch fresh invoice and approval data
     fetchInvoicesData();
 
-    const unsub1 = sseClient.on('approval_level_complete', debouncedRefresh);
-    const unsub2 = sseClient.on('approval_chain_complete', debouncedRefresh);
-    const unsub3 = sseClient.on('notification', debouncedRefresh);
-    window.addEventListener('heliflow:approval-updated', debouncedRefresh);
+    // 3. Listen to all SSE events related to invoices and approval chain
+    const unsubLevel = sseClient.on('approval_level_complete', debouncedRefresh);
+    const unsubChain = sseClient.on('approval_chain_complete', debouncedRefresh);
+    const unsubForwarded = sseClient.on('approval_auto_forwarded', debouncedRefresh);
+    const unsubReq = sseClient.on('approval_required', debouncedRefresh);
+    const unsubNotif = sseClient.on('notification', debouncedRefresh);
+    const unsubApprovalInit = sseClient.on('approval_initiated', debouncedRefresh);
+    const unsubApprovalUpdated = sseClient.on('approval_updated', debouncedRefresh);
+    const unsubPoStatus = sseClient.on('po_status_changed', debouncedRefresh);
+    const unsubPoUpdated = sseClient.on('po_updated', debouncedRefresh);
+    const unsubPoCreated = sseClient.on('po_created', debouncedRefresh);
+
+    // 4. In-page and cross-component custom window events
+    const handleApprovalUpdated = () => {
+      debouncedRefresh();
+    };
+
+    window.addEventListener('heliflow:approval-updated', handleApprovalUpdated);
+    window.addEventListener('heliflow:invoice-created', debouncedRefresh);
+    window.addEventListener('heliflow:invoice-deleted', debouncedRefresh);
+    window.addEventListener('heliflow:dispatch-note-created', debouncedRefresh);
+    window.addEventListener('heliflow:po-created', debouncedRefresh);
+    window.addEventListener('heliflow:po-updated', debouncedRefresh);
+
+    // 5. Cross-tab real-time sync via BroadcastChannel
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = (e) => {
+        if (e?.data?.source === 'AccountsPayablePage') return;
+        debouncedRefresh();
+      };
+    } catch {}
 
     return () => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-      unsub1();
-      unsub2();
-      unsub3();
-      window.removeEventListener('heliflow:approval-updated', debouncedRefresh);
+      unsubLevel();
+      unsubChain();
+      unsubForwarded();
+      unsubReq();
+      unsubNotif();
+      unsubApprovalInit();
+      unsubApprovalUpdated();
+      unsubPoStatus();
+      unsubPoUpdated();
+      unsubPoCreated();
+
+      window.removeEventListener('heliflow:approval-updated', handleApprovalUpdated);
+      window.removeEventListener('heliflow:invoice-created', debouncedRefresh);
+      window.removeEventListener('heliflow:invoice-deleted', debouncedRefresh);
+      window.removeEventListener('heliflow:dispatch-note-created', debouncedRefresh);
+      window.removeEventListener('heliflow:po-created', debouncedRefresh);
+      window.removeEventListener('heliflow:po-updated', debouncedRefresh);
+
+      if (bc) bc.close();
     };
   }, [fetchInvoicesData, debouncedRefresh]);
 
@@ -667,7 +769,7 @@ export default function AccountsPayablePage() {
       return {
         totalPayable: invoicesList.reduce((sum, invoice) => sum + normalize(invoice.amount) - normalize(invoice.paidAmount), 0),
         overdue: invoicesList.filter((invoice) => invoice.status === 'OVERDUE').length,
-        pending: invoicesList.filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'PENDING_APPROVAL' || invoice.status === 'RE_REVIEW' || (invoice.status === 'RETURNED' && invoice.canAct)).length,
+        pending: invoicesList.filter((invoice) => (invoice.status === 'PENDING' || invoice.status === 'PENDING_APPROVAL' || invoice.status === 'RE_REVIEW' || (invoice.status === 'RETURNED' && invoice.canAct)) && invoice.canAct).length,
         completed: invoicesList.filter((invoice) => ['PAID', 'APPROVED'].includes(invoice.status)).length,
       };
     },
@@ -688,9 +790,9 @@ export default function AccountsPayablePage() {
       const matchStatus = statusFilter === 'ALL'
         ? true
         : statusFilter === 'RETURNED'
-        ? (invoice.status === 'RETURNED' || invoice.isReturned)
+        ? ((invoice.status === 'RETURNED' || invoice.isReturned) && (invoice.canAct || isAdmin))
         : statusFilter === 'PENDING'
-        ? (invoice.status === 'PENDING' || invoice.status === 'PENDING_APPROVAL' || invoice.status === 'RE_REVIEW')
+        ? ((invoice.status === 'PENDING' || invoice.status === 'PENDING_APPROVAL' || invoice.status === 'RE_REVIEW') && (invoice.canAct || isAdmin))
         : invoice.status === statusFilter;
 
       return (
@@ -701,7 +803,7 @@ export default function AccountsPayablePage() {
           ))
       );
     });
-  }, [invoicesList, search, statusFilter]);
+  }, [invoicesList, search, statusFilter, isAdmin]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -864,8 +966,14 @@ export default function AccountsPayablePage() {
         invalidateApiCache('/approvals');
         invalidateApiCache('/invoices');
         invalidateApiCache('/payments');
+        clearAllApiCache();
         await new Promise((resolve) => setTimeout(resolve, 250));
-        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+        window.dispatchEvent(new CustomEvent('heliflow:approval-updated', { detail: { source: 'AccountsPayablePage' } }));
+        try {
+          const bc = new BroadcastChannel('heliflow_sync');
+          bc.postMessage({ type: 'APPROVAL_UPDATED', source: 'AccountsPayablePage', timestamp: Date.now() });
+          bc.close();
+        } catch {}
         debouncedRefresh();
       } catch (err: any) {
         console.error('Action failed in background:', err);
@@ -1003,8 +1111,14 @@ export default function AccountsPayablePage() {
           invalidateApiCache('/approvals');
           invalidateApiCache('/invoices');
           invalidateApiCache('/payments');
+          clearAllApiCache();
           await new Promise((resolve) => setTimeout(resolve, 250));
-          window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+          window.dispatchEvent(new CustomEvent('heliflow:approval-updated', { detail: { source: 'AccountsPayablePage' } }));
+          try {
+            const bc = new BroadcastChannel('heliflow_sync');
+            bc.postMessage({ type: 'APPROVAL_UPDATED', source: 'AccountsPayablePage', timestamp: Date.now() });
+            bc.close();
+          } catch {}
           debouncedRefresh();
         } catch (err) {
           console.error('Background approval sync error:', err);
@@ -1338,6 +1452,8 @@ export default function AccountsPayablePage() {
                                 currentLevel={invoice.currentLevel}
                                 hasApprovedPriorLevel={invoice.hasApprovedPriorLevel}
                                 isReturned={invoice.isReturned}
+                                canAct={invoice.canAct}
+                                requiredRole={invoice.requiredRole}
                               />
                             </td>
                           );
@@ -1457,6 +1573,8 @@ export default function AccountsPayablePage() {
                     currentLevel={invoice.currentLevel}
                     hasApprovedPriorLevel={invoice.hasApprovedPriorLevel}
                     isReturned={invoice.isReturned}
+                    canAct={invoice.canAct}
+                    requiredRole={invoice.requiredRole}
                   />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
@@ -1736,6 +1854,8 @@ export default function AccountsPayablePage() {
                   currentLevel={detailInvoice.currentLevel}
                   hasApprovedPriorLevel={detailInvoice.hasApprovedPriorLevel}
                   isReturned={detailInvoice.isReturned}
+                  canAct={detailInvoice.canAct}
+                  requiredRole={detailInvoice.requiredRole}
                 />
               </div>
               <DialogDescription className="text-sm font-medium text-muted-foreground">

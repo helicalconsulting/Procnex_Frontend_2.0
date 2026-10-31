@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Package, Plus, Receipt, Search, Truck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, Download, FileText, Package, Plus, Receipt, Search, Truck } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
 import { MessageStrip } from '@/components/shared/MessageStrip';
@@ -12,6 +12,9 @@ import { PageLead } from '@/components/ui/product';
 import type { VendorOrderMock } from '@/mocks/vendorPortal.mock';
 import { downloadPurchaseOrderAsPdf } from '@/utils/pdfDownload';
 import { getVendorPath } from '@/utils/tenantResolver';
+import { useServiceData } from '@/hooks/useServiceData';
+import { vendorPortalService } from '@/services/vendorPortalService';
+import { dispatchNoteService } from '@/services/dispatchNoteService';
 import { orderState } from './orderPresentation';
 import { quoteDate } from './quotationFormatting';
 
@@ -31,6 +34,47 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
   const [itemSearch, setItemSearch] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+
+  // Load existing dispatch notes and invoices for duplication checks
+  const { data: dnData } = useServiceData(
+    () => dispatchNoteService.list({ limit: 100 }),
+    { dispatchNotes: [] as any[], total: 0 },
+    [],
+    { cacheKey: 'vendor:dns', cacheTtlMs: 30000 }
+  );
+  const { data: invoices } = useServiceData(
+    () => vendorPortalService.listInvoices(),
+    [],
+    [],
+    { cacheKey: 'vendor:invoices' }
+  );
+
+  const poIdStr = String(order.id || '').toLowerCase().trim();
+  const poNumStr = String(order.poNumber || '').toLowerCase().trim();
+
+  const isOrderDispatched = useMemo(() => {
+    const s = String(order.status || '').toUpperCase();
+    if (s === 'DISPATCHED' || s === 'IN_TRANSIT' || s === 'RECEIVED') return true;
+    const dns = Array.isArray(dnData) ? dnData : (dnData as any)?.dispatchNotes || [];
+    return dns.some((dn: any) => {
+      if (dn.status === 'CANCELLED') return false;
+      const dnPoId = String(dn.poId || dn.purchaseOrder?.id || '').toLowerCase().trim();
+      const dnPoNum = String(dn.poNumber || dn.purchaseOrder?.poNumber || '').toLowerCase().trim();
+      return (poIdStr && dnPoId === poIdStr) || (poNumStr && dnPoNum === poNumStr) || (poNumStr && dnPoId === poNumStr);
+    });
+  }, [order.status, dnData, poIdStr, poNumStr]);
+
+  const isOrderInvoiced = useMemo(() => {
+    const s = String(order.status || '').toUpperCase();
+    if (s === 'INVOICED' || s === 'CLOSED') return true;
+    return (invoices || []).some((inv: any) => {
+      if (inv.status === 'REJECTED' || inv.status === 'CANCELLED') return false;
+      const invPoId = String(inv.poId || inv.purchaseOrder?.id || '').toLowerCase().trim();
+      const invPoNum = String(inv.poNumber || inv.purchaseOrder?.poNumber || '').toLowerCase().trim();
+      return (poIdStr && invPoId === poIdStr) || (poNumStr && invPoNum === poNumStr) || (poNumStr && invPoId === poNumStr);
+    });
+  }, [order.status, invoices, poIdStr, poNumStr]);
+
   const state = orderState(order.status);
   const sourceCurrency = order.currency || companyDefaultCurrency;
   const amount = (value: number) => formatAmount(convert(value, sourceCurrency, currency), currency);
@@ -61,19 +105,39 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
         <RecordStatusBadge kind="order" status={order.status} />
         <Button size="sm" variant="outline" onClick={download} disabled={downloading}><Download className="size-3.5" />{downloading ? 'Downloading…' : 'Download PO'}</Button>
         {!state.cancelled && order.vendorFulfillmentAllowed !== 'INVOICE_ONLY' && (
-          <Link
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            to={getVendorPath(`/vendor/create-dispatch-note?poId=${encodeURIComponent(order.id || order.poNumber)}`)}
-          >
-            <Truck className="size-3.5" />Create Dispatch Note
-          </Link>
+          isOrderDispatched ? (
+            <Link
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              to={getVendorPath('/vendor/invoices?tab=dispatches')}
+              title="Dispatch Note already created for this order"
+            >
+              <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />Dispatched
+            </Link>
+          ) : (
+            <Link
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              to={getVendorPath(`/vendor/create-dispatch-note?poId=${encodeURIComponent(order.id || order.poNumber)}`)}
+            >
+              <Truck className="size-3.5" />Create Dispatch Note
+            </Link>
+          )
         )}
         {!state.cancelled && order.vendorFulfillmentAllowed !== 'DISPATCH_ONLY' && (
-          <Link className={buttonVariants({ size: 'sm' })} to={getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(order.id || order.poNumber)}`)}>
-            <Plus className="size-3.5" />Create Invoice
-          </Link>
+          isOrderInvoiced ? (
+            <Link
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              to={getVendorPath('/vendor/invoices')}
+              title="Invoice already submitted for this order"
+            >
+              <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />Invoiced
+            </Link>
+          ) : (
+            <Link className={buttonVariants({ size: 'sm' })} to={getVendorPath(`/vendor/create-invoice?poId=${encodeURIComponent(order.id || order.poNumber)}`)}>
+              <Plus className="size-3.5" />Create Invoice
+            </Link>
+          )
         )}
-        {(state.received || state.value === 'INVOICED') && <Link className={buttonVariants({ variant: 'outline', size: 'sm' })} to={getVendorPath('/vendor/invoices')}><Receipt className="size-3.5" />View Invoices</Link>}
+        {(state.received || state.value === 'INVOICED' || isOrderInvoiced) && <Link className={buttonVariants({ variant: 'outline', size: 'sm' })} to={getVendorPath('/vendor/invoices')}><Receipt className="size-3.5" />View Invoices</Link>}
       </>} />
     {downloadError && <MessageStrip type="error" onClose={() => setDownloadError('')}>{downloadError}</MessageStrip>}
 

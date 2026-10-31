@@ -3,6 +3,7 @@ import { companySettingsService } from './companySettingsService';
 import { USE_MOCK } from '../config/mock';
 import { ALL_MOCK_USERS, MOCK_TOKEN } from '../config/mockData';
 import { apiRequest, API_BASE, authHeaders, ApiError, clearAllApiCache } from '../api/client';
+import { sseClient } from './sseClient';
 import type { AuthResponse, LoginPayload, UserModulePermission } from '../types';
 import { PERMISSION_MODULE_NAMES } from '../config/modulePermissions';
 
@@ -402,6 +403,9 @@ export const authService = {
     // Clear local session instantly so the UI redirects immediately
     const token = getToken();
     clearSession();
+
+    // Disconnect SSE stream on logout
+    sseClient.disconnect();
 
     // Clear in-memory API response cache to prevent stale data showing
     // when the next user logs in from the same browser tab.

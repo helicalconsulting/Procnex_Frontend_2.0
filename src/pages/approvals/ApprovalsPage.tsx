@@ -6,6 +6,7 @@ import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { approvalService } from '../../services/approvalService';
 import { sseClient } from '../../services/sseClient';
+import { clearAllApiCache } from '../../api/client';
 import type { ApprovalTableRow } from '../../types/viewModels';
 import {
   CheckSquare,
@@ -283,11 +284,15 @@ export default function ApprovalsPage() {
   );
 
   useEffect(() => {
+    sseClient.connect();
+
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const refreshAll = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
-        reload();
+        setOptimisticMap({});
+        clearAllApiCache();
+        forceRefresh();
       }, 300);
     };
 
@@ -355,7 +360,7 @@ export default function ApprovalsPage() {
       window.removeEventListener('heliflow:po-updated', refreshAll);
       if (bc) bc.close();
     };
-  }, [reload]);
+  }, [forceRefresh]);
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
 
@@ -477,22 +482,25 @@ export default function ApprovalsPage() {
   const filtered = useMemo(() => {
     if (statusFilter === 'ALL' || statusFilter === 'All') return moduleFiltered;
     if (statusFilter === 'RETURNED') {
-      return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'RETURNED');
+      return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'RETURNED' && (a.canAct || isAdmin));
     }
     if (statusFilter === 'REJECTED') {
       return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED');
     }
+    if (statusFilter === 'PENDING') {
+      return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'PENDING' && (a.canAct || isAdmin));
+    }
     return moduleFiltered.filter((a) => getEffectiveStatus(a) === statusFilter);
-  }, [moduleFiltered, statusFilter, getEffectiveStatus]);
+  }, [moduleFiltered, statusFilter, getEffectiveStatus, isAdmin]);
 
   const summary = useMemo(() => {
     return {
       total: moduleFiltered.length,
-      pending: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'PENDING').length,
+      pending: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'PENDING' && (a.canAct || isAdmin)).length,
       approved: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'APPROVED').length,
       rejected: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED').length,
     };
-  }, [moduleFiltered, getEffectiveStatus]);
+  }, [moduleFiltered, getEffectiveStatus, isAdmin]);
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);

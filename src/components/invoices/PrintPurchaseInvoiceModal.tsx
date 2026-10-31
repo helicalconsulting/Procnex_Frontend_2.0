@@ -121,6 +121,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
   const data = dataProp || invoiceProp;
   if (!data) return null;
   const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const activeCurrency = (data as any).currency || companyDefaultCurrency;
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
   // ── Instant Zero-Delay Approvers & Signatures State ─────────────────────────
@@ -609,12 +610,15 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
     computedSubtotal = computedSubtotal / 1000;
   }
 
-  // If subtotal is inflated (e.g. 200,000 or 10,000,000 when invoice total is 11,800, or subtotal >= totalInvoiceAmount)
-  if (totalInvoiceAmount > 0 && (computedSubtotal >= totalInvoiceAmount || (computedSubtotal > 0 && Math.abs(totalInvoiceAmount - (computedSubtotal * (1 + taxRate / 100))) > 50))) {
+  const hasExplicitTax = (data as any).taxAmount !== undefined && Number((data as any).taxAmount) > 0;
+  const isExactSum = Math.abs(totalInvoiceAmount - computedSubtotal) < 1;
+
+  // If subtotal is inflated (e.g. 200,000 or 10,000,000 when invoice total is 11,800, or subtotal > totalInvoiceAmount)
+  if (totalInvoiceAmount > 0 && !isExactSum && (computedSubtotal > totalInvoiceAmount || (computedSubtotal > 0 && Math.abs(totalInvoiceAmount - (computedSubtotal * (1 + taxRate / 100))) > 50))) {
     computedSubtotal = Math.round(totalInvoiceAmount / (1 + taxRate / 100)); // 11800 / 1.18 = 10000
   }
   if (!computedSubtotal && totalInvoiceAmount > 0) {
-    computedSubtotal = Math.round(totalInvoiceAmount / (1 + taxRate / 100));
+    computedSubtotal = hasExplicitTax || taxRate > 0 ? Math.round(totalInvoiceAmount / (1 + taxRate / 100)) : totalInvoiceAmount;
   }
   if (!totalInvoiceAmount && computedSubtotal > 0) {
     totalInvoiceAmount = Number((computedSubtotal * (1 + taxRate / 100)).toFixed(2));
@@ -622,15 +626,17 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
 
   let computedTax = (data as any).taxAmount !== undefined && Number((data as any).taxAmount) < totalInvoiceAmount
     ? Number((data as any).taxAmount)
-    : Number((totalInvoiceAmount - computedSubtotal).toFixed(2));
+    : isExactSum
+      ? 0
+      : Number((totalInvoiceAmount - computedSubtotal).toFixed(2));
 
   // Guard against absurd tax percentages like 5800%
-  if (computedTax <= 0 || (computedSubtotal > 0 && (computedTax / computedSubtotal) > 0.5)) {
+  if (!isExactSum && (computedTax < 0 || (computedSubtotal > 0 && (computedTax / computedSubtotal) > 0.5))) {
     computedTax = Number(((computedSubtotal * taxRate) / 100).toFixed(2));
     totalInvoiceAmount = Number((computedSubtotal + computedTax).toFixed(2));
   }
 
-  const taxPercentage = computedSubtotal > 0 && computedTax > 0 ? Math.round((computedTax / computedSubtotal) * 100) : taxRate;
+  const taxPercentage = computedSubtotal > 0 && computedTax > 0 ? Math.round((computedTax / computedSubtotal) * 100) : (isExactSum ? 0 : taxRate);
 
   // Reconcile line items so item totals match computedSubtotal cleanly
   const finalDisplayItems = rawDisplayItems.map((item) => {
@@ -780,7 +786,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                 docType="INVOICE"
                 docNumber={data.invoiceNumber}
                 amount={data.amount || 0}
-                currency={companyDefaultCurrency || 'INR'}
+                currency={activeCurrency || 'INR'}
                 vendorName={data.vendorName}
                 companyCode={profile?.companyCode || (data as any).companyCode}
                 companyName={displayCompanyName}
@@ -844,10 +850,10 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                         {qty} {item.unit && item.unit !== 'Unit' && item.unit !== 'Units' ? <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>{item.unit}</span> : ''}
                       </td>
                       <td style={{ textAlign: 'right', fontSize: '13px', color: '#334155' }}>
-                        {formatAmount(unitRate, companyDefaultCurrency)}
+                        {formatAmount(unitRate, activeCurrency)}
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>
-                        {formatAmount(lineTotal, companyDefaultCurrency)}
+                        {formatAmount(lineTotal, activeCurrency)}
                       </td>
                     </tr>
                   );
@@ -860,17 +866,17 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
           <div className="ppi-sheet__total-box">
             <div className="ppi-sheet__total-row">
               <span>Subtotal:</span>
-              <span>{formatAmount(computedSubtotal, companyDefaultCurrency)}</span>
+              <span>{formatAmount(computedSubtotal, activeCurrency)}</span>
             </div>
             <div className="ppi-sheet__total-row">
               <span>Tax / VAT{taxPercentage > 0 ? ` (${taxPercentage}%):` : ':'}</span>
               <span style={{ color: computedTax > 0 ? '#0f172a' : '#64748b' }}>
-                {computedTax > 0 ? `+ ${formatAmount(computedTax, companyDefaultCurrency)}` : formatAmount(0, companyDefaultCurrency)}
+                {computedTax > 0 ? `+ ${formatAmount(computedTax, activeCurrency)}` : formatAmount(0, activeCurrency)}
               </span>
             </div>
             <div className="ppi-sheet__total-row ppi-sheet__total-row--grand">
               <span>Total Invoice Amount:</span>
-              <span>{formatAmount(totalInvoiceAmount, companyDefaultCurrency)}</span>
+              <span>{formatAmount(totalInvoiceAmount, activeCurrency)}</span>
             </div>
           </div>
 

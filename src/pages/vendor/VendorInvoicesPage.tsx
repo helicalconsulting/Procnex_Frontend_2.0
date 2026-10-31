@@ -17,6 +17,7 @@ import { dispatchNoteService, type DispatchNote } from '../../services/dispatchN
 import { getVendorPath } from '../../utils/tenantResolver';
 import { TableSkeleton } from '@/components/shared/Skeleton';
 import { PrintDispatchNoteModal } from '../../components/dispatch-notes/PrintDispatchNoteModal';
+import { PrintPurchaseInvoiceModal } from '../../components/invoices/PrintPurchaseInvoiceModal';
 import { extractCleanInvoiceNumber } from './VendorPaymentsPage';
 
 export default function VendorInvoicesPage() {
@@ -29,6 +30,7 @@ export default function VendorInvoicesPage() {
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
   const [selectedDispatchForPrint, setSelectedDispatchForPrint] = useState<DispatchNote | null>(null);
+  const [selectedInvoiceForPrint, setSelectedInvoiceForPrint] = useState<any | null>(null);
   const { data: invoices, loading: invLoading, error: invError, forceRefresh: forceRefreshInvoices } = useServiceData(
     () => vendorPortalService.listInvoices(),
     [] as VendorInvoiceMock[],
@@ -351,7 +353,7 @@ export default function VendorInvoicesPage() {
               <DataTableViewport label="Vendor invoices" showHint={false}>
                 <LandingTable key="vendor-invoices" preferenceKey="vendor-invoices" columns={VENDOR_INVOICES_COLUMNS} className="w-full min-w-[980px] text-left text-sm">
                   <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    <tr>{['Invoice', 'PO reference', 'Description', 'Amount', 'GST', 'Total', 'Submitted', 'Due date', 'Status'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
+                    <tr>{['Invoice', 'PO reference', 'Description', 'Amount', 'GST', 'Total', 'Submitted', 'Due date', 'Status', 'Actions'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
                     {paginatedInvoices.map((invoice) => (
@@ -365,6 +367,18 @@ export default function VendorInvoicesPage() {
                         <td className="px-4 py-3.5 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(invoice.submittedDate)}</span></td>
                         <td className="px-4 py-3.5 text-xs text-muted-foreground"><div>{formatDate(invoice.dueDate)}</div>{invoice.paymentDate && <div className="mt-1 font-semibold text-emerald-600">Paid {formatDate(invoice.paymentDate)}</div>}</td>
                         <td className="px-4 py-3.5"><RecordStatusBadge kind="invoice" status={invoice.status} /></td>
+                        <td className="px-4 py-3.5 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedInvoiceForPrint(invoice)}
+                            className="h-8 gap-1.5 px-3 text-xs font-semibold rounded-lg bg-emerald-50/80 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border-emerald-200/90 hover:border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/70 dark:hover:bg-emerald-900/50 shadow-xs whitespace-nowrap"
+                            title="Print Official Tax Invoice Document"
+                          >
+                            <Printer className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span>Print</span>
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -383,6 +397,17 @@ export default function VendorInvoicesPage() {
                     <div><dt className="text-muted-foreground">Submitted</dt><dd className="mt-1 font-medium">{formatDate(invoice.submittedDate)}</dd></div>
                     <div><dt className="text-muted-foreground">Due</dt><dd className="mt-1 font-medium">{formatDate(invoice.dueDate)}</dd></div>
                   </dl>
+                  <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedInvoiceForPrint(invoice)}
+                      className="h-8 gap-1.5 px-3.5 text-xs font-semibold rounded-lg bg-emerald-50/80 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border-emerald-200/90 hover:border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/70 dark:hover:bg-emerald-900/50 shadow-xs"
+                    >
+                      <Printer className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Print Invoice</span>
+                    </Button>
+                  </div>
                 </Card>
               ))}
             </div>
@@ -554,6 +579,24 @@ export default function VendorInvoicesPage() {
           onClose={() => setSelectedDispatchForPrint(null)}
         />
       )}
+
+      {selectedInvoiceForPrint && (
+        <PrintPurchaseInvoiceModal
+          data={{
+            ...selectedInvoiceForPrint,
+            invoiceNumber: selectedInvoiceForPrint.invoiceNumber,
+            poNumber: selectedInvoiceForPrint.poNumber,
+            amount: Number(selectedInvoiceForPrint.totalAmount || selectedInvoiceForPrint.amount || 0),
+            invoiceDate: selectedInvoiceForPrint.submittedDate || selectedInvoiceForPrint.invoiceDate,
+            dueDate: selectedInvoiceForPrint.dueDate,
+            vendorName: selectedInvoiceForPrint.vendorName || (selectedInvoiceForPrint as any).supplier || 'Vendor / Supplier',
+            status: selectedInvoiceForPrint.status || 'SUBMITTED',
+            paymentTerms: selectedInvoiceForPrint.paymentTerms || 'Net 30',
+            currency: (selectedInvoiceForPrint as any).currency || displayCurrency,
+          }}
+          onClose={() => setSelectedInvoiceForPrint(null)}
+        />
+      )}
     </PageFrame>
   );
 }
@@ -568,6 +611,7 @@ const VENDOR_INVOICES_COLUMNS: LandingColumn[] = [
   { key: 'submitted', label: 'Submitted', defaultVisible: true },
   { key: 'due', label: 'Due date', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true },
 ];
 
 const VENDOR_DISPATCH_COLUMNS: LandingColumn[] = [

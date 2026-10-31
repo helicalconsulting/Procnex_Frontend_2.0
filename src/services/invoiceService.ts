@@ -43,7 +43,7 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
     query.set('limit', String(params?.limit || 100));
 
     const url = `/invoices?${query.toString()}`;
-    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url, { cacheTtlMs: 30000 });
+    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url, { cacheTtlMs: 0 });
     if (!data.invoices || data.invoices.length === 0) {
       return [];
     }

@@ -275,6 +275,22 @@ function getCustomPaymentsKey(): string {
   }
 }
 
+function cleanRemarks(text?: string): string {
+  if (!text) return '';
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const bankLines = lines.filter((l) => l.startsWith('Bank:'));
+  const otherLines = lines.filter((l) => !l.startsWith('Bank:'));
+  const result: string[] = [];
+  if (bankLines.length > 0) {
+    bankLines.sort((a, b) => b.length - a.length);
+    result.push(bankLines[0]);
+  }
+  for (const line of otherLines) {
+    if (!result.includes(line)) result.push(line);
+  }
+  return result.join('\n');
+}
+
 export const localDataService = {
   getPayments: async (): Promise<Payment[]> => {
     try {
@@ -296,7 +312,7 @@ export const localDataService = {
             status: p.status || 'PENDING',
             paidAt: String(p.paidAt || p.scheduledAt || p.createdAt || '').slice(0, 10),
             approvedBy: p.approvedBy || 'Pending Approval (Payments Workflow)',
-            remarks: p.remarks || p.comments || '',
+            remarks: cleanRemarks(p.remarks || p.comments || ''),
             bankName: p.bankName,
             accountNumber: p.accountNumber,
             ifscCode: p.ifscCode,

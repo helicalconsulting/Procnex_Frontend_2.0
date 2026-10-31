@@ -7,7 +7,9 @@
 import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import defaultHeliflowLogo from '../assets/heliflow.png';
+import QRCode from 'qrcode';
 import { signatureService } from '../services/signatureService';
+import { approvalService } from '../services/approvalService';
 
 import { cleanDuplicateSignatures } from './cleanSignatures';
 
@@ -478,8 +480,202 @@ export async function downloadPurchaseOrderAsPdf(
   const otherCharges = order.otherCharges || 0;
   const grandTotal = order.grandTotal || order.totalAmount || 0;
 
-  const docSigs = await signatureService.getDocumentSignatures('PurchaseOrders', order.poNumber || String(order.id)).catch(() => []);
-  const isApproved = (order.status || '').toUpperCase().includes('APPROVED');
+  const rawStatus = (order.status || order.approvalStatus || '').toUpperCase().trim();
+  const isApproved =
+    rawStatus.includes('APPROVED') ||
+    ['SENT_TO_VENDOR', 'ACKNOWLEDGED', 'CONFIRMED', 'PROCESSING', 'IN_PROGRESS', 'DISPATCHED', 'SHIPPED', 'DELIVERED', 'RECEIVED', 'GRN_RECEIVED', 'INVOICED', 'CLOSED', 'FULFILLED'].includes(rawStatus) ||
+    order.approvalStatus === 'APPROVED' ||
+    Boolean(order.approvedAt);
+
+  const poNum = (order.poNumber || (order.id ? `PO-${order.id}` : 'PO-DRAFT')).trim();
+  const targetRef = order.poNumber || String(order.id);
+
+  // 1. Fetch approval chain, document signatures, and saved signatures in parallel
+  const [chainRes, rawDocSigs, savedSigs] = await Promise.all([
+    approvalService.getChain('PurchaseOrders', targetRef).catch(() => null),
+    signatureService.getDocumentSignatures('PurchaseOrders', targetRef).catch(() => []),
+    signatureService.list().catch(() => []),
+  ]);
+
+  let docSigs = Array.isArray(rawDocSigs) ? rawDocSigs : [];
+  if (docSigs.length === 0 && order.id && order.poNumber) {
+    docSigs = await signatureService.getDocumentSignatures('PurchaseOrders', String(order.id)).catch(() => []);
+  }
+
+  // Populate localStorage with user signatures if retrieved
+  if (Array.isArray(savedSigs) && savedSigs.length > 0) {
+    for (const s of savedSigs) {
+      const n = (s.name || s.signedByName || (s as any).user?.name || (s as any).user?.fullName || '').toLowerCase();
+      const url = s.dataUrl || (s as any).url || (s as any).signatureData;
+      if (url) {
+        if (n.includes('mahi') || (s as any).userId === '6a7d5a46bab343663a43aaad') {
+          try { localStorage.setItem('heliflow_sig_mahi', url); } catch {}
+        }
+        if (n.includes('nischal') || (s as any).userId === '6a4a8823de28b3ac89d1a4cb') {
+          try { localStorage.setItem('heliflow_sig_nischal', url); } catch {}
+        }
+      }
+    }
+  }
+
+  const normalizedDocSigs = docSigs.map((s: any, idx: number) => ({
+    levelNumber: s.levelNumber || idx + 1,
+    signedByName: s.signedByName || s.signedBy?.fullName || (typeof s.signedBy === 'string' ? s.signedBy : undefined) || s.signature?.name,
+    dataUrl: s.dataUrl || s.signature?.dataUrl || s.url,
+    signedAt: s.signedAt || s.createdAt,
+    signedById: s.signedById || s.userId,
+  }));
+
+  let explicitApprovers: any[] = Array.isArray(order.approvers) && order.approvers.length > 0 ? order.approvers : [];
+  if (explicitApprovers.length === 0 && typeof window !== 'undefined') {
+    try {
+      const keys = [
+        targetRef ? `approvers_${targetRef}` : null,
+        order.id ? `approvers_${order.id}` : null,
+      ].filter(Boolean) as string[];
+      for (const k of keys) {
+        const raw = sessionStorage.getItem(k) || localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            explicitApprovers = parsed;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const localSigMahi = typeof localStorage !== 'undefined' ? localStorage.getItem('heliflow_sig_mahi') : null;
+  const localSigNischal = typeof localStorage !== 'undefined' ? localStorage.getItem('heliflow_sig_nischal') : null;
+
+  const chainLevels: any[] = chainRes?.levels && chainRes.levels.length > 0
+    ? chainRes.levels
+    : (chainRes?.history && chainRes.history.length > 0 ? chainRes.history : explicitApprovers);
+
+  let stamps: Array<{
+    level: string;
+    role: string;
+    name: string;
+    date: string;
+    isApproved: boolean;
+    signatureUrl?: string;
+  }> = [];
+
+  if (chainLevels && chainLevels.length > 0) {
+    const usedSigUrls = new Set<string>();
+    stamps = chainLevels.map((lvl: any, idx: number) => {
+      const lvlNum = lvl.levelNumber || idx + 1;
+      const statusUpper = (lvl.status || '').toUpperCase().trim();
+      const isLevelApproved = isApproved || statusUpper === 'APPROVED' || statusUpper === 'AUTO_FORWARDED';
+
+      let sigUrl = lvl.signatureUrl || lvl.dataUrl;
+      let signerName = lvl.signedByName || lvl.approverName || lvl.name;
+
+      if (!sigUrl && isLevelApproved) {
+        if (lvlNum === 1 || (signerName || '').toLowerCase().includes('mahi')) {
+          sigUrl = normalizedDocSigs.find((d: any) => (d.signedByName || '').toLowerCase().includes('mahi'))?.dataUrl ||
+                   normalizedDocSigs[0]?.dataUrl ||
+                   localSigMahi;
+          if (!signerName) signerName = 'Mahi Agarwal';
+        } else if (lvlNum === 2 || (signerName || '').toLowerCase().includes('nischal')) {
+          sigUrl = normalizedDocSigs.find((d: any) => (d.signedByName || '').toLowerCase().includes('nischal'))?.dataUrl ||
+                   normalizedDocSigs[1]?.dataUrl ||
+                   localSigNischal ||
+                   (!usedSigUrls.has(normalizedDocSigs[0]?.dataUrl) ? normalizedDocSigs[0]?.dataUrl : undefined);
+          if (!signerName) signerName = 'Nischal Agarwal';
+        }
+      }
+      if (sigUrl) usedSigUrls.add(sigUrl);
+
+      const rawRole = lvl.role || lvl.requiredRole || (lvlNum === 1 ? 'Purchase Clerk' : 'Purchase Manager');
+      const formattedRole = rawRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+      const dateStr = (isLevelApproved && (lvl.actionDate || lvl.actionAt || lvl.signedAt || lvl.date))
+        ? formatDate(lvl.actionDate || lvl.actionAt || lvl.signedAt || lvl.date)
+        : formatDate(order.createdAt || order.orderDate);
+
+      return {
+        level: `LEVEL ${lvlNum}`,
+        role: formattedRole,
+        name: signerName || (lvlNum === 1 ? 'Mahi Agarwal' : 'Nischal Agarwal'),
+        date: dateStr,
+        isApproved: isLevelApproved,
+        signatureUrl: isLevelApproved ? sigUrl : undefined,
+      };
+    });
+  } else {
+    // Default 2-level hierarchy
+    const sigMahi =
+      explicitApprovers[0]?.signatureUrl ||
+      explicitApprovers[0]?.dataUrl ||
+      normalizedDocSigs.find((d: any) => (d.signedByName || '').toLowerCase().includes('mahi'))?.dataUrl ||
+      normalizedDocSigs[0]?.dataUrl ||
+      localSigMahi;
+
+    const sigNischal =
+      explicitApprovers[1]?.signatureUrl ||
+      explicitApprovers[1]?.dataUrl ||
+      normalizedDocSigs.find((d: any) => (d.signedByName || '').toLowerCase().includes('nischal'))?.dataUrl ||
+      normalizedDocSigs[1]?.dataUrl ||
+      localSigNischal;
+
+    stamps = [
+      {
+        level: 'LEVEL 1',
+        role: 'Purchase Clerk',
+        name: explicitApprovers[0]?.signedByName || explicitApprovers[0]?.approverName || normalizedDocSigs[0]?.signedByName || 'Mahi Agarwal',
+        date: formatDate(explicitApprovers[0]?.date || normalizedDocSigs[0]?.signedAt || order.createdAt || order.orderDate),
+        isApproved: isApproved || Boolean(sigMahi),
+        signatureUrl: (isApproved || Boolean(sigMahi)) ? sigMahi : undefined,
+      },
+      {
+        level: 'LEVEL 2',
+        role: 'Purchase Manager',
+        name: explicitApprovers[1]?.signedByName || explicitApprovers[1]?.approverName || normalizedDocSigs[1]?.signedByName || 'Nischal Agarwal',
+        date: formatDate(explicitApprovers[1]?.date || normalizedDocSigs[1]?.signedAt || order.createdAt || order.orderDate),
+        isApproved: isApproved || Boolean(sigNischal),
+        signatureUrl: (isApproved || Boolean(sigNischal)) ? (sigNischal || sigMahi) : undefined,
+      },
+    ];
+  }
+
+  // 2. Generate Document QR Code (Scan to Verify)
+  const fallbackCode = (() => {
+    const raw = `PO|${poNum}|${grandTotal}|${displayCurrency}`;
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      hash = (hash << 5) - hash + raw.charCodeAt(i);
+      hash |= 0;
+    }
+    const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+    return `VER-${hex.substring(0, 4)}-${hex.substring(4, 8)}`;
+  })();
+
+  const origin =
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('heliflow_verify_host') : null) ||
+    (import.meta as any).env?.VITE_PUBLIC_APP_URL ||
+    (import.meta as any).env?.VITE_APP_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : 'https://app.procnex.com');
+
+  const cleanOrigin = origin.replace(/\/+$/, '');
+  const cleanDocNum = encodeURIComponent(poNum);
+  const cleanAmt = encodeURIComponent(String(grandTotal || 0));
+  const cleanCur = encodeURIComponent(String(displayCurrency || 'INR'));
+  const cleanCN = encodeURIComponent(String(companyName || '').trim());
+  const verifyUrl = `${cleanOrigin}/verify?type=PO&doc=${cleanDocNum}&amt=${cleanAmt}&cur=${cleanCur}&fb=${fallbackCode}&cn=${cleanCN}`;
+
+  let qrDataUrl = '';
+  try {
+    qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+      width: 300,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0a2342', light: '#ffffff' },
+    });
+  } catch (e) {
+    console.warn('Failed to generate PO PDF QR code', e);
+  }
 
   // ── Smart Multi-Page Chunking ──
   // Page 1 holds up to 6 items comfortably along with full Company Header, Vendor/ShipTo, and PO Info Grid.
@@ -585,7 +781,7 @@ export async function downloadPurchaseOrderAsPdf(
             ${isFirst ? `
               <!-- Header -->
               <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-                <div style="display: flex; gap: 14px; align-items: flex-start;">
+                <div style="display: flex; gap: 14px; align-items: flex-start; max-width: 52%;">
                   <img src="${companyLogoUrl}" alt="${companyName}" style="width: 50px; height: 50px; object-fit: contain; border-radius: 6px; flex-shrink: 0;" />
                   <div>
                     <h1 style="font-size: 18px; font-weight: 700; color: #0a2342; margin: 0 0 3px 0; border: none; padding: 0;">${companyName}</h1>
@@ -594,17 +790,27 @@ export async function downloadPurchaseOrderAsPdf(
                     <p style="font-size: 11px; color: #475569; margin: 1px 0;">${companyWebsite}</p>
                   </div>
                 </div>
-                <div style="text-align: right; flex-shrink: 0;">
-                  <div style="margin-bottom: 6px;">
-                    <span style="display: block; font-size: 19px; font-weight: 800; color: #0a2342; letter-spacing: 2px; margin-bottom: 1px;">PURCHASE ORDER</span>
-                    <span style="display: block; font-size: 13.5px; font-weight: 600; color: #059669; letter-spacing: 0.5px;">${order.poNumber}</span>
+                <div style="display: flex; gap: 14px; align-items: flex-start; justify-content: flex-end; flex-shrink: 0;">
+                  <div style="text-align: right;">
+                    <div style="margin-bottom: 6px;">
+                      <span style="display: block; font-size: 19px; font-weight: 800; color: #0a2342; letter-spacing: 2px; margin-bottom: 1px;">PURCHASE ORDER</span>
+                      <span style="display: block; font-size: 13.5px; font-weight: 600; color: #059669; letter-spacing: 0.5px;">${order.poNumber}</span>
+                    </div>
+                    <table style="border-collapse: collapse; margin-left: auto;">
+                      <tbody>
+                        <tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Date</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${formatDate(order.orderDate)}</td></tr>
+                        <tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Number</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${order.poNumber}</td></tr>
+                        ${order.rfqNumber && order.rfqNumber !== 'RFQ-N/A' ? `<tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">RFQ Ref</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${order.rfqNumber}</td></tr>` : ''}
+                      </tbody>
+                    </table>
                   </div>
-                  <table style="border-collapse: collapse; margin-left: auto;">
-                    <tbody>
-                      <tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Date</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${formatDate(order.orderDate)}</td></tr>
-                      <tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Number</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${order.poNumber}</td></tr>
-                    </tbody>
-                  </table>
+                  ${qrDataUrl ? `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); flex-shrink: 0;">
+                      <img src="${qrDataUrl}" alt="QR Verification" style="width: 82px; height: 82px; display: block;" />
+                      <span style="font-size: 7.5px; font-weight: 800; color: #0284c7; letter-spacing: 0.5px; margin-top: 3px; text-transform: uppercase;">SCAN TO VERIFY</span>
+                      <span style="font-size: 7px; font-family: monospace; color: #64748b; font-weight: 600;">${fallbackCode}</span>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
 
@@ -698,25 +904,8 @@ export async function downloadPurchaseOrderAsPdf(
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; color: #0369a1; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">
                   APPROVAL HIERARCHY & AUTHORIZATION STAMPS
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                  ${[
-                    {
-                      level: 'LEVEL 1',
-                      role: 'Purchase Clerk',
-                      name: (docSigs && docSigs[0]?.signedByName) || 'Mahi Agarwal',
-                      date: (docSigs && docSigs[0]?.signedAt) ? formatDate(docSigs[0].signedAt) : formatDate(order.createdAt || order.poDate),
-                      isApproved: isApproved || Boolean(docSigs && docSigs[0]?.dataUrl),
-                      signatureUrl: docSigs && docSigs[0]?.dataUrl,
-                    },
-                    {
-                      level: 'LEVEL 2',
-                      role: 'Purchase Manager',
-                      name: (docSigs && docSigs[1]?.signedByName) || 'Nischal Agarwal',
-                      date: (docSigs && docSigs[1]?.signedAt) ? formatDate(docSigs[1].signedAt) : formatDate(order.createdAt || order.poDate),
-                      isApproved: isApproved && (Boolean(docSigs && docSigs[1]?.dataUrl) || (order.status === 'APPROVED')),
-                      signatureUrl: docSigs && (docSigs[1]?.dataUrl || docSigs[0]?.dataUrl),
-                    }
-                  ].map(stamp => `
+                <div style="display: grid; grid-template-columns: repeat(${Math.min(stamps.length, 3)}, 1fr); gap: 12px;">
+                  ${stamps.map(stamp => `
                     <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; font-family: sans-serif;">
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <span style="font-size: 9.5px; font-weight: 800; color: #1e293b; background: #e2e8f0; padding: 2px 5px; border-radius: 3px;">${stamp.level}</span>
@@ -733,7 +922,7 @@ export async function downloadPurchaseOrderAsPdf(
                           ` : `
                             <svg viewBox="0 0 170 32" style="width: 140px; height: 32px;">
                               <path d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10" fill="none" stroke="#1e3a8a" stroke-width="2.5" stroke-linecap="round" />
-                              <text x="15" y="24" font-family="cursive, sans-serif" font-size="16" fill="#1e3a8a" font-style="italic">${stamp.name}</text>
+                              <text x="15" y="24" font-family="'Dancing Script', 'Brush Script MT', cursive, sans-serif" font-size="16" fill="#1e3a8a" font-style="italic">${stamp.name}</text>
                             </svg>
                           `
                         ) + `

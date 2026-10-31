@@ -79,7 +79,11 @@ export default function AppLayout() {
       sseClient.on('approval_required', (d) => dispatchTargetedEvent('approval', d)),
       sseClient.on('approval_level_complete', (d) => dispatchTargetedEvent('approval', d)),
       sseClient.on('approval_chain_complete', (d) => dispatchTargetedEvent('approval', d)),
+      sseClient.on('approval_updated', (d) => dispatchTargetedEvent('approval', d)),
+      sseClient.on('approval_initiated', (d) => dispatchTargetedEvent('approval', d)),
+      sseClient.on('approval_auto_forwarded', (d) => dispatchTargetedEvent('approval', d)),
       sseClient.on('po_created', (d) => dispatchTargetedEvent('po', d)),
+      sseClient.on('po_updated', (d) => dispatchTargetedEvent('po', d)),
       sseClient.on('po_status_changed', (d) => dispatchTargetedEvent('po', d)),
       sseClient.on('quotation_received', (d) => dispatchTargetedEvent('quotation', d)),
       sseClient.on('quotation_status_changed', (d) => dispatchTargetedEvent('quotation', d)),
@@ -90,7 +94,6 @@ export default function AppLayout() {
     return () => {
       if (invalidateTimer) clearTimeout(invalidateTimer);
       unsubs.forEach((unsub) => unsub());
-      sseClient.disconnect();
     };
   }, [queryClient]);
 

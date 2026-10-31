@@ -15,8 +15,13 @@ import {
   X,
   Save,
   Printer,
-  Truck
+  Truck,
+  Receipt
 } from 'lucide-react';
+import { invoiceService, type APInvoice } from '../../services/invoiceService';
+import { vendorPortalService } from '../../services/vendorPortalService';
+import type { VendorInvoiceMock } from '../../mocks/vendorPortal.mock';
+import { getVendorPath } from '../../utils/tenantResolver';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
@@ -65,6 +70,63 @@ export default function VendorCreateInvoicePage() {
     []
   );
   const poList = useMemo(() => poData.orders || [], [poData.orders]);
+
+  // Load existing vendor invoices to prevent duplicate invoice submission
+  const { data: vendorInvoices } = useServiceData(
+    () => vendorPortalService.listInvoices(),
+    [] as VendorInvoiceMock[],
+    [],
+    { cacheKey: 'vendor:invoices' }
+  );
+  const { data: allInvoices } = useServiceData(
+    () => invoiceService.list({ limit: 100 }),
+    [] as APInvoice[],
+    []
+  );
+
+  // Set of all PO IDs and PO Numbers that already have an invoice generated
+  const invoicedPoKeys = useMemo(() => {
+    const keys = new Set<string>();
+
+    const checkAndAdd = (poId?: string, poNum?: string, status?: string) => {
+      const s = String(status || '').toUpperCase();
+      if (s === 'REJECTED' || s === 'CANCELLED') return;
+      if (poId) keys.add(String(poId).trim().toLowerCase());
+      if (poNum) keys.add(String(poNum).trim().toLowerCase());
+    };
+
+    (vendorInvoices || []).forEach((inv: any) => {
+      checkAndAdd(inv.poId || inv.purchaseOrder?.id, inv.poNumber || inv.purchaseOrder?.poNumber, inv.status);
+    });
+
+    (allInvoices || []).forEach((inv: any) => {
+      checkAndAdd(inv.poId || inv.purchaseOrder?.id, inv.poNumber || inv.purchaseOrder?.poNumber, inv.status);
+    });
+
+    // Also check localStorage for local/optimistic invoice saves
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i) || '';
+        if (k.startsWith('vendor_invoice_items_') || k.startsWith('invoice_items_')) {
+          const rawKey = k.replace(/^(?:vendor_)?invoice_items_/, '');
+          if (rawKey) keys.add(rawKey.trim().toLowerCase());
+        }
+      }
+    } catch {}
+
+    return keys;
+  }, [vendorInvoices, allInvoices]);
+
+  const isPoAlreadyInvoiced = useCallback((po: any): boolean => {
+    if (!po) return false;
+    const s = String(po.status || '').toUpperCase();
+    if (s === 'INVOICED' || s === 'CLOSED') return true;
+    const poId = String(po.id || '').trim().toLowerCase();
+    const poNum = String(po.poNumber || '').trim().toLowerCase();
+    if (poId && invoicedPoKeys.has(poId)) return true;
+    if (poNum && invoicedPoKeys.has(poNum)) return true;
+    return false;
+  }, [invoicedPoKeys]);
 
   // Form State - initialize state directly from URL query parameters if present
   const [selectedPoId, setSelectedPoId] = useState<string>(() => poIdParam || '');
@@ -121,6 +183,14 @@ export default function VendorCreateInvoicePage() {
   }, [poList, selectedPoId]);
 
   const isDispatchOnly = selectedPO?.vendorFulfillmentAllowed === 'DISPATCH_ONLY';
+
+  // Check if current selected PO is already invoiced
+  const isAlreadyInvoiced = useMemo(() => {
+    if (!selectedPO && !selectedPoId) return false;
+    if (selectedPO) return isPoAlreadyInvoiced(selectedPO);
+    const idLower = String(selectedPoId).trim().toLowerCase();
+    return invoicedPoKeys.has(idLower);
+  }, [selectedPO, selectedPoId, isPoAlreadyInvoiced, invoicedPoKeys]);
 
   const finalLogoUrl = selectedPO?.companyLogoUrl || logoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
   const finalCompanyName = buyerName || selectedPO?.companyName || profile?.companyName || companyName || 'Company';
@@ -448,6 +518,10 @@ export default function VendorCreateInvoicePage() {
       setErrorMsg('Please select a Purchase Order.');
       return false;
     }
+    if (isAlreadyInvoiced) {
+      setErrorMsg(`An invoice has already been created for Purchase Order ${displayPoNumber}. Duplicate invoicing is strictly not allowed.`);
+      return false;
+    }
     if (isDispatchOnly) {
       setErrorMsg('This Purchase Order is configured for Dispatch Note Only. Direct invoicing is restricted. Please create a Dispatch Note instead.');
       return false;
@@ -457,6 +531,10 @@ export default function VendorCreateInvoicePage() {
 
   // Submit Invoice to Buyer
   const handleSubmitInvoice = async (isDraft: boolean) => {
+    if (isAlreadyInvoiced) {
+      setErrorMsg(`An invoice has already been created for Purchase Order ${displayPoNumber}. Duplicate invoicing is strictly not allowed.`);
+      return;
+    }
     if (!validateForm()) return;
 
     if (isDraft) setSavingDraft(true);
@@ -608,7 +686,8 @@ export default function VendorCreateInvoicePage() {
             variant="outline"
             size="sm"
             onClick={() => handleSubmitInvoice(true)}
-            disabled={savingDraft || submitting || isDispatchOnly}
+            disabled={savingDraft || submitting || isDispatchOnly || isAlreadyInvoiced}
+            title={isAlreadyInvoiced ? 'An invoice has already been created for this Purchase Order' : undefined}
             className="gap-1.5"
           >
             <Save className="size-4" /> {savingDraft ? 'Saving…' : 'Save Draft'}
@@ -616,7 +695,8 @@ export default function VendorCreateInvoicePage() {
           <Button
             size="sm"
             onClick={() => handleSubmitInvoice(false)}
-            disabled={savingDraft || submitting || isDispatchOnly}
+            disabled={savingDraft || submitting || isDispatchOnly || isAlreadyInvoiced}
+            title={isAlreadyInvoiced ? 'An invoice has already been created for this Purchase Order' : undefined}
             className="gap-1.5 shadow-xs"
           >
             <Send className="size-4" /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
@@ -626,6 +706,30 @@ export default function VendorCreateInvoicePage() {
 
       {/* Form Body */}
       <div className="space-y-6">
+        {/* Duplicate Invoicing Warning Banner */}
+        {isAlreadyInvoiced && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 shrink-0">
+                <Receipt className="size-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Invoice Already Created for this Purchase Order</p>
+                <p className="text-xs text-rose-700/90 dark:text-rose-300/80 mt-0.5">
+                  An invoice has already been created for <strong>{displayPoNumber}</strong>. Duplicate invoicing for the same Purchase Order is not allowed.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-700 text-white shrink-0 gap-1.5"
+              onClick={() => navigate(getVendorPath('/vendor/invoices'))}
+            >
+              <Receipt className="size-4" /> View Existing Invoices
+            </Button>
+          </div>
+        )}
+
         {/* Dispatch Only Warning Banner */}
         {isDispatchOnly && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200">
@@ -684,14 +788,19 @@ export default function VendorCreateInvoicePage() {
                 disabled={poLoading}
               >
                 <option value="">-- Select Purchase Order --</option>
-                {poList.map((po) => (
-                  <option key={po.id} value={po.id}>
-                    {po.poNumber} — ({formatAmount(po.totalAmount, currency)}){po.vendorFulfillmentAllowed === 'DISPATCH_ONLY' ? ' [Dispatch Only]' : ''}
-                  </option>
-                ))}
+                {poList.map((po) => {
+                  const alreadyInvoiced = isPoAlreadyInvoiced(po);
+                  return (
+                    <option key={po.id} value={po.id} disabled={alreadyInvoiced}>
+                      {po.poNumber} — ({formatAmount(po.totalAmount, currency)})
+                      {po.vendorFulfillmentAllowed === 'DISPATCH_ONLY' ? ' [Dispatch Only]' : ''}
+                      {alreadyInvoiced ? ' [Already Invoiced - Duplication Not Allowed]' : ''}
+                    </option>
+                  );
+                })}
                 {selectedPoId && !poList.some((po) => String(po.id) === String(selectedPoId)) && (
-                  <option value={selectedPoId}>
-                    {displayPoNumber}
+                  <option value={selectedPoId} disabled={isAlreadyInvoiced}>
+                    {displayPoNumber}{isAlreadyInvoiced ? ' [Already Invoiced - Duplication Not Allowed]' : ''}
                   </option>
                 )}
               </Select>

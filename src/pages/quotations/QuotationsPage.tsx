@@ -2042,12 +2042,13 @@ function canActionQuotation(s: MockQuotation | null | undefined, user: any, role
   const reqClean = stripPrefix(activeRole).toLowerCase().replace(/[\s_-]+/g, '');
 
   const aliases: Record<string, string[]> = {
-    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer'],
-    approver1: ['approver1', 'level1user', 'level1', 'l1user', 'l1_user', 'l1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer'],
-    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'procurement'],
+    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchaseclerk', 'buyer', 'analyst'],
+    approver1: ['approver1', 'level1user', 'level1', 'l1user', 'l1_user', 'l1', 'purchaseclerk', 'buyer', 'analyst'],
+    purchaseclerk: ['purchaseclerk', 'purchase_clerk', 'procurementclerk', 'procurement_clerk', 'buyer', 'analyst', 'l1user', 'approver1'],
+    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'procurement'],
     financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2'],
-    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'financeapprover', 'financemanager', 'purchaseclerk'],
-    approver2: ['approver2', 'level2user', 'level2', 'l2user', 'l2_user', 'l2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'financeapprover', 'purchaseclerk'],
+    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'financeapprover', 'financemanager'],
+    approver2: ['approver2', 'level2user', 'level2', 'l2user', 'l2_user', 'l2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'financeapprover'],
     generalmanager: ['generalmanager', 'general_manager', 'managingdirector', 'managing_director', 'director', 'executive', 'l3user', 'l3_user', 'l3', 'approver3', 'level3user', 'level3'],
     l3user: ['l3user', 'l3_user', 'l3', 'approver3', 'level3user', 'level3', 'generalmanager', 'general_manager', 'managingdirector', 'director', 'executive'],
     approver3: ['approver3', 'level3user', 'level3', 'l3user', 'l3_user', 'l3', 'generalmanager', 'general_manager', 'managingdirector', 'director'],

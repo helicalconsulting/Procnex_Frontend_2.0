@@ -408,10 +408,6 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
   const l2ApproverName = !isGenericName(l2RawName) ? l2RawName : 'Mahi Agarwal';
   const sigL2 = getSigForLevel(2, l2ApproverName) || sigMahi || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined);
 
-  const l3RawName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal';
-  const l3ApproverName = !isGenericName(l3RawName) ? l3RawName : 'Nischal Agarwal';
-  const sigL3 = getSigForLevel(3, l3ApproverName) || sigNischal || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : undefined);
-
   return [
     {
       level: 'Level 1',
@@ -430,15 +426,6 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
       status: 'APPROVED' as const,
       comments: 'Approved & Digitally Signed',
       signatureUrl: sigL2,
-    },
-    {
-      level: 'Level 3',
-      name: l3ApproverName,
-      role: 'General Manager',
-      date: data.voucherDate || new Date().toISOString().slice(0, 10),
-      status: 'APPROVED' as const,
-      comments: 'Approved & Digitally Signed',
-      signatureUrl: sigL3,
     },
   ];
 }
@@ -671,7 +658,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           : (data.poNumbers && data.poNumbers[0]);
         const poRef = poRefMatch && poRefMatch !== '—' ? poRefMatch : undefined;
 
-        const [resPay, resInv, resPO, docSigsP, docSigsInv, docSigsAP, docSigsPO, docSigsAP_P, savedSigs] = await Promise.all([
+        const [resPay, resInv, resPO, docSigsP, docSigsInv, docSigsAP, docSigsPO, docSigsAP_P, savedSigs, adminLevels] = await Promise.all([
           pNo ? approvalService.getChain('Payments', pNo).catch(() => null) : Promise.resolve(null),
           firstInv ? approvalService.getChain('AccountsPayable', firstInv).catch(() => null) : Promise.resolve(null),
           poRef ? approvalService.getChain('PurchaseOrders', poRef).catch(() => null) : Promise.resolve(null),
@@ -681,6 +668,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           poRef ? signatureService.getDocumentSignatures('PurchaseOrders', poRef).catch(() => []) : Promise.resolve([]),
           pNo ? signatureService.getDocumentSignatures('AccountsPayable', pNo).catch(() => []) : Promise.resolve([]),
           signatureService.list().catch(() => []),
+          approvalService.getLevels().catch(() => []),
         ]);
         if (!isMounted) return;
 
@@ -791,7 +779,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             const levelNum = Number(item.levelNumber) || idx + 1;
             const roleName = item.requiredRole
               ? item.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-              : (levelNum === 1 ? 'Purchase Manager' : (levelNum === 2 ? 'Purchase Clerk' : 'General Manager'));
+              : (levelNum === 1 ? 'Purchase Manager' : 'Purchase Clerk');
             const isApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
 
             let name = !isGenericName(item.approverName) ? item.approverName : undefined;
@@ -799,17 +787,15 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               name = item.signedByName;
             }
             if (!name) {
-              if (levelNum === 1) name = (data as any).approvedBy && !isGenericName((data as any).approvedBy) ? (data as any).approvedBy : 'Kanika Agarwal';
+              if (levelNum === 1) name = (data as any).approvedBy && !isGenericName((data as any).approvedBy) ? (data as any).approvedBy : 'Nischal Agarwal';
               else if (levelNum === 2) name = 'Mahi Agarwal';
-              else if (levelNum === 3) name = 'Nischal Agarwal';
               else name = roleName;
             }
 
             let sigUrl = isApproved ? getSigForLevel(levelNum, name, item.approverId) : undefined;
             if (isApproved && !sigUrl) {
-              if (levelNum === 1) sigUrl = cachedSigKanika || (uniqueDocSigs[0]?.dataUrl);
-              else if (levelNum === 2) sigUrl = cachedSigMahi || (uniqueDocSigs[1]?.dataUrl);
-              else if (levelNum === 3) sigUrl = cachedSigNischal || (uniqueDocSigs[2]?.dataUrl);
+              const matchedSig = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === levelNum);
+              sigUrl = matchedSig?.dataUrl;
             }
             if (sigUrl) usedSigUrls.add(sigUrl);
 
@@ -823,69 +809,70 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               signatureUrl: sigUrl,
             };
           });
-
-          const isVoucherApproved = ['PAID', 'POSTED', 'APPROVED', 'COMPLETED'].includes(String(data.status || '').toUpperCase());
-
-          // Ensure Level 3 is included if only 2 levels were in the chain
-          if (finalApprovers.length === 2) {
-            const sigL3 = isVoucherApproved ? (getSigForLevel(3, 'Nischal Agarwal') || cachedSigNischal || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : undefined)) : undefined;
-            finalApprovers.push({
-              level: 'Level 3',
-              name: uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal',
-              role: 'General Manager',
-              date: data.voucherDate || new Date().toISOString().slice(0, 10),
-              status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
-              signatureUrl: sigL3,
-            });
-          }
         } else {
-          // Standard 3-level fallback
+          // Resolve from configured approval levels in admin
+          const configuredLevels = (adminLevels || [])
+            .filter((l: any) => l.module === 'Payments' || l.module === 'AccountsPayable')
+            .sort((a: any, b: any) => (a.levelNumber || 1) - (b.levelNumber || 1));
+
           const isVoucherApproved = ['PAID', 'POSTED', 'APPROVED', 'COMPLETED'].includes(String(data.status || '').toUpperCase());
 
-          const l1RawName = (data as any).approvedBy && (data as any).approvedBy !== '—' && !isGenericName((data as any).approvedBy)
-            ? (data as any).approvedBy
-            : (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.signedByName || 'Kanika Agarwal');
-          const l1ApproverName = !isGenericName(l1RawName) ? l1RawName : 'Kanika Agarwal';
-          const sigL1 = isVoucherApproved ? (getSigForLevel(1, l1ApproverName) || cachedSigKanika || (uniqueDocSigs.length > 0 ? uniqueDocSigs[0]?.dataUrl : defaultSigUrl)) : undefined;
+          if (configuredLevels.length > 0) {
+            const seenLevels = new Set<number>();
+            const uniqueLevels = configuredLevels.filter((l: any) => {
+              if (seenLevels.has(l.levelNumber)) return false;
+              seenLevels.add(l.levelNumber);
+              return true;
+            });
 
-          const l2RawName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.signedByName || 'Mahi Agarwal';
-          const l2ApproverName = !isGenericName(l2RawName) ? l2RawName : 'Mahi Agarwal';
-          const sigL2 = isVoucherApproved ? (getSigForLevel(2, l2ApproverName) || cachedSigMahi || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined)) : undefined;
+            finalApprovers = uniqueLevels.map((lvl: any, idx: number) => {
+              const levelNum = Number(lvl.levelNumber) || idx + 1;
+              const roleName = lvl.requiredRole
+                ? lvl.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                : (levelNum === 1 ? 'Purchase Manager' : 'Purchase Clerk');
+              const docSig = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === levelNum);
+              const name = docSig?.signedByName || roleName;
+              const sigUrl = isVoucherApproved ? (docSig?.dataUrl || getSigForLevel(levelNum, name)) : undefined;
 
-          const l3RawName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 3)?.signedByName || 'Nischal Agarwal';
-          const l3ApproverName = !isGenericName(l3RawName) ? l3RawName : 'Nischal Agarwal';
-          const sigL3 = isVoucherApproved ? (getSigForLevel(3, l3ApproverName) || cachedSigNischal || (uniqueDocSigs.length > 2 ? uniqueDocSigs[2]?.dataUrl : undefined)) : undefined;
+              return {
+                level: `Level ${levelNum}`,
+                name,
+                role: roleName,
+                date: data.voucherDate || new Date().toISOString().slice(0, 10),
+                status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
+                comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
+                signatureUrl: sigUrl,
+              };
+            });
+          } else {
+            // Standard configured 2-level fallback
+            const l1ApproverName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.signedByName || 'Purchase Manager';
+            const sigL1 = isVoucherApproved ? (getSigForLevel(1, l1ApproverName) || cachedSigKanika || (uniqueDocSigs.length > 0 ? uniqueDocSigs[0]?.dataUrl : defaultSigUrl)) : undefined;
 
-          finalApprovers = [
-            {
-              level: 'Level 1',
-              name: l1ApproverName,
-              role: 'Purchase Manager',
-              date: data.voucherDate || new Date().toISOString().slice(0, 10),
-              status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
-              signatureUrl: sigL1,
-            },
-            {
-              level: 'Level 2',
-              name: l2ApproverName,
-              role: 'Purchase Clerk',
-              date: data.voucherDate || new Date().toISOString().slice(0, 10),
-              status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
-              signatureUrl: sigL2,
-            },
-            {
-              level: 'Level 3',
-              name: l3ApproverName,
-              role: 'General Manager',
-              date: data.voucherDate || new Date().toISOString().slice(0, 10),
-              status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
-              signatureUrl: sigL3,
-            },
-          ];
+            const l2ApproverName = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.signedByName || 'Purchase Clerk';
+            const sigL2 = isVoucherApproved ? (getSigForLevel(2, l2ApproverName) || cachedSigMahi || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined)) : undefined;
+
+            finalApprovers = [
+              {
+                level: 'Level 1',
+                name: l1ApproverName,
+                role: 'Purchase Manager',
+                date: data.voucherDate || new Date().toISOString().slice(0, 10),
+                status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
+                comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
+                signatureUrl: sigL1,
+              },
+              {
+                level: 'Level 2',
+                name: l2ApproverName,
+                role: 'Purchase Clerk',
+                date: data.voucherDate || new Date().toISOString().slice(0, 10),
+                status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
+                comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
+                signatureUrl: sigL2,
+              },
+            ];
+          }
         }
 
         setApproversList(finalApprovers);

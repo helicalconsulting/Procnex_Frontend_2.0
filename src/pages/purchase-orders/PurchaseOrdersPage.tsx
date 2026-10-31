@@ -37,6 +37,7 @@ import ActionSuccessModal, { type ActionSuccessModalData } from '../../component
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import PrintPurchaseOrderModal from '../../components/purchase-orders/PrintPurchaseOrderModal';
 import { sseClient } from '../../services/sseClient';
+import { clearAllApiCache } from '../../api/client';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { toNumber } from '../../api/normalize';
 import type { PurchaseOrder } from '../../types';
@@ -243,11 +244,14 @@ export default function PurchaseOrdersPage() {
   );
 
   useEffect(() => {
+    sseClient.connect();
+
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const debouncedRefresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
-        reload();
+        clearAllApiCache();
+        forceRefresh();
         fetchPendingApprovals();
       }, 300);
     };
@@ -290,7 +294,7 @@ export default function PurchaseOrdersPage() {
       unsub8();
       if (bc) bc.close();
     };
-  }, [reload, fetchPendingApprovals]);
+  }, [forceRefresh, fetchPendingApprovals]);
 
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string | number, POStatus>>({});
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
