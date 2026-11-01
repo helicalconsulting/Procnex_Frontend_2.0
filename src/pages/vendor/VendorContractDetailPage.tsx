@@ -25,6 +25,7 @@ import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
 import { sseClient } from '../../services/sseClient';
 import { getVendorPath } from '../../utils/tenantResolver';
 import { signatureService, type SavedSignature } from '../../services/signatureService';
+import { trimCanvas } from '../../utils/trimCanvas';
 import { useAuth } from '../../context/AuthContext';
 import { DetailSkeleton } from '../../components/shared/Skeleton';
 import './VendorContractDetailPage.css';
@@ -135,8 +136,15 @@ export default function VendorContractDetailPage() {
       if (poTimeoutRef.current) clearTimeout(poTimeoutRef.current);
       poTimeoutRef.current = setTimeout(() => reload(), 500);
     });
+    const unsubTerminated = sseClient.on('contract_terminated', (payload: unknown) => {
+      const event = payload as { contractId?: string };
+      if (!event?.contractId || event.contractId === id) {
+        reload();
+      }
+    });
     return () => {
       unsub();
+      unsubTerminated();
       if (poTimeoutRef.current) clearTimeout(poTimeoutRef.current);
     };
   }, [id, reload]);
@@ -296,7 +304,7 @@ export default function VendorContractDetailPage() {
   const getSignatureDataUrl = (): string | null => {
     if (mode === 'saved' && selectedSigUrl) return selectedSigUrl;
     if (mode === 'upload' && uploadedImage) return uploadedImage;
-    if (mode === 'draw') return canvasRef.current?.toDataURL('image/png') || null;
+    if (mode === 'draw' && canvasRef.current) return trimCanvas(canvasRef.current);
     return null;
   };
 
@@ -752,20 +760,6 @@ export default function VendorContractDetailPage() {
                         value={signerName}
                         onChange={(e) => setSignerName(e.target.value)}
                         placeholder="e.g. Rahul Sharma"
-                        disabled={signing}
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-foreground flex items-center gap-1">
-                        <Building2 className="size-3 text-muted-foreground" /> Title / Role
-                      </label>
-                      <Input
-                        type="text"
-                        className="h-10 rounded-xl"
-                        value={signerTitle}
-                        onChange={(e) => setSignerTitle(e.target.value)}
-                        placeholder="e.g. Managing Director"
                         disabled={signing}
                       />
                     </div>

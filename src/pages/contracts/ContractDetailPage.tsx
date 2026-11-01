@@ -21,6 +21,7 @@ import { signatureService, type SavedSignature } from '../../services/signatureS
 import { useAuth } from '../../context/AuthContext';
 import { useBranding } from '../../context/BrandingContext';
 import { readCachedProfile } from '../../lib/branding';
+import { trimCanvas } from '../../utils/trimCanvas';
 import './ContractDetailPage.css';
 
 // ─── Status helpers ──────────────────────────────────────────
@@ -266,7 +267,7 @@ function SignModal({
   const getSignatureDataUrl = (): string | null => {
     if (mode === 'saved' && selectedSigUrl) return selectedSigUrl;
     if (mode === 'upload' && uploadedImage) return uploadedImage;
-    if (mode === 'draw') return canvasRef.current?.toDataURL('image/png') || null;
+    if (mode === 'draw' && canvasRef.current) return trimCanvas(canvasRef.current);
     return null;
   };
 
@@ -536,6 +537,7 @@ export default function ContractDetailPage() {
     const unsubPoStatus = sseClient.on('po_status_changed', refreshAll);
     const unsubApprovalInit = sseClient.on('approval_initiated', refreshAll);
     const unsubApprovalUpdated = sseClient.on('approval_updated', refreshAll);
+    const unsubTerminated = sseClient.on('contract_terminated', refreshAll);
 
     // 2. Custom Window Events (Instant same-window sync)
     const handlePoCreated = () => refreshAll();
@@ -563,6 +565,7 @@ export default function ContractDetailPage() {
       unsubPoStatus();
       unsubApprovalInit();
       unsubApprovalUpdated();
+      unsubTerminated();
       window.removeEventListener('heliflow:po-created', handlePoCreated);
       window.removeEventListener('heliflow:approval-updated', handleApprovalUpdated);
       window.removeEventListener('heliflow:po-updated', handlePoCreated);
@@ -741,26 +744,30 @@ export default function ContractDetailPage() {
 
   const pageTitle = `${contract.contractNumber} — ${contract.title}`;
 
-  // Match DocumentSignature entries to buyer/vendor by signedAt timestamp
-  // (signedAt and signedByCustomerAt/signedByVendorAt are set simultaneously in the same DB transaction)
+  // Match DocumentSignature entries to buyer/vendor by signer or signedAt timestamp
   const buyerSignatureUrl = (() => {
-    if (!contract.signedByCustomerAt || !contract.documentSignatures?.length) return null;
-    const targetMs = new Date(contract.signedByCustomerAt).getTime();
-    const match = contract.documentSignatures.find(ds => {
-      const diff = Math.abs(new Date(ds.signedAt).getTime() - targetMs);
-      return diff < 2000;
-    });
-    return match?.signature?.dataUrl || null;
+    if (!contract.signedByCustomerAt) return null;
+    if (contract.documentSignatures?.length) {
+      const match = contract.documentSignatures.find(ds => ds.signedById === contract.contractOwnerId)
+        || contract.documentSignatures.find(ds => Math.abs(new Date(ds.signedAt).getTime() - new Date(contract.signedByCustomerAt!).getTime()) < 5000);
+      if (match?.signature?.dataUrl) return match.signature.dataUrl;
+    }
+    return null;
   })();
 
   const vendorSignatureUrl = (() => {
-    if (!contract.signedByVendorAt || !contract.documentSignatures?.length) return null;
-    const targetMs = new Date(contract.signedByVendorAt).getTime();
-    const match = contract.documentSignatures.find(ds => {
-      const diff = Math.abs(new Date(ds.signedAt).getTime() - targetMs);
-      return diff < 2000;
-    });
-    return match?.signature?.dataUrl || null;
+    if (!contract.signedByVendorAt) return null;
+    if (contract.documentSignatures?.length) {
+      const match = contract.documentSignatures.find(ds => ds.signedById !== contract.contractOwnerId)
+        || contract.documentSignatures.find(ds => Math.abs(new Date(ds.signedAt).getTime() - new Date(contract.signedByVendorAt!).getTime()) < 5000);
+      if (match?.signature?.dataUrl) return match.signature.dataUrl;
+    }
+    if (contract.contentSnapshot) {
+      const vendorImgMatch = contract.contentSnapshot.match(/data-sig-container="signedFor"[^>]*>[\s\S]*?<img[^>]+src="([^">]+)"/i)
+        || contract.contentSnapshot.match(/<img[^>]+alt="Vendor Signature"[^>]+src="([^">]+)"/i);
+      if (vendorImgMatch?.[1]) return vendorImgMatch[1];
+    }
+    return null;
   })();
 
   const hasPO = (contract._count?.purchaseOrders || contract.purchaseOrders?.length || contractBalance?.totalPOs || 0) > 0;
@@ -1197,7 +1204,9 @@ export default function ContractDetailPage() {
                 {contract.signedByCustomerAt ? <><Check size={12} /> Signed {formatDate(contract.signedByCustomerAt)}</> : <><Clock size={12} /> Awaiting Signature</>}
               </div>
               {buyerSignatureUrl && (
-                <img src={buyerSignatureUrl} alt="Buyer signature" className="ctr-detail__sig-image" />
+                <div className="ctr-detail__sig-pad">
+                  <img src={buyerSignatureUrl} alt="Buyer signature" className="ctr-detail__sig-image" />
+                </div>
               )}
             </div>
             <div className="ctr-detail__sig-card">
@@ -1208,7 +1217,9 @@ export default function ContractDetailPage() {
                 {contract.signedByVendorAt ? <><Check size={12} /> Signed {formatDate(contract.signedByVendorAt)}</> : <><Clock size={12} /> Awaiting Signature</>}
               </div>
               {vendorSignatureUrl && (
-                <img src={vendorSignatureUrl} alt="Vendor signature" className="ctr-detail__sig-image" />
+                <div className="ctr-detail__sig-pad">
+                  <img src={vendorSignatureUrl} alt="Vendor signature" className="ctr-detail__sig-image" />
+                </div>
               )}
             </div>
             {canSign && (

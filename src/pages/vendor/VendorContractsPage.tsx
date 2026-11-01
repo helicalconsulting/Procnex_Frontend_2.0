@@ -42,9 +42,11 @@ export default function VendorContractsPage() {
   useEffect(() => {
     const unsubscribeSigned = sseClient.on('contract_signed', reload);
     const unsubscribePurchaseOrder = sseClient.on('po_created', reload);
+    const unsubscribeTerminated = sseClient.on('contract_terminated', reload);
     return () => {
       unsubscribeSigned();
       unsubscribePurchaseOrder();
+      unsubscribeTerminated();
     };
   }, [reload]);
 

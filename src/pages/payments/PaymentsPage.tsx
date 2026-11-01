@@ -294,15 +294,15 @@ export default function PaymentsPage() {
     return authRoles.some((r) => r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin'));
   }, [authRoles]);
 
+  const [configuredPaymentLevels, setConfiguredPaymentLevels] = useState<any[]>([]);
+
   const canApprovePayment =
     isAdmin ||
     hasPermission('Payments', 'canApprove') ||
     hasPermission('Payments', 'canCreate') ||
     hasPermission('Accounts Payable', 'canApprove') ||
-    isRoleMatching('Purchase Clerk', authRoles) ||
-    isRoleMatching('Purchase Manager', authRoles) ||
-    isRoleMatching('Developer', authRoles) ||
-    isRoleMatching('Analyst', authRoles);
+    configuredPaymentLevels.some((l) => isRoleMatching(l.requiredRole, authRoles)) ||
+    authRoles.some((r) => isRoleMatching(r, ['Purchase Manager', 'Purchase Clerk', 'Analyst', 'Developer', 'Finance Head', 'CFO']));
 
   const [paymentsList, setPaymentsList] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -319,10 +319,22 @@ export default function PaymentsPage() {
       invalidateApiCache('/approvals');
       invalidateApiCache('/payments');
 
-      const [rawPayments, approvalRowsPay] = await Promise.all([
+      const [rawPayments, approvalRowsPay, allLevelsRes] = await Promise.all([
         localDataService.getPayments({ force: true }).catch(() => []),
         approvalService.listTable({ module: 'Payments' }).catch(() => [] as any[]),
+        approvalService.getLevels().catch(() => [] as any[]),
       ]);
+
+      const paymentLevels = (allLevelsRes || [])
+        .filter((l: any) => {
+          const mod = String(l.module || '').toLowerCase().replace(/[\s_-]+/g, '');
+          return mod === 'payments' || mod === 'payment' || mod === 'paymentvoucher';
+        })
+        .sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0));
+
+      setConfiguredPaymentLevels(paymentLevels);
+      const dynamicDefaultTotalLevels = paymentLevels.length > 0 ? paymentLevels.length : 1;
+      const dynamicL1Role = paymentLevels[0]?.requiredRole || 'Purchase Manager';
 
       const approvalRows = approvalRowsPay;
       const normalize = (str?: string | number) =>
@@ -360,8 +372,8 @@ export default function PaymentsPage() {
             ...base,
             status: 'DRAFT' as PaymentStatus,
             currentLevel: 1,
-            totalLevels: 2,
-            requiredRole: 'Purchase Manager',
+            totalLevels: dynamicDefaultTotalLevels,
+            requiredRole: dynamicL1Role,
             canAct: false,
             hasApprovedPriorLevel: false,
           };
@@ -489,14 +501,14 @@ export default function PaymentsPage() {
           };
         }
 
-        const isL1User = isRoleMatching('Purchase Manager', authRoles);
+        const isL1User = isAdmin || isRoleMatching(dynamicL1Role, authRoles);
         const canActFallback = base.status === 'PENDING' && isL1User;
 
         return {
           ...base,
           currentLevel: 1,
-          totalLevels: 2,
-          requiredRole: 'Purchase Manager',
+          totalLevels: dynamicDefaultTotalLevels,
+          requiredRole: dynamicL1Role,
           canAct: canActFallback,
           hasApprovedPriorLevel: false,
         };
@@ -762,32 +774,31 @@ export default function PaymentsPage() {
           });
           setVoucherApprovers(mapped);
         } else {
-          const sigL1 = getSigForLevel(1, null, selectedPrintVoucher.approvedBy) || (currentLvl > 1 || isVoucherConfirmed ? (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined) : undefined);
-          const sigL2 = getSigForLevel(2);
+          const approversToRender = configuredPaymentLevels.length > 0 ? configuredPaymentLevels : [
+            { levelNumber: 1, requiredRole: 'Purchase Manager' },
+          ];
+          const mappedFallback = approversToRender.map((lvl: any, idx: number) => {
+            const levelNum = Number(lvl.levelNumber) || idx + 1;
+            const isApproved = currentLvl > levelNum || isVoucherConfirmed;
+            const sig = getSigForLevel(levelNum, null, isApproved ? selectedPrintVoucher.approvedBy : undefined) ||
+              (isApproved && levelNum === 1 && uniqueDocSigs.length === 0 ? defaultSigUrl : undefined);
+            const roleName = lvl.requiredRole
+              ? lvl.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+              : `Level ${levelNum} Approver`;
 
-          const isL1Approved = currentLvl > 1 || isVoucherConfirmed;
-          const isL2Approved = currentLvl > 2 || isVoucherConfirmed;
-
-          setVoucherApprovers([
-            {
-              level: 'Level 1',
-              name: isL1Approved ? (selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : 'Purchase Manager') : 'Purchase Manager',
-              role: 'Purchase Manager',
+            return {
+              level: `Level ${levelNum}`,
+              name: isApproved
+                ? (levelNum === 1 && selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : roleName)
+                : 'Pending Approval',
+              role: roleName,
               date: selectedPrintVoucher.date,
-              status: isL1Approved ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isL1Approved ? 'Approved & Digitally Signed' : 'Awaiting Level 1 Approval',
-              signatureUrl: isL1Approved ? sigL1 : undefined,
-            },
-            {
-              level: 'Level 2',
-              name: isL2Approved ? 'Purchase Clerk' : 'Purchase Clerk',
-              role: 'Purchase Clerk',
-              date: selectedPrintVoucher.date,
-              status: isL2Approved ? ('APPROVED' as const) : ('PENDING' as const),
-              comments: isL2Approved ? 'Approved & Digitally Signed' : 'Awaiting Level 2 Approval',
-              signatureUrl: isL2Approved ? sigL2 : undefined,
-            },
-          ]);
+              status: isApproved ? ('APPROVED' as const) : ('PENDING' as const),
+              comments: isApproved ? 'Approved & Digitally Signed' : `Awaiting Level ${levelNum} Approval`,
+              signatureUrl: isApproved ? sig : undefined,
+            };
+          });
+          setVoucherApprovers(mappedFallback);
         }
       } catch (_err) {
         if (isMounted) setVoucherApprovers(null);
@@ -904,11 +915,12 @@ export default function PaymentsPage() {
     const target = actionModal.payment;
     const act = actionModal.action;
     const comment = actionComment.trim() || undefined;
-    const isLevel1 = (target.currentLevel || 1) === 1;
-    const isMultiLevel = (target.totalLevels || 2) > 1;
+    const levelNum = target.currentLevel || 1;
+    const totalLevels = target.totalLevels || 1;
+    const isLastLevel = levelNum >= totalLevels;
     const returnTarget = (target.currentLevel || 1) > 1 ? actionReturnTarget : 'ORIGINATOR';
     const optimisticStatus: PaymentStatus = act === 'confirm'
-      ? (isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED')
+      ? (!isLastLevel ? 'PENDING' : 'CONFIRMED')
       : act === 'cancel' ? 'CANCELLED' : act === 'return' ? 'RETURNED' : 'RETRIED';
 
     const updatedPayment: Payment = {
@@ -916,13 +928,9 @@ export default function PaymentsPage() {
       status: optimisticStatus,
       currentLevel: act === 'return'
         ? 1
-        : (isLevel1 && isMultiLevel ? 2 : target.currentLevel),
-      requiredRole: act === 'return'
-        ? 'Purchase Manager'
-        : (isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole),
+        : (!isLastLevel ? levelNum + 1 : target.currentLevel),
       canAct: false,
       hasApprovedPriorLevel: act === 'confirm',
-      approvedBy: isLevel1 ? 'Purchase Manager' : 'Purchase Clerk',
       comments: comment || target.comments,
     };
 

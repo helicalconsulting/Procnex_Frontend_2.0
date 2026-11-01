@@ -213,6 +213,7 @@ export default function ContractsPage() {
     const unsubPoStatus = sseClient.on('po_status_changed', handleRefresh);
     const unsubChain = sseClient.on('approval_chain_complete', handleRefresh);
     const unsubNotif = sseClient.on('notification', handleRefresh);
+    const unsubTerminated = sseClient.on('contract_terminated', handleRefresh);
 
     sseClient.connect();
 
@@ -240,6 +241,7 @@ export default function ContractsPage() {
       unsubPoStatus();
       unsubChain();
       unsubNotif();
+      unsubTerminated();
       if (bc) bc.close();
       clearInterval(interval);
     };
