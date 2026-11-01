@@ -20,6 +20,7 @@ import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumen
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { signatureService } from '../../services/signatureService';
+import { isRoleMatching } from '../../utils/roleMatcher';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -155,6 +156,22 @@ function StatusBadge({
   canAct?: boolean;
   requiredRole?: string;
 }) {
+  if (status === 'RETURNED' || status === 'RE_REVIEW') {
+    if (canAct) {
+      return (
+        <Badge tone="warning">
+          <RotateCcw className="size-3" />
+          Returned (Re-Review)
+        </Badge>
+      );
+    }
+    return (
+      <Badge tone="warning">
+        <RotateCcw className="size-3" />
+        Returned
+      </Badge>
+    );
+  }
   if (status === 'PENDING') {
     if (canAct) {
       return (
@@ -166,9 +183,9 @@ function StatusBadge({
     }
     if (hasApprovedPriorLevel) {
       return (
-        <Badge tone="info" className="bg-sky-500/10 text-sky-600 border-sky-500/20 dark:text-sky-300">
+        <Badge tone="success">
           <CheckCircle2 className="size-3" />
-          L{Math.max(1, (currentLevel || 2) - 1)} Approved
+          Approved
         </Badge>
       );
     }
@@ -205,49 +222,7 @@ function StatusBadge({
   );
 }
 
-const L1_ROLES = [
-  'purchaseclerk', 'purchase_clerk', 'procurementclerk', 'procurement_clerk',
-  'purchaseofficer', 'purchase_officer', 'procurementofficer', 'procurement_officer',
-  'buyer', 'l1user', 'l1_user', 'l1', 'approver1', 'approver_1', 'level1user', 'level1', 'level_1',
-  'poapprover1', 'po_approver_1', 'invoiceapprover1', 'purchaseinvoiceapprover1', 'paymentapprover1', 'paymentvoucherapprover1',
-  'analyst', 'analyst_user'
-];
 
-const L2_ROLES = [
-  'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement',
-  'financeapprover', 'finance_approver', 'financemanager', 'finance_manager', 'finance',
-  'accountspayable', 'accounts_payable', 'purchasehead', 'headofprocurement',
-  'l2user', 'l2_user', 'l2', 'approver2', 'approver_2', 'level2user', 'level2', 'level_2',
-  'poapprover2', 'invoiceapprover2', 'purchaseinvoiceapprover2', 'paymentapprover2', 'paymentvoucherapprover2',
-  'developer', 'developer_user', 'dev', 'softwareengineer'
-];
-
-const L3_ROLES = [
-  'generalmanager', 'general_manager', 'managingdirector', 'managing_director', 'director', 'executive',
-  'ceo', 'cfo', 'coo', 'vp', 'l3user', 'l3_user', 'l3', 'approver3', 'approver_3', 'level3user', 'level3',
-  'founder', 'co-founder', 'cofounder', 'owner'
-];
-
-const ADMIN_ROLES = [
-  'admin', 'administrator', 'superadmin', 'super_admin', 'systemadministrator', 'system_administrator'
-];
-
-const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean => {
-  if (!requiredRole || !userRoles || userRoles.length === 0) return false;
-  const stripPrefix = (str: string) =>
-    str.replace(/^level\s*\d+(\s*of\s*\d+)?\s*:\s*/i, '').trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const reqClean = stripPrefix(requiredRole);
-
-  return userRoles.some((r) => {
-    const usrClean = stripPrefix(r);
-    if (reqClean === usrClean) return true;
-    if (L1_ROLES.includes(reqClean) && L1_ROLES.includes(usrClean)) return true;
-    if (L2_ROLES.includes(reqClean) && L2_ROLES.includes(usrClean)) return true;
-    if (L3_ROLES.includes(reqClean) && L3_ROLES.includes(usrClean)) return true;
-    if (ADMIN_ROLES.includes(reqClean) && ADMIN_ROLES.includes(usrClean)) return true;
-    return false;
-  });
-};
 
 const ALL_COLUMNS: ColumnDef[] = [
   { key: 'invoiceNumber', label: 'Invoice', defaultVisible: true, required: true },
@@ -489,26 +464,19 @@ export default function AccountsPayablePage() {
                 (user?.name && r.approverName && r.approverName.toLowerCase() === user.name.toLowerCase()) ||
                 (user?.email && (r as any).approverEmail && (r as any).approverEmail.toLowerCase() === user.email.toLowerCase())
               )
-          ) ||
-          (currentLevel > 1 && (
-            isRoleMatching('Purchase Clerk', authRoles) ||
-            isRoleMatching('Analyst', authRoles) ||
-            isRoleMatching('L1 User', authRoles) ||
-            isRoleMatching('Approver 1', authRoles)
-          )) ||
-          (currentLevel > 2 && (
-            isRoleMatching('Purchase Manager', authRoles) ||
-            isRoleMatching('Procurement Manager', authRoles) ||
-            isRoleMatching('Finance Approver', authRoles) ||
-            isRoleMatching('Finance Manager', authRoles) ||
-            isRoleMatching('L2 User', authRoles) ||
-            isRoleMatching('Developer', authRoles)
-          )) ||
-          (currentLevel > 3 && (
-            isRoleMatching('General Manager', authRoles) ||
-            isRoleMatching('L3 User', authRoles) ||
-            isRoleMatching('Founder', authRoles)
-          ));
+          );
+
+        const userReturnedRecord = rows.find(
+          (r) =>
+            r.status === 'RETURNED' &&
+            (
+              isRoleMatching(r.requiredRole, authRoles) ||
+              (user?.id && r.approverId && String(r.approverId) === String(user.id)) ||
+              (user?.name && r.approverName && r.approverName.toLowerCase() === user.name.toLowerCase())
+            )
+        );
+        const returnedLevel = userReturnedRecord?.currentLevel || (userReturnedRecord?.level as any)?.levelNumber || 0;
+        const returnedByMe = Boolean(userReturnedRecord && !isUserMatchingPendingStep && currentLevel <= returnedLevel);
 
         let status: APStatus;
         if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE'].includes(matchingRaw.status)) {
@@ -518,13 +486,16 @@ export default function AccountsPayablePage() {
         } else if (rejectedRow || matchingRaw?.status === 'REJECTED') {
           status = 'REJECTED';
         } else if (pendingRow) {
-          // If currently pending: for approvers who already approved their prior level, show APPROVED!
-          if (hasApprovedPriorLevel && !isUserMatchingPendingStep) {
+          if (isUserMatchingPendingStep) {
+            status = hadReturn ? 'RETURNED' : 'PENDING';
+          } else if (returnedByMe) {
+            status = 'RETURNED';
+          } else if (hasApprovedPriorLevel) {
             status = 'APPROVED';
           } else {
             status = 'PENDING';
           }
-        } else if (returnedRow || matchingRaw?.status === 'RETURNED' || hadReturn) {
+        } else if (returnedRow || matchingRaw?.status === 'RETURNED' || hadReturn || returnedByMe) {
           status = 'RETURNED';
         } else {
           status = (matchingRaw?.status as APStatus) || 'APPROVED';
@@ -534,11 +505,11 @@ export default function AccountsPayablePage() {
         if (status === 'PENDING') {
           effectiveCanAct = isUserMatchingPendingStep;
         } else if (status === 'RETURNED') {
-          const isL1Role = isRoleMatching('Analyst', authRoles) || isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('L1 User', authRoles) || isRoleMatching('Approver 1', authRoles);
+          const isL1Role = isRoleMatching(l1Role, authRoles);
           effectiveCanAct = isL1Role || isRoleMatching(reqRole, authRoles);
         }
 
-        if (status === 'APPROVED' || (hasApprovedPriorLevel && !isUserMatchingPendingStep)) {
+        if (status === 'APPROVED' || (hasApprovedPriorLevel && !isUserMatchingPendingStep) || returnedByMe) {
           effectiveCanAct = false;
         }
 
@@ -905,13 +876,14 @@ export default function AccountsPayablePage() {
 
         if (approvalId) {
           if (act === 'approve') {
-            const res = await approvalService.approve(approvalId, comment).catch(async (err) => {
-              console.warn('approvalService.approve failed, falling back to direct status update:', err);
-              return { nextLevel: false };
+            const res = await approvalService.approve(approvalId, comment).catch((err) => {
+              console.error('approvalService.approve failed:', err);
+              return null;
             });
             const isFinal =
-              res?.nextLevel === false ||
-              (!res?.nextLevel && Boolean(targetInvoice.totalLevels) && targetInvoice.currentLevel >= targetInvoice.totalLevels);
+              Boolean(res) &&
+              (res?.nextLevel === false ||
+              (!res?.nextLevel && Boolean(targetInvoice.totalLevels) && targetInvoice.currentLevel >= targetInvoice.totalLevels));
 
             if (isFinal) {
               await invoiceService.updateStatus(targetInvoice.id, 'APPROVED').catch(() => {});
@@ -1086,18 +1058,8 @@ export default function AccountsPayablePage() {
                   });
                 } catch {}
               }
-            }).catch(async (err) => {
-              console.warn('approvalService.approve failed, updating invoice directly:', err);
-              await invoiceService.updateStatus(targetInvoice.id, 'APPROVED').catch(() => {});
-              if (targetInvoice.invoiceNumber) {
-                await invoiceService.updateStatus(targetInvoice.invoiceNumber, 'APPROVED').catch(() => {});
-              }
-              setGeneratedVoucherBanner({
-                voucherNumber: targetInvoice.invoiceNumber,
-                invoiceNumber: targetInvoice.invoiceNumber,
-                vendorName: targetInvoice.vendorName,
-                amount: targetInvoice.amount,
-              });
+            }).catch((err) => {
+              console.error('approvalService.approve failed:', err);
             });
           } else {
             approvePromise = invoiceService.updateStatus(targetInvoice.id, 'APPROVED').then(() => {

@@ -164,12 +164,12 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     key: 'level', label: 'Approval Level', defaultVisible: true, align: 'center',
     render: (req) => {
       const total = req.totalLevels || 1;
-      const isApproved = req.status === 'APPROVED';
-      const current = isApproved ? total + 1 : (req.currentLevel || 1);
+      const isOverallApproved = req.status === 'APPROVED' && (!req.workflowStatus || req.workflowStatus === 'APPROVED');
+      const current = isOverallApproved ? total : (req.currentLevel || 1);
       return (
         <div className="inline-flex items-center justify-center gap-1.5 text-xs tabular-nums">
           <Badge variant="secondary" className="font-semibold">
-            L{isApproved ? total : Math.min(current, total)}/{total}
+            L{Math.min(current, total)}/{total}
           </Badge>
         </div>
       );
@@ -179,24 +179,19 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     key: 'status', label: 'Status', defaultVisible: true, align: 'left',
     render: (req) => {
       let effectiveStatus = req.status;
-      const isReturnedReReview = Boolean(
-        (req as any).isReturned ||
-        (req as any).isReReview ||
-        req.status === 'RETURNED' ||
-        req.status === 'RE_REVIEW' ||
-        req.status === 'RETURNED_RE_REVIEW' ||
-        (req.comments && /return/i.test(req.comments))
-      );
-      if (req.status === 'PENDING' || req.status === 'RETURNED' || req.status === 'RE_REVIEW') {
-        if (req.status === 'PENDING') {
-          effectiveStatus = isReturnedReReview ? 'RE_REVIEW' : 'PENDING';
-        } else {
-          effectiveStatus = isReturnedReReview ? 'RE_REVIEW' : req.status;
-        }
+      const isApproved = req.status === 'APPROVED';
+      const isReturned = req.status === 'RETURNED' || Boolean((req as any).isReturned || (req as any).returnedByMe);
+      const isReturnedReReview = isReturned && req.canAct;
+      if (isApproved) {
+        effectiveStatus = 'APPROVED';
+      } else if (isReturned) {
+        effectiveStatus = isReturnedReReview ? 'RE_REVIEW' : 'RETURNED';
+      } else if (req.status === 'PENDING') {
+        effectiveStatus = 'PENDING';
       }
       return (
         <Badge variant="outline" className={cn('font-semibold gap-1 whitespace-nowrap', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
-          {isReturnedReReview && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
+          {isReturned && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
           {STATUS_LABELS[effectiveStatus] || effectiveStatus.replace(/_/g, ' ')}
         </Badge>
       );
@@ -473,16 +468,15 @@ export default function ApprovalsPage() {
   const getEffectiveStatus = useCallback((a: ApprovalRequest): ApprovalStatusType => {
     if (a.status === 'APPROVED' || (a.status as string) === 'APPROVED_L1') return 'APPROVED';
     if (a.status === 'REJECTED') return 'REJECTED';
+    if (a.status === 'RETURNED' || (a as any).isReturned) return 'RETURNED';
     if (a.status === 'PENDING') return 'PENDING';
-    if (a.status === 'RETURNED') return 'RETURNED';
-    if ((a as any).isReturned) return 'RETURNED';
     return 'PENDING';
   }, []);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'ALL' || statusFilter === 'All') return moduleFiltered;
     if (statusFilter === 'RETURNED') {
-      return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'RETURNED' && (a.canAct || isAdmin));
+      return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'RETURNED' && (a.canAct || (a as any).returnedByMe || isAdmin));
     }
     if (statusFilter === 'REJECTED') {
       return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED');
@@ -506,12 +500,15 @@ export default function ApprovalsPage() {
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
   const actionsWidth = paginated.some(request => request.canAct) ? 384 : 144;
 
-  const handleAction = useCallback(async (actionOverride?: string, commentOverride?: string) => {
+  const handleAction = useCallback(async (actionOverride?: string | unknown, commentOverride?: string | unknown) => {
     if (!actionModal) return;
     const { id } = actionModal.request;
-    const actionType = actionOverride || actionModal.action;
+    const actionType: 'approve' | 'reject' | 'return' =
+      (typeof actionOverride === 'string' && (actionOverride === 'approve' || actionOverride === 'reject' || actionOverride === 'return')
+        ? actionOverride
+        : actionModal.action);
     const req = actionModal.request;
-    const comment = (commentOverride !== undefined ? commentOverride : actionComment).trim() || undefined;
+    const comment = (typeof commentOverride === 'string' ? commentOverride : actionComment).trim() || undefined;
 
     setActionModal(null);
     setActionComment('');
@@ -1098,7 +1095,7 @@ export default function ApprovalsPage() {
                   actionModal.action === 'approve' && "bg-emerald-600 hover:bg-emerald-700 text-white",
                   actionModal.action === 'return' && "bg-amber-600 hover:bg-amber-700 text-white"
                 )}
-                onClick={handleAction}
+                onClick={() => handleAction()}
               >
                 {actionModal.action === 'approve' ? (
                   <>

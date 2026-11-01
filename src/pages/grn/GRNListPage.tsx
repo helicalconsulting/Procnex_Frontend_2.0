@@ -96,6 +96,46 @@ export default function GRNListPage() {
   const [invoiceToPrint, setInvoiceToPrint] = useState<any | null>(null);
   const [grnToPrint, setGrnToPrint] = useState<any | null>(null);
 
+  const getPoTotalWithTax = (po: any): number => {
+    if (!po) return 0;
+    const targetPoId = String(po?.id || '').toLowerCase();
+    const targetPoNum = String(po?.poNumber || po?.purchaseOrder?.poNumber || '').toLowerCase();
+
+    const matchedInvoice = (invoicesList || []).find((inv: any) => {
+      const invPoId = String(inv.poId || '').toLowerCase();
+      const invPoNum = String(inv.poNumber || '').toLowerCase();
+      const invId = String(inv.id || '').toLowerCase();
+      const invNum = String(inv.invoiceNumber || '').toLowerCase();
+      return (
+        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId || invId === targetPoId)) ||
+        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum || invNum === targetPoNum))
+      );
+    });
+
+    if (matchedInvoice && Number(matchedInvoice.amount) > 0) {
+      return Number(matchedInvoice.amount);
+    }
+
+    if (po.grandTotal && Number(po.grandTotal) > 0) {
+      return Number(po.grandTotal);
+    }
+
+    const baseAmount = Number(po.totalAmount || po.amount || 0);
+    if (po.taxTotal && Number(po.taxTotal) > 0) {
+      return baseAmount + Number(po.taxTotal);
+    }
+
+    const taxRate = po.taxPercent !== undefined
+      ? Number(po.taxPercent)
+      : (po.taxRate !== undefined ? Number(po.taxRate) : 18);
+
+    if (baseAmount > 0 && taxRate > 0) {
+      return Number((baseAmount * (1 + taxRate / 100)).toFixed(2));
+    }
+
+    return baseAmount;
+  };
+
   const getInvoicePayload = (po: any) => {
     const targetPoId = String(po?.id || '').toLowerCase();
     const targetPoNum = String(po?.poNumber || po?.purchaseOrder?.poNumber || '').toLowerCase();
@@ -151,7 +191,7 @@ export default function GRNListPage() {
       invoiceNumber: matchedInvoice?.invoiceNumber || po?.dispatchNoteNumber || po?.vendorDispatchNoteNumber || `INV-${po?.poNumber || po?.id || '2026-001'}`,
       poNumber: po?.poNumber || po?.purchaseOrder?.poNumber || matchedInvoice?.poNumber || '—',
       vendorName: po?.vendor?.name || po?.vendorName || matchedInvoice?.vendorName || user?.fullName || 'Supplier',
-      amount: Number(matchedInvoice?.amount || po?.totalAmount || po?.grandTotal || 0),
+      amount: getPoTotalWithTax(po),
       dueDate: matchedInvoice?.dueDate || new Date().toISOString().slice(0, 10),
       submittedAt: matchedInvoice?.submittedAt || (po?.createdAt ? String(po.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
       invoiceDate: matchedInvoice?.invoiceDate || matchedInvoice?.submittedAt || (po?.createdAt ? String(po.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
@@ -693,7 +733,7 @@ export default function GRNListPage() {
                             <span>{vName}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-sm font-semibold tabular-nums text-foreground">{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
+                        <td className="px-5 py-3.5 text-sm font-semibold tabular-nums text-foreground">{formatAmount(getPoTotalWithTax(po), (po as any).currency || companyDefaultCurrency)}</td>
                         <td className="px-5 py-3.5 text-sm text-muted-foreground">{createdDate}</td>
                         <td className="px-5 py-3.5 text-center">
                           <Badge tone="success" className="text-xs font-medium min-h-[26px] px-2.5 py-0.5">

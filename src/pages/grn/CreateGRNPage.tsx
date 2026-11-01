@@ -711,7 +711,7 @@ export default function CreateGRNPage() {
     }
   }, [poIdParam, rawPoList]);
 
-  // Handle line item edits (Bidirectional Accepted <-> Rejected auto calculation)
+  // Handle line item edits (Bidirectional Accepted <-> Rejected auto calculation with validation)
   const handleUpdateItem = (id: string, field: keyof LineItemState, value: any) => {
     setLineItems((prev) =>
       prev.map((item) => {
@@ -720,14 +720,50 @@ export default function CreateGRNPage() {
         const rec = updated.receivedQty === '' || updated.receivedQty == null ? 0 : Number(updated.receivedQty) || 0;
 
         if (field === 'acceptedQty') {
-          const acc = value === '' || value == null ? 0 : Number(value) || 0;
-          updated.rejectedQty = Math.max(0, rec - acc);
+          if (value === '' || value == null) {
+            updated.acceptedQty = '';
+            updated.rejectedQty = rec;
+          } else {
+            let acc = Number(value);
+            if (isNaN(acc) || acc < 0) acc = 0;
+            if (acc > rec) {
+              setErrorMsg(`Accepted quantity cannot be greater than received quantity (${rec}) for "${item.itemName || 'Line Item'}". Automatically capped to ${rec}.`);
+              acc = rec;
+            } else {
+              if (errorMsg && errorMsg.includes('Accepted quantity')) {
+                setErrorMsg(null);
+              }
+            }
+            updated.acceptedQty = acc;
+            updated.rejectedQty = Math.max(0, rec - acc);
+          }
         } else if (field === 'rejectedQty') {
-          const rej = value === '' || value == null ? 0 : Number(value) || 0;
-          updated.acceptedQty = Math.max(0, rec - rej);
+          if (value === '' || value == null) {
+            updated.rejectedQty = '';
+            updated.acceptedQty = rec;
+          } else {
+            const rej = Number(value);
+            if (rej > rec) {
+              updated.rejectedQty = rec;
+              updated.acceptedQty = 0;
+            } else {
+              updated.rejectedQty = Math.max(0, rej);
+              updated.acceptedQty = Math.max(0, rec - rej);
+            }
+          }
         } else if (field === 'receivedQty') {
-          const rej = updated.rejectedQty === '' || updated.rejectedQty == null ? 0 : Number(updated.rejectedQty) || 0;
-          updated.acceptedQty = Math.max(0, rec - rej);
+          const newRec = value === '' || value == null ? 0 : Number(value) || 0;
+          const currentAcc = updated.acceptedQty === '' || updated.acceptedQty == null ? 0 : Number(updated.acceptedQty) || 0;
+          if (currentAcc > newRec) {
+            updated.acceptedQty = newRec;
+            updated.rejectedQty = 0;
+            if (errorMsg && errorMsg.includes('Accepted quantity')) {
+              setErrorMsg(null);
+            }
+          } else {
+            const rej = updated.rejectedQty === '' || updated.rejectedQty == null ? 0 : Number(updated.rejectedQty) || 0;
+            updated.acceptedQty = Math.max(0, newRec - rej);
+          }
         }
         return updated;
       })
@@ -807,6 +843,18 @@ export default function CreateGRNPage() {
     if (lineItems.length === 0) {
       setErrorMsg('Please add at least one line item to record receipt.');
       return false;
+    }
+    for (const item of lineItems) {
+      const rec = typeof item.receivedQty === 'number' ? item.receivedQty : (Number(item.receivedQty) || 0);
+      const acc = typeof item.acceptedQty === 'number' ? item.acceptedQty : (item.acceptedQty === '' ? 0 : Number(item.acceptedQty) || 0);
+      if (acc > rec) {
+        setErrorMsg(`Accepted quantity (${acc}) cannot be greater than received quantity (${rec}) for "${item.itemName || 'Line Item'}". Please adjust accepted quantity.`);
+        return false;
+      }
+      if (acc < 0) {
+        setErrorMsg(`Accepted quantity cannot be negative for "${item.itemName || 'Line Item'}".`);
+        return false;
+      }
     }
     return true;
   };
@@ -1282,9 +1330,11 @@ export default function CreateGRNPage() {
                   </tr>
                 ) : (
                   lineItems.map((item, index) => {
-                    const rec = typeof item.receivedQty === 'number' ? item.receivedQty : 0;
+                    const rec = typeof item.receivedQty === 'number' ? item.receivedQty : (item.receivedQty === '' ? 0 : Number(item.receivedQty) || 0);
+                    const acc = typeof item.acceptedQty === 'number' ? item.acceptedQty : (item.acceptedQty === '' ? 0 : Number(item.acceptedQty) || 0);
                     const price = item.unitPrice || 0;
-                    const totalLineVal = rec * price;
+                    const isOverAccepted = typeof item.acceptedQty === 'number' && typeof item.receivedQty === 'number' && item.acceptedQty > item.receivedQty;
+                    const totalLineVal = acc * price;
 
                     return (
                       <tr key={item.id} className="hover:bg-muted/30 transition-colors">
@@ -1326,15 +1376,22 @@ export default function CreateGRNPage() {
                           <Input
                             type="number"
                             min="0"
+                            max={rec}
                             step="any"
                             value={item.acceptedQty}
-                            onChange={(e) =>
-                              handleUpdateItem(
-                                item.id,
-                                'acceptedQty',
-                                e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0)
-                              )
-                            }
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              if (raw === '') {
+                                handleUpdateItem(item.id, 'acceptedQty', '');
+                                return;
+                              }
+                              const val = parseFloat(raw);
+                              if (!isNaN(val) && val > rec) {
+                                handleUpdateItem(item.id, 'acceptedQty', rec);
+                              } else {
+                                handleUpdateItem(item.id, 'acceptedQty', isNaN(val) ? 0 : Math.max(0, val));
+                              }
+                            }}
                             className="h-9 text-sm text-center font-bold text-emerald-600 dark:text-emerald-400 bg-background"
                           />
                         </td>
@@ -1471,15 +1528,31 @@ export default function CreateGRNPage() {
               </div>
             </div>
 
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || (Boolean(selectedPO) && !hasInboundDispatch)}
-              title={Boolean(selectedPO) && !hasInboundDispatch ? 'Vendor Dispatch Note or Invoice is required before GRN can be posted.' : undefined}
-              className="w-full py-2.5 gap-2 shadow-sm font-bold"
-            >
-              <Send className="size-4" /> {submitting ? 'Posting GRN…' : 'Save & Post GRN'}
-            </Button>
+            {(() => {
+              const hasInvalidAcceptedQty = lineItems.some((item) => {
+                const rec = typeof item.receivedQty === 'number' ? item.receivedQty : (item.receivedQty === '' ? 0 : Number(item.receivedQty) || 0);
+                const acc = typeof item.acceptedQty === 'number' ? item.acceptedQty : (item.acceptedQty === '' ? 0 : Number(item.acceptedQty) || 0);
+                return acc > rec || acc < 0;
+              });
+
+              return (
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting || hasInvalidAcceptedQty || (Boolean(selectedPO) && !hasInboundDispatch)}
+                  title={
+                    hasInvalidAcceptedQty
+                      ? 'Accepted quantity cannot be greater than received quantity.'
+                      : Boolean(selectedPO) && !hasInboundDispatch
+                      ? 'Vendor Dispatch Note or Invoice is required before GRN can be posted.'
+                      : undefined
+                  }
+                  className="w-full py-2.5 gap-2 shadow-sm font-bold"
+                >
+                  <Send className="size-4" /> {submitting ? 'Posting GRN…' : 'Save & Post GRN'}
+                </Button>
+              );
+            })()}
           </Card>
         </div>
       </div>
@@ -1509,18 +1582,22 @@ export default function CreateGRNPage() {
             vendorGstVat: selectedPO?.vendor?.gstNumber || selectedPO?.vendor?.taxId,
             notes,
             status: isSelectedPoAlreadyReceived ? 'RECEIVED' : 'VERIFIED & RECORDED',
-            items: lineItems.map((li, idx) => ({
-              id: li.id || idx + 1,
-              itemCode: (li as any).itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
-              itemName: li.itemName,
-              orderedQty: Number(li.orderedQty || 0),
-              receivedQty: Number(li.receivedQty !== '' ? li.receivedQty : li.orderedQty),
-              acceptedQty: Number(li.acceptedQty !== '' ? li.acceptedQty : (li.receivedQty !== '' ? li.receivedQty : li.orderedQty)),
-              rejectedQty: Number(li.rejectedQty !== '' ? li.rejectedQty : 0),
-              unitPrice: Number(li.unitPrice || 0),
-              totalPrice: Number(li.totalPrice || 0),
-              remarks: li.remarks,
-            })),
+            items: lineItems.map((li, idx) => {
+              const accQty = Number(li.acceptedQty !== '' ? li.acceptedQty : (li.receivedQty !== '' ? li.receivedQty : li.orderedQty));
+              const uPrice = Number(li.unitPrice || 0);
+              return {
+                id: li.id || idx + 1,
+                itemCode: (li as any).itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+                itemName: li.itemName,
+                orderedQty: Number(li.orderedQty || 0),
+                receivedQty: Number(li.receivedQty !== '' ? li.receivedQty : li.orderedQty),
+                acceptedQty: accQty,
+                rejectedQty: Number(li.rejectedQty !== '' ? li.rejectedQty : 0),
+                unitPrice: uPrice,
+                totalPrice: Number(accQty * uPrice),
+                remarks: li.remarks,
+              };
+            }),
             purchaseOrder: selectedPO,
           }}
           po={selectedPO}

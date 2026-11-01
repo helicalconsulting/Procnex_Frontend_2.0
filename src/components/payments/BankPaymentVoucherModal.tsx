@@ -664,11 +664,12 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           : (data.poNumbers && data.poNumbers[0]);
         const poRef = poRefMatch && poRefMatch !== '—' ? poRefMatch : undefined;
 
-        const [resPay, resInv, resPO, docSigsP, docSigsInv, docSigsAP, docSigsPO, docSigsAP_P, savedSigs, adminLevels] = await Promise.all([
+        const [resPay, resInv, resPO, docSigsP, docSigsP_Caps, docSigsInv, docSigsAP, docSigsPO, docSigsAP_P, savedSigs, adminLevels] = await Promise.all([
           pNo ? approvalService.getChain('Payments', pNo).catch(() => null) : Promise.resolve(null),
           firstInv ? approvalService.getChain('AccountsPayable', firstInv).catch(() => null) : Promise.resolve(null),
           poRef ? approvalService.getChain('PurchaseOrders', poRef).catch(() => null) : Promise.resolve(null),
           pNo ? signatureService.getDocumentSignatures('Payments', pNo).catch(() => []) : Promise.resolve([]),
+          pNo ? signatureService.getDocumentSignatures('PAYMENT', pNo).catch(() => []) : Promise.resolve([]),
           firstInv ? signatureService.getDocumentSignatures('Payments', firstInv).catch(() => []) : Promise.resolve([]),
           firstInv ? signatureService.getDocumentSignatures('AccountsPayable', firstInv).catch(() => []) : Promise.resolve([]),
           poRef ? signatureService.getDocumentSignatures('PurchaseOrders', poRef).catch(() => []) : Promise.resolve([]),
@@ -678,7 +679,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
         ]);
         if (!isMounted) return;
 
-        const allRawDocSigs = [...docSigsP, ...docSigsInv, ...docSigsAP, ...docSigsPO, ...docSigsAP_P];
+        const allRawDocSigs = [...docSigsP, ...docSigsP_Caps, ...docSigsInv, ...docSigsAP, ...docSigsPO, ...docSigsAP_P];
         const signerMap = new Map<string, any>();
         for (const s of allRawDocSigs) {
           const sigUrl = s.dataUrl || s.signature?.dataUrl;
@@ -769,13 +770,17 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           return undefined;
         };
 
-        // Pick best available approval chain
-        const candidateChains = [resPay, resInv, resPO].filter(Boolean);
-        const bestChain = candidateChains.sort((a, b) => {
-          const lenA = (a.levels?.length || 0) + (a.history?.length || 0);
-          const lenB = (b.levels?.length || 0) + (b.history?.length || 0);
-          return lenB - lenA;
-        })[0] || null;
+        // Pick best available approval chain: prioritize the Payment Voucher's own chain
+        let bestChain = null;
+        if (resPay?.levels && resPay.levels.length > 0) {
+          bestChain = resPay;
+        } else if (resInv?.levels && resInv.levels.length > 0) {
+          bestChain = resInv;
+        } else if (resPO?.levels && resPO.levels.length > 0) {
+          bestChain = resPO;
+        } else {
+          bestChain = resPay || resInv || resPO || null;
+        }
 
         let finalApprovers: any[] = [];
 
@@ -793,9 +798,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               name = item.signedByName;
             }
             if (!name) {
-              if (levelNum === 1) name = (data as any).approvedBy && !isGenericName((data as any).approvedBy) ? (data as any).approvedBy : 'Nischal Agarwal';
-              else if (levelNum === 2) name = 'Mahi Agarwal';
-              else name = roleName;
+              name = (data as any).approvedBy && !isGenericName((data as any).approvedBy) ? (data as any).approvedBy : roleName;
             }
 
             let sigUrl = isApproved ? getSigForLevel(levelNum, name, item.approverId) : undefined;
@@ -817,11 +820,32 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           });
         } else {
           // Resolve from configured approval levels in admin
-          const configuredLevels = (adminLevels || [])
-            .filter((l: any) => l.module === 'Payments' || l.module === 'AccountsPayable')
+          let configuredLevels = (adminLevels || [])
+            .filter((l: any) => l.module === 'Payments')
             .sort((a: any, b: any) => (a.levelNumber || 1) - (b.levelNumber || 1));
+          if (configuredLevels.length === 0) {
+            configuredLevels = (adminLevels || [])
+              .filter((l: any) => l.module === 'AccountsPayable')
+              .sort((a: any, b: any) => (a.levelNumber || 1) - (b.levelNumber || 1));
+          }
+
+          const voucherCreatedAt = (data as any)?.createdAt || (data as any)?.voucherDate;
+          if (voucherCreatedAt) {
+            const cutoff = new Date(voucherCreatedAt).getTime() + 5 * 60 * 1000;
+            configuredLevels = configuredLevels.filter((lvl: any) => {
+              if (!lvl.createdAt) return true;
+              return new Date(lvl.createdAt).getTime() <= cutoff;
+            });
+          }
 
           const isVoucherApproved = ['PAID', 'POSTED', 'APPROVED', 'COMPLETED'].includes(String(data.status || '').toUpperCase());
+
+          // For legacy approved vouchers without an approval chain, only show levels that match actual signatures
+          if (isVoucherApproved && uniqueDocSigs.length > 0 && configuredLevels.length > uniqueDocSigs.length) {
+            configuredLevels = configuredLevels.slice(0, uniqueDocSigs.length);
+          } else if (isVoucherApproved && uniqueDocSigs.length === 0 && configuredLevels.length > 2) {
+            configuredLevels = configuredLevels.slice(0, 2);
+          }
 
           if (configuredLevels.length > 0) {
             const seenLevels = new Set<number>();

@@ -135,7 +135,11 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
         (targetRef ? sessionStorage.getItem(`invoice_approvers_${targetRef}`) : null) ||
         (data.id ? sessionStorage.getItem(`invoice_approvers_${data.id}`) : null) ||
         (targetRef ? localStorage.getItem(`invoice_approvers_${targetRef}`) : null) ||
-        (data.id ? localStorage.getItem(`invoice_approvers_${data.id}`) : null);
+        (data.id ? localStorage.getItem(`invoice_approvers_${data.id}`) : null) ||
+        (data.poNumber ? sessionStorage.getItem(`approvers_${data.poNumber}`) : null) ||
+        (data.poNumber ? localStorage.getItem(`approvers_${data.poNumber}`) : null) ||
+        (data.poNumber ? sessionStorage.getItem(`invoice_approvers_${data.poNumber}`) : null) ||
+        (data.poNumber ? localStorage.getItem(`invoice_approvers_${data.poNumber}`) : null);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -330,16 +334,21 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
     const fetchChain = async () => {
       try {
         const targetRef = data.invoiceNumber;
-        const [res, docSigs1, docSigs2, docSigs3, savedSigs] = await Promise.all([
+        const poRef = data.poNumber || (data as any).purchaseOrder?.poNumber || (data as any).poReference;
+
+        const [resInv, resPO, docSigs1, docSigs2, docSigsPO1, docSigsPO2, docSigsPO3, savedSigs] = await Promise.all([
           approvalService.getChain('AccountsPayable', targetRef).catch(() => null),
+          poRef ? approvalService.getChain('PurchaseOrders', poRef).catch(() => null) : Promise.resolve(null),
           signatureService.getDocumentSignatures('AccountsPayable', targetRef).catch(() => []),
           data.id && data.id !== targetRef ? signatureService.getDocumentSignatures('AccountsPayable', String(data.id)).catch(() => []) : Promise.resolve([]),
-          data.poNumber ? signatureService.getDocumentSignatures('AccountsPayable', data.poNumber).catch(() => []) : Promise.resolve([]),
+          poRef ? signatureService.getDocumentSignatures('PurchaseOrders', poRef).catch(() => []) : Promise.resolve([]),
+          poRef ? signatureService.getDocumentSignatures('PURCHASE_ORDER', poRef).catch(() => []) : Promise.resolve([]),
+          poRef ? signatureService.getDocumentSignatures('AccountsPayable', poRef).catch(() => []) : Promise.resolve([]),
           signatureService.list().catch(() => []),
         ]);
         if (!isMounted) return;
 
-        const allRawDocSigs = [...docSigs1, ...docSigs2, ...docSigs3];
+        const allRawDocSigs = [...docSigs1, ...docSigs2, ...docSigsPO1, ...docSigsPO2, ...docSigsPO3];
         const signerMap = new Map<string, any>();
         for (const s of allRawDocSigs) {
           const sigUrl = s.dataUrl || s.signature?.dataUrl;
@@ -364,24 +373,43 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
           return timeA - timeB;
         });
 
-        const chainItems = res?.levels && res.levels.length > 0 ? res.levels : (res?.history && res.history.length > 0 ? res.history : []);
+        const hasApprovedLevels = (chain: any) =>
+          Array.isArray(chain?.levels) && chain.levels.some((l: any) => l.status === 'APPROVED' || l.status === 'AUTO_FORWARDED');
+
+        let bestChain = null;
+        if (hasApprovedLevels(resInv)) {
+          bestChain = resInv;
+        } else if (hasApprovedLevels(resPO)) {
+          bestChain = resPO;
+        } else if (resInv?.levels && resInv.levels.length > 0) {
+          bestChain = resInv;
+        } else {
+          bestChain = resPO;
+        }
+
+        const chainItems = bestChain?.levels && bestChain.levels.length > 0
+          ? bestChain.levels
+          : (bestChain?.history && bestChain.history.length > 0 ? bestChain.history : []);
         const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
 
-        // Identify any signature explicitly belonging to Mahi Agarwal or Nischal Agarwal
-        const docSigMahi = sortedDocSigs.find((d: any) => {
+        // Persist signatures in localStorage cache
+        for (const d of sortedDocSigs) {
+          if (!d.dataUrl) continue;
           const n = (d.signedByName || '').toLowerCase();
-          return n.includes('mahi') || (d.signedById && String(d.signedById) === '6a7d5a46bab343663a43aaad');
-        });
-        const docSigNischal = sortedDocSigs.find((d: any) => {
-          const n = (d.signedByName || '').toLowerCase();
-          return n.includes('nischal') || (d.signedById && String(d.signedById) === '6a4a8823de28b3ac89d1a4cb');
-        });
-
-        if (docSigMahi?.dataUrl) {
-          try { localStorage.setItem('heliflow_sig_mahi', docSigMahi.dataUrl); } catch {}
+          if (n.includes('mahi') || String(d.signedById) === '6a7d5a46bab343663a43aaad') {
+            try { localStorage.setItem('heliflow_sig_mahi', d.dataUrl); } catch {}
+          } else if (n.includes('nischal') || String(d.signedById) === '6a4a8823de28b3ac89d1a4cb') {
+            try { localStorage.setItem('heliflow_sig_nischal', d.dataUrl); } catch {}
+          }
         }
-        if (docSigNischal?.dataUrl) {
-          try { localStorage.setItem('heliflow_sig_nischal', docSigNischal.dataUrl); } catch {}
+        for (const s of savedSigs) {
+          if (!s.dataUrl) continue;
+          const n = (s.name || '').toLowerCase();
+          if (n.includes('mahi')) {
+            try { localStorage.setItem('heliflow_sig_mahi', s.dataUrl); } catch {}
+          } else if (n.includes('nischal')) {
+            try { localStorage.setItem('heliflow_sig_nischal', s.dataUrl); } catch {}
+          }
         }
 
         if (chainItems && chainItems.length > 0) {
@@ -408,15 +436,16 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                 }
               }
 
-              // 2. Specific match for known Clerk (Mahi) / Manager (Nischal)
+              // 2. Specific match for known Clerk (Mahi) / Manager (Nischal) by approver name
               if (!levelSig) {
-                if (levelNum === 1 || (item.requiredRole || '').toLowerCase().includes('clerk')) {
+                const nLower = (item.approverName || '').toLowerCase();
+                if (nLower.includes('mahi')) {
                   const cachedMahi = docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi');
                   if (cachedMahi && !usedSigUrls.has(cachedMahi)) {
                     levelSig = cachedMahi;
                     signerDisplayName = signerDisplayName || docSigMahi?.signedByName || 'Mahi Agarwal';
                   }
-                } else if (levelNum === 2 || (item.requiredRole || '').toLowerCase().includes('manager')) {
+                } else if (nLower.includes('nischal')) {
                   const cachedNischal = docSigNischal?.dataUrl || localStorage.getItem('heliflow_sig_nischal');
                   if (cachedNischal && !usedSigUrls.has(cachedNischal)) {
                     levelSig = cachedNischal;
@@ -477,7 +506,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
 
             const name = signerDisplayName || (item.approverName && !item.approverName.toLowerCase().includes('authorized') && !item.approverName.toLowerCase().includes('system administrator')
               ? item.approverName
-              : (isLevelApproved ? (levelNum === 1 ? 'Mahi Agarwal' : 'Nischal Agarwal') : (item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${levelNum} Approver`)));
+              : (isLevelApproved ? (item.approverName || item.requiredRole || `Level ${levelNum} Approver`) : (item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${levelNum} Approver`)));
 
             return {
               level: `Level ${levelNum}`,
@@ -499,6 +528,10 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
             if (data.id) {
               sessionStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(mapped));
               localStorage.setItem(`invoice_approvers_${data.id}`, JSON.stringify(mapped));
+            }
+            if (poRef) {
+              sessionStorage.setItem(`invoice_approvers_${poRef}`, JSON.stringify(mapped));
+              localStorage.setItem(`invoice_approvers_${poRef}`, JSON.stringify(mapped));
             }
           } catch {}
         } else {

@@ -37,12 +37,13 @@ export function ActionSuccessModal({ data, onClose }: ActionSuccessModalProps) {
 
   if (!data) return null;
 
-  const isSent = data.actionType === 'sent' || data.actionType === 'submit';
-  const isApprove = data.actionType === 'approve' || data.actionType === 'accept';
-  const isReject = data.actionType === 'reject';
-  const isReturn = data.actionType === 'return';
+  const rawType = typeof data.actionType === 'string' ? data.actionType.toLowerCase() : '';
+  const isSent = rawType === 'sent' || rawType === 'submit';
+  const isApprove = rawType === 'approve' || rawType === 'accept' || rawType === 'approved';
+  const isReject = rawType === 'reject' || rawType === 'rejected';
+  const isReturn = rawType === 'return' || rawType === 'returned' || (!isSent && !isApprove && !isReject);
 
-  const typeClass = (isApprove || isSent) ? 'approve' : isReject ? 'reject' : 'return';
+  const typeClass: 'approve' | 'reject' | 'return' = (isApprove || isSent) ? 'approve' : isReject ? 'reject' : 'return';
 
   const displayActionTitle = data.actionTitle || (isSent
     ? `${data.module} Sent`
@@ -83,9 +84,9 @@ export function ActionSuccessModal({ data, onClose }: ActionSuccessModalProps) {
 
         {/* Dynamic Icon Circle */}
         <div className={`action-success-modal__icon-wrap action-success-modal__icon-wrap--${typeClass}`}>
-          {(isApprove || isSent) && <CheckCircle2 size={38} className="action-success-modal__icon" />}
-          {isReject && <XCircle size={38} className="action-success-modal__icon" />}
-          {isReturn && <RotateCcw size={38} className="action-success-modal__icon" />}
+          {(isApprove || isSent) && <CheckCircle2 size={38} strokeWidth={2.4} className="action-success-modal__icon" />}
+          {isReject && <XCircle size={38} strokeWidth={2.4} className="action-success-modal__icon" />}
+          {isReturn && <RotateCcw size={38} strokeWidth={2.4} className="action-success-modal__icon" />}
         </div>
 
         {/* Header Title & Badge */}

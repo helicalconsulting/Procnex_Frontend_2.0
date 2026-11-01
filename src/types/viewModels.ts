@@ -154,6 +154,9 @@ export interface ApprovalTableRow {
   canAct?: boolean;
   isReturned?: boolean;
   isReReview?: boolean;
+  approvedByMe?: boolean;
+  returnedByMe?: boolean;
+  workflowStatus?: string;
   approverId?: string;
   approverName?: string;
   approverEmail?: string;

@@ -337,7 +337,14 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     comments: a.comments ? String(a.comments) : undefined,
     department: String(a.department || '—'),
     canAct: Boolean(a.canAct ?? false),
-    isReturned: Boolean(a.isReturned || (a as any).isReReview || a.status === 'RETURNED' || (a.comments && /return/i.test(String(a.comments)))),
+    approvedByMe: Boolean((a as any).approvedByMe),
+    returnedByMe: Boolean((a as any).returnedByMe),
+    workflowStatus: (a as any).workflowStatus ? String((a as any).workflowStatus) : undefined,
+    isReturned: Boolean(
+      ((a as any).isReturned || a.status === 'RETURNED' || (a as any).isReReview) &&
+      a.status !== 'APPROVED' &&
+      !(a as any).approvedByMe
+    ),
     approverId: a.approverId ? String(a.approverId) : (a.approver as any)?.id ? String((a.approver as any).id) : undefined,
     approverName: a.approverName ? String(a.approverName) : (a.approver as any)?.fullName ? String((a.approver as any).fullName) : undefined,
     approverEmail: a.approverEmail ? String(a.approverEmail) : (a.approver as any)?.email ? String((a.approver as any).email) : undefined,

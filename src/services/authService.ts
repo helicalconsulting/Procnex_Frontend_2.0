@@ -13,6 +13,89 @@ const ROLES_KEY = 'heliflow_roles';
 const PERMISSIONS_KEY = 'heliflow_permissions';
 const VENDOR_TOKEN_KEY = 'heliflow_vendor_token';
 
+export function pruneStorage(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      // Never delete critical authentication keys
+      if (
+        key === TOKEN_KEY ||
+        key === USER_KEY ||
+        key === ROLES_KEY ||
+        key === PERMISSIONS_KEY ||
+        key === VENDOR_TOKEN_KEY ||
+        key === 'employee_company_code' ||
+        key === 'vendor_company_code'
+      ) {
+        continue;
+      }
+      // Target ephemeral caches, base64 attachments, and large objects
+      if (
+        key.includes('attachment') ||
+        key.startsWith('invoice_') ||
+        key.startsWith('payment_') ||
+        key.startsWith('vendor_invoice_') ||
+        key.startsWith('dispatch_') ||
+        key.startsWith('approvers_') ||
+        key.startsWith('po_items_') ||
+        key.startsWith('voucher_items_') ||
+        key.startsWith('heliflow_sig_') ||
+        key.startsWith('heliflow_doc_signatures') ||
+        key.startsWith('heliflow_signatures') ||
+        key.startsWith('sap_') ||
+        key.startsWith('dashboard_') ||
+        key.startsWith('calendar_') ||
+        key.startsWith('branding_')
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch {}
+    });
+  } catch {}
+}
+
+export function safeSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // If quota exceeded or error, aggressively purge non-essential keys
+    pruneStorage();
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Fallback to sessionStorage so authentication and session always succeed
+      try {
+        sessionStorage.setItem(key, value);
+      } catch {}
+    }
+  }
+}
+
+export function safeGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key) || sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function safeRemoveItem(key: string): void {
+  try { localStorage.removeItem(key); } catch {}
+  try { sessionStorage.removeItem(key); } catch {}
+}
+
+// Proactively run prune on file load to clear any preexisting quota exhaustion
+try {
+  pruneStorage();
+} catch {}
+
 function mockPermissionsForRoles(roles: string[]): UserModulePermission[] {
   const isSuper = roles.some((r) => r === 'Super Admin' || r === 'admin' || r === 'Administrator');
   const isManager = roles.some((r) =>
@@ -258,56 +341,59 @@ async function apiGetCurrentUser(): Promise<AuthResponse | null> {
 }
 
 function saveSession(data: AuthResponse, options?: { vendorPortal?: boolean }): void {
-  localStorage.setItem(TOKEN_KEY, data.token);
-  localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  try {
+    safeSetItem(TOKEN_KEY, data.token);
+    safeSetItem(USER_KEY, JSON.stringify(data.user));
 
-  let rolesToSave = data.roles || [];
-  if (rolesToSave.length === 0) {
-    try {
-      const existing = localStorage.getItem(ROLES_KEY);
-      if (existing) {
-        const parsed = JSON.parse(existing);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          rolesToSave = parsed;
+    let rolesToSave = data.roles || [];
+    if (rolesToSave.length === 0) {
+      try {
+        const existing = safeGetItem(ROLES_KEY);
+        if (existing) {
+          const parsed = JSON.parse(existing);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            rolesToSave = parsed;
+          }
         }
-      }
-    } catch {}
-  }
-  localStorage.setItem(ROLES_KEY, JSON.stringify(rolesToSave));
+      } catch {}
+    }
+    safeSetItem(ROLES_KEY, JSON.stringify(rolesToSave));
 
-  if (data.permissions?.length) {
-    localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(data.permissions));
-  } else if (!localStorage.getItem(PERMISSIONS_KEY)) {
-    localStorage.removeItem(PERMISSIONS_KEY);
-  }
-  if (options?.vendorPortal) {
-    localStorage.setItem(VENDOR_TOKEN_KEY, data.token);
-    if (data.user?.companyCode) {
-      localStorage.setItem('vendor_company_code', data.user.companyCode.toUpperCase());
+    if (data.permissions?.length) {
+      safeSetItem(PERMISSIONS_KEY, JSON.stringify(data.permissions));
+    } else if (!safeGetItem(PERMISSIONS_KEY)) {
+      safeRemoveItem(PERMISSIONS_KEY);
     }
-  } else {
-    if (data.user?.companyCode) {
-      localStorage.setItem('employee_company_code', data.user.companyCode.toUpperCase());
+    if (options?.vendorPortal) {
+      safeSetItem(VENDOR_TOKEN_KEY, data.token);
+      if (data.user?.companyCode) {
+        safeSetItem('vendor_company_code', data.user.companyCode.toUpperCase());
+      }
+    } else {
+      if (data.user?.companyCode) {
+        safeSetItem('employee_company_code', data.user.companyCode.toUpperCase());
+      }
     }
+  } catch (e) {
+    console.warn('[Auth] Non-fatal storage notice during saveSession:', e);
   }
 }
 
-/** Synchronously read cached session from localStorage — no async call needed */
+/** Synchronously read cached session from localStorage / sessionStorage — no async call needed */
 function getCachedSession(): {
   user: import('../types').User;
   roles: string[];
   permissions?: UserModulePermission[];
 } | null {
   try {
-    const userStr = localStorage.getItem(USER_KEY);
-    const rolesStr = localStorage.getItem(ROLES_KEY);
+    const userStr = safeGetItem(USER_KEY);
+    const rolesStr = safeGetItem(ROLES_KEY);
     if (!userStr || !rolesStr) return null;
+    const permsStr = safeGetItem(PERMISSIONS_KEY);
     return {
       user: JSON.parse(userStr),
       roles: JSON.parse(rolesStr),
-      permissions: localStorage.getItem(PERMISSIONS_KEY)
-        ? JSON.parse(localStorage.getItem(PERMISSIONS_KEY)!)
-        : undefined,
+      permissions: permsStr ? JSON.parse(permsStr) : undefined,
     };
   } catch {
     return null;
@@ -315,21 +401,21 @@ function getCachedSession(): {
 }
 
 function clearSession(): void {
-  const companyCode = localStorage.getItem('vendor_company_code');
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(ROLES_KEY);
-  localStorage.removeItem(PERMISSIONS_KEY);
-  localStorage.removeItem(VENDOR_TOKEN_KEY);
-  localStorage.removeItem('heliflow_branding_cache');
-  localStorage.removeItem('heliflow_tab_title');
+  const companyCode = safeGetItem('vendor_company_code');
+  safeRemoveItem(TOKEN_KEY);
+  safeRemoveItem(USER_KEY);
+  safeRemoveItem(ROLES_KEY);
+  safeRemoveItem(PERMISSIONS_KEY);
+  safeRemoveItem(VENDOR_TOKEN_KEY);
+  safeRemoveItem('heliflow_branding_cache');
+  safeRemoveItem('heliflow_tab_title');
   if (companyCode) {
-    localStorage.setItem('vendor_company_code', companyCode);
+    safeSetItem('vendor_company_code', companyCode);
   }
 }
 
 function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return safeGetItem(TOKEN_KEY);
 }
 
 /**
@@ -339,7 +425,7 @@ function getToken(): string | null {
  * This happens once — after that, all tokens are real JWTs.
  */
 async function migrateMockToken(): Promise<AuthResponse | null> {
-  const storedToken = localStorage.getItem(TOKEN_KEY);
+  const storedToken = safeGetItem(TOKEN_KEY);
   if (storedToken !== MOCK_TOKEN) return null; // not the mock token, nothing to do
 
   try {
@@ -434,4 +520,8 @@ export const authService = {
   saveSession,
   clearSession,
   migrateMockToken,
+  pruneStorage,
+  safeSetItem,
+  safeGetItem,
+  safeRemoveItem,
 };

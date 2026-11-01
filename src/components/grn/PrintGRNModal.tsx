@@ -152,7 +152,7 @@ export function PrintGRNModal({
     const rejected = Number(item.rejectedQty ?? 0);
     const unit = item.unit || 'pcs';
     const unitPrice = Number(item.unitPrice || 0);
-    const totalPrice = Number(item.totalPrice || (received * unitPrice) || 0);
+    const totalPrice = Number(item.totalPrice || (accepted * unitPrice) || 0);
     const remarks = item.remarks || (rejected > 0 ? `Rejected: ${rejected} ${unit}` : 'Quality Sound & Accepted');
 
     return {

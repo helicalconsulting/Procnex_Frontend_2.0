@@ -554,7 +554,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
               // 3. Match specifically by known approver in sortedDocSigs or local cache if matching name
               if (!levelSig) {
                 const nLower = (item.approverName || '').toLowerCase();
-                if (nLower.includes('mahi') || (levelNum === 1 && docSigMahi?.dataUrl)) {
+                if (nLower.includes('mahi')) {
                   const cachedMahi = docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi');
                   if (cachedMahi && !usedSigUrls.has(cachedMahi)) {
                     levelSig = cachedMahi;
@@ -564,7 +564,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
                   const cachedNischal = docSigNischal?.dataUrl || localStorage.getItem('heliflow_sig_nischal');
                   if (cachedNischal && !usedSigUrls.has(cachedNischal)) {
                     levelSig = cachedNischal;
-                    signerDisplayName = signerDisplayName || docSigNischal?.signedByName || 'nischal';
+                    signerDisplayName = signerDisplayName || docSigNischal?.signedByName || 'Nischal Agarwal';
                   }
                 }
               }
@@ -755,26 +755,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     if (!total && unitPrice > 0) total = qty * unitPrice;
     if (!unitPrice && total > 0 && qty > 0) unitPrice = total / qty;
 
-    // Normalization against 1000x inflated values (e.g. 200,000 -> 200, 10,000,000 -> 10,000)
-    if (unitPrice >= 100000 && (unitPrice === 200000 || unitPrice % 1000 === 0)) {
-      unitPrice = unitPrice / 1000;
-      total = qty * unitPrice;
-    }
-    if (total >= 1000000 && (total % 1000 === 0)) {
-      total = total / 1000;
-      unitPrice = Number((total / qty).toFixed(2));
-    }
-
-    // Safety fallback: if an item is wildly inflated compared to numericAmount (e.g. from an old master RFQ dummy item)
-    if (numericAmount > 0 && total > numericAmount * 1.5) {
-      if (total / 1000 <= numericAmount * 1.5) {
-        total = total / 1000;
-        unitPrice = Number((total / qty).toFixed(2));
-      } else {
-        total = numericAmount;
-        unitPrice = Number((numericAmount / qty).toFixed(2));
-      }
-    } else if (!unitPrice && numericAmount > 0) {
+    if (!unitPrice && numericAmount > 0) {
       unitPrice = Number((numericAmount / (itemsList.length || 1) / qty).toFixed(2));
       total = qty * unitPrice;
     }
@@ -792,6 +773,10 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     };
   });
 
+  const itemsSum = resolvedItems.reduce((sum: number, it: any) => sum + (Number(it.total) || 0), 0);
+  const resolvedGrandTotal = (fullPO?.grandTotal ?? fullPO?.totalAmount) || (itemsSum > 0 ? itemsSum : numericAmount);
+  const resolvedSubtotal = fullPO?.subtotal || (itemsSum > 0 ? itemsSum : resolvedGrandTotal);
+
   const finalItems = resolvedItems.length > 0 ? resolvedItems : [
     {
       id: '1',
@@ -799,10 +784,10 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
       description: data.title || 'Procurement Line Item',
       quantity: 1,
       unit: 'pcs',
-      unitPrice: numericAmount || 0,
+      unitPrice: resolvedGrandTotal || 0,
       taxPercent: 0,
       discount: 0,
-      total: numericAmount || 0,
+      total: resolvedGrandTotal || 0,
     }
   ];
 
@@ -848,10 +833,10 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     internalNotes: (data as any).internalNotes || data.comments || fullPO?.internalNotes || 'No internal notes',
     specialInstructions: (data as any).specialInstructions || fullPO?.specialInstructions || 'No special instructions',
 
-    subtotal: numericAmount,
+    subtotal: resolvedSubtotal,
     taxTotal: 0,
     discountTotal: 0,
-    grandTotal: numericAmount,
+    grandTotal: resolvedGrandTotal,
 
     quotationNumber: (data as any).quotationNumber || fullPO?.quotationNumber || (data as any).sourceReferences?.supplierQuotationNo,
     requisitionNumber: (data as any).requisitionNumber || fullPO?.requisitionNumber || (data as any).sourceReferences?.prNo,

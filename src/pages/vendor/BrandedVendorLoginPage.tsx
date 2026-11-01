@@ -12,6 +12,7 @@ import { getTenantCompanyCode, setTenantCompanyCode } from '../../utils/tenantRe
 import { AuthLayout } from '../../components/auth/AuthLayout';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { authService } from '../../services/authService';
 
 function getCachedTenantBranding(code: string): CompanyBranding | null {
   const profile = code ? readCachedProfile(code) : null;
@@ -109,6 +110,7 @@ export const BrandedVendorLoginPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      authService.pruneStorage();
       if (companyCodeState) {
         setTenantCompanyCode(companyCodeState);
       }
@@ -116,7 +118,20 @@ export const BrandedVendorLoginPage: React.FC = () => {
       const targetPath = companyCodeState ? `/v/${companyCodeState.toLowerCase()}/dashboard` : '/vendor/dashboard';
       navigate(targetPath, { replace: true });
     } catch (err: any) {
-      setError(err?.message || 'Login failed. Please check your credentials.');
+      const msg = err?.message || 'Login failed. Please check your credentials.';
+      if (msg.includes('quota') || msg.includes('Storage')) {
+        authService.pruneStorage();
+        try {
+          await vendorLogin({ username: username.trim(), password });
+          const targetPath = companyCodeState ? `/v/${companyCodeState.toLowerCase()}/dashboard` : '/vendor/dashboard';
+          navigate(targetPath, { replace: true });
+          return;
+        } catch (retryErr: any) {
+          setError(retryErr?.message || 'Storage quota error cleared. Please click Sign in again.');
+        }
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsSubmitting(false);
     }

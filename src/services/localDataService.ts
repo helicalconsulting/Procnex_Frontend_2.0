@@ -292,9 +292,11 @@ function cleanRemarks(text?: string): string {
 }
 
 export const localDataService = {
-  getPayments: async (): Promise<Payment[]> => {
+  getPayments: async (options?: { force?: boolean }): Promise<Payment[]> => {
     try {
-      const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments?limit=100', { cacheTtlMs: 30000 });
+      const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments?limit=100', {
+        cacheTtlMs: options?.force ? 0 : 5000,
+      });
       if (data.payments && Array.isArray(data.payments)) {
         const mappedList = data.payments.map((p, idx) => {
           let amt = Number(p.amount || 0);

@@ -839,10 +839,8 @@ export default function CreatePurchaseInvoicePage() {
           const grnQty = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 1);
 
           let unitPrice = Number(gi.unitPrice || poMatch?.unitPrice || (foundInv?.amount ? foundInv.amount / (grnQty || 1) : 0) || 0);
-          if (totalPOValue > 0 && grnQty > 0 && unitPrice * grnQty > totalPOValue * 1.5) {
-            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
-          } else if (!unitPrice && totalPOValue > 0 && grnQty > 0) {
-            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
+          if (!unitPrice && totalPOValue > 0 && poQty > 0) {
+            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / poQty).toFixed(2));
           }
 
           let rawItemName = gi.itemName || poMatch?.itemName || poMatch?.name || poMatch?.description || '';
@@ -995,10 +993,8 @@ export default function CreatePurchaseInvoicePage() {
           const grnQty = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 1);
 
           let unitPrice = Number(gi.unitPrice || poMatch?.unitPrice || (foundInv?.amount ? foundInv.amount / (grnQty || 1) : 0) || 0);
-          if (totalPOValue > 0 && grnQty > 0 && unitPrice * grnQty > totalPOValue * 1.5) {
-            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
-          } else if (!unitPrice && totalPOValue > 0 && grnQty > 0) {
-            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
+          if (!unitPrice && totalPOValue > 0 && poQty > 0) {
+            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / poQty).toFixed(2));
           }
 
           let rawItemName = gi.itemName || poMatch?.itemName || poMatch?.name || poMatch?.description || '';
