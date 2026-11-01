@@ -1271,8 +1271,13 @@ export default function CreatePaymentVoucherPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setVoucherNumber(v.paymentId || (v as any).paymentNumber || '');
-    setInvoiceRef(v.invoiceRef || '');
     let editAmount = typeof v.amount === 'number' ? v.amount : (typeof v.grossAmount === 'number' ? v.grossAmount : '');
+    if (v.invoices && v.invoices.length > 0) {
+      const invTotal = v.invoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+      if (invTotal > 0) {
+        editAmount = invTotal;
+      }
+    }
     setGrossAmount(editAmount);
     if (v.method) setPaymentMethod(v.method);
     if (v.remarks) setRemarks(v.remarks);
@@ -1354,9 +1359,33 @@ export default function CreatePaymentVoucherPage() {
   };
 
   // Calculations
-  const subtotal = typeof grossAmount === 'number' ? grossAmount : 0;
-  const taxAmount = useMemo(() => Number(((subtotal * (taxPercent || 0)) / 100).toFixed(2)), [subtotal, taxPercent]);
-  const grossWithTax = useMemo(() => Number((subtotal + taxAmount).toFixed(2)), [subtotal, taxAmount]);
+  const isInvoiceDerived = vendorInvoices.some((i) => i.selected);
+  const totalAmount = typeof grossAmount === 'number' ? grossAmount : 0;
+  const taxRate = taxPercent || 0;
+
+  // When invoices are selected, grossAmount represents the invoice bill total (inclusive of VAT/tax).
+  // Hence we extract the pre-tax base subtotal and tax amount so the net disbursement matches the invoice amount.
+  const subtotal = useMemo(() => {
+    if (isInvoiceDerived && taxRate > 0) {
+      return Number((totalAmount / (1 + taxRate / 100)).toFixed(2));
+    }
+    return totalAmount;
+  }, [totalAmount, taxRate, isInvoiceDerived]);
+
+  const taxAmount = useMemo(() => {
+    if (isInvoiceDerived && taxRate > 0) {
+      return Number((totalAmount - subtotal).toFixed(2));
+    }
+    return Number(((subtotal * taxRate) / 100).toFixed(2));
+  }, [totalAmount, subtotal, taxRate, isInvoiceDerived]);
+
+  const grossWithTax = useMemo(() => {
+    if (isInvoiceDerived) {
+      return totalAmount;
+    }
+    return Number((subtotal + taxAmount).toFixed(2));
+  }, [totalAmount, subtotal, taxAmount, isInvoiceDerived]);
+
   const tdsAmount = useMemo(() => Number(((subtotal * (tdsPercent || 0)) / 100).toFixed(2)), [subtotal, tdsPercent]);
   const netPayable = useMemo(() => Number((grossWithTax - tdsAmount).toFixed(2)), [grossWithTax, tdsAmount]);
   const gross = grossWithTax;
@@ -1425,9 +1454,9 @@ export default function CreatePaymentVoucherPage() {
     }));
 
     const itemsList = selectedInvoices.map((inv, idx) => {
-      const invSub = inv.paymentAmount;
-      const invTax = Number(((invSub * (taxPercent || 0)) / 100).toFixed(2));
-      const invGross = Number((invSub + invTax).toFixed(2));
+      const invGross = inv.paymentAmount;
+      const invTax = taxPercent > 0 ? Number((invGross - (invGross / (1 + taxPercent / 100))).toFixed(2)) : 0;
+      const invSub = Number((invGross - invTax).toFixed(2));
       const invTds = Number(((invSub * (tdsPercent || 0)) / 100).toFixed(2));
       const invNet = Number((invGross - invTds).toFixed(2));
       return {
@@ -1602,10 +1631,19 @@ export default function CreatePaymentVoucherPage() {
   // Open voucher document modal for viewing
   const handleViewVoucherDoc = (voucher: Payment) => {
     let vAmount = Number(voucher.amount || 0);
-    let vGross = Number(voucher.grossAmount || voucher.amount || 0);
-    let vSubtotal = Number((voucher as any).subtotal || (voucher.grossAmount ? voucher.grossAmount : voucher.amount) || 0);
-    let vTaxAmount = Number((voucher as any).taxAmount || 0);
+    if (voucher.invoices && Array.isArray(voucher.invoices) && voucher.invoices.length > 0) {
+      const invTotal = voucher.invoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+      if (invTotal > 0 && (vAmount > invTotal || vAmount <= 0)) {
+        vAmount = invTotal;
+      }
+    }
     const vTaxPercent = (voucher as any).taxPercent !== undefined ? (voucher as any).taxPercent : 18;
+    let vGross = vAmount;
+    let vSubtotal = Number((voucher as any).subtotal || 0);
+    if (!vSubtotal || vSubtotal >= vGross) {
+      vSubtotal = vTaxPercent > 0 ? Number((vGross / (1 + vTaxPercent / 100)).toFixed(2)) : vGross;
+    }
+    let vTaxAmount = Number((voucher as any).taxAmount || (vGross - vSubtotal).toFixed(2));
 
     let voucherItems = voucher.items;
     if (!voucherItems || voucherItems.length === 0) {

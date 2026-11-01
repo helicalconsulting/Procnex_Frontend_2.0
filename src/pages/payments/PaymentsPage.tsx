@@ -211,13 +211,25 @@ function mapPayment(payment: ServicePayment): Payment {
   const resolvedStatus: PaymentStatus =
     statusMap[rawStatus] || (rawStatus === 'DRAFT' ? 'DRAFT' : rawStatus === 'RETURNED' ? 'RETURNED' : 'PENDING');
 
+  let resolvedAmount = Number(payment.amount || 0);
+  if (Array.isArray(payment.invoices) && payment.invoices.length > 0) {
+    const invTotal = payment.invoices.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0);
+    if (invTotal > 0) {
+      const tds = Number(payment.tdsAmount || 0);
+      const expectedNet = Number(Math.max(0, invTotal - tds).toFixed(2));
+      if (resolvedAmount > invTotal || resolvedAmount <= 0) {
+        resolvedAmount = expectedNet;
+      }
+    }
+  }
+
   return {
     id: payment.id,
     paymentNumber: payment.paymentId,
     invoiceRef: payment.invoiceRef,
     vendorName: payment.vendor,
     vendorInitials: payment.vendor.split(' ').map((word) => word[0]).join('').slice(0, 2).toUpperCase(),
-    amount: payment.amount,
+    amount: resolvedAmount,
     method: (payment.method as PaymentMethod) || 'NEFT',
     date: payment.paidAt,
     status: resolvedStatus,
@@ -2051,10 +2063,10 @@ export default function PaymentsPage() {
             accountNumber: vendorBankDetails?.accountNumber,
             ifscCode: vendorBankDetails?.ifscCode,
             invoiceRef: selectedPrintVoucher.invoiceRef,
-            subtotal: (selectedPrintVoucher as any).subtotal || selectedPrintVoucher.amount,
+            subtotal: ((selectedPrintVoucher as any).subtotal && Number((selectedPrintVoucher as any).subtotal) < selectedPrintVoucher.amount) ? (selectedPrintVoucher as any).subtotal : undefined,
             taxPercent: (selectedPrintVoucher as any).taxPercent !== undefined ? (selectedPrintVoucher as any).taxPercent : 18,
             taxAmount: (selectedPrintVoucher as any).taxAmount || 0,
-            grossAmount: (selectedPrintVoucher as any).grossAmount || selectedPrintVoucher.amount,
+            grossAmount: selectedPrintVoucher.amount,
             tdsAmount: (selectedPrintVoucher as any).tdsAmount || 0,
             netAmount: selectedPrintVoucher.amount,
             currency: companyDefaultCurrency,

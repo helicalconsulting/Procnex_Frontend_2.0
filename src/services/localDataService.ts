@@ -298,6 +298,16 @@ export const localDataService = {
       if (data.payments && Array.isArray(data.payments)) {
         const mappedList = data.payments.map((p, idx) => {
           let amt = Number(p.amount || 0);
+          if (Array.isArray(p.invoices) && p.invoices.length > 0) {
+            const invTotal = p.invoices.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0);
+            if (invTotal > 0) {
+              const tds = Number(p.tdsAmount || 0);
+              const expectedNet = Number(Math.max(0, invTotal - tds).toFixed(2));
+              if (amt > invTotal || amt <= 0) {
+                amt = expectedNet;
+              }
+            }
+          }
           let gross = p.grossAmount ? Number(p.grossAmount) : undefined;
 
           return {

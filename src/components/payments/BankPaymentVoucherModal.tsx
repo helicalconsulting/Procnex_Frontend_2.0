@@ -150,8 +150,14 @@ function normalizeVoucherItems(rawItems: any[], data: PaymentVoucherDocData): Pa
 function generateSingleLineItemForVoucher(data: PaymentVoucherDocData): PaymentVoucherItem[] {
   const taxRate = data.taxPercent !== undefined ? Number(data.taxPercent) : (data.taxRate !== undefined ? Number(data.taxRate) : 18);
   let total = Number(data.netAmount || data.grossAmount || 0);
-  let baseSubtotal = data.subtotal ? Number(data.subtotal) : (data.taxAmount ? total - data.taxAmount : Number((total / (1 + taxRate / 100)).toFixed(2)));
-  let taxAmt = data.taxAmount !== undefined ? Number(data.taxAmount) : Number(((baseSubtotal * taxRate) / 100).toFixed(2));
+  let baseSubtotal = (data.subtotal && Number(data.subtotal) < total)
+    ? Number(data.subtotal)
+    : (data.taxAmount && Number(data.taxAmount) < total
+      ? Math.max(0, total - Number(data.taxAmount))
+      : (taxRate > 0 ? Number((total / (1 + taxRate / 100)).toFixed(2)) : total));
+  let taxAmt = (data.taxAmount !== undefined && Number(data.taxAmount) < total)
+    ? Number(data.taxAmount)
+    : Number(Math.max(0, total - baseSubtotal).toFixed(2));
 
   const grossAmt = Number((baseSubtotal + taxAmt).toFixed(2));
   const tdsAmt = Number(data.tdsAmount || 0);

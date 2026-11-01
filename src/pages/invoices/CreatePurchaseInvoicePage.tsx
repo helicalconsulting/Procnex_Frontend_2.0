@@ -189,6 +189,17 @@ export default function CreatePurchaseInvoicePage() {
   const [selectedGrnId, setSelectedGrnId] = useState<string>(() => grnIdParam || '');
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
   const [invoiceOptions, setInvoiceOptions] = useState<APInvoice[]>([]);
+  const [grnRefreshTrigger, setGrnRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleGrnUpdated = () => {
+      setGrnRefreshTrigger((prev) => prev + 1);
+    };
+    window.addEventListener('heliflow:grn-updated', handleGrnUpdated);
+    return () => {
+      window.removeEventListener('heliflow:grn-updated', handleGrnUpdated);
+    };
+  }, []);
 
   // Form Details (declared before useMemo to avoid TDZ ReferenceError)
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(() => (invoiceIdParam ? String(invoiceIdParam) : null));
@@ -604,22 +615,28 @@ export default function CreatePurchaseInvoicePage() {
 
   // Pre-select GRN / Vendor Invoice once grnOptions / invoiceOptions load or when PO is selected
   useEffect(() => {
-    if (grnIdParam && (grnOptions.length > 0 || invoiceOptions.length > 0)) {
-      const matchGrn = grnOptions.find(
-        (g) => String(g.id) === String(grnIdParam) || String(g.grnNumber) === String(grnIdParam)
-      );
-      if (matchGrn) {
-        setSelectedGrnId(`grn_${matchGrn.id}`);
-        return;
+    if (grnIdParam) {
+      if (grnOptions.length > 0) {
+        const matchGrn = grnOptions.find(
+          (g) => String(g.id) === String(grnIdParam) || String(g.grnNumber) === String(grnIdParam)
+        );
+        if (matchGrn) {
+          setSelectedGrnId(`grn_${matchGrn.id}`);
+          return;
+        }
       }
-      const matchInv = invoiceOptions.find(
-        (i) => String(i.id) === String(grnIdParam) || String(i.invoiceNumber) === String(grnIdParam)
-      );
-      if (matchInv) {
-        setSelectedGrnId(`inv_${matchInv.id}`);
-        return;
+      if (invoiceOptions.length > 0) {
+        const matchInv = invoiceOptions.find(
+          (i) => String(i.id) === String(grnIdParam) || String(i.invoiceNumber) === String(grnIdParam)
+        );
+        if (matchInv) {
+          setSelectedGrnId(`inv_${matchInv.id}`);
+          return;
+        }
       }
-      setSelectedGrnId(grnIdParam);
+      if (!selectedGrnId) {
+        setSelectedGrnId(grnIdParam);
+      }
       return;
     }
 
@@ -635,15 +652,15 @@ export default function CreatePurchaseInvoicePage() {
         }
       }
 
-      // 2. Auto-select first linked Vendor Invoice if available
-      if (invoiceOptions.length > 0) {
-        setSelectedGrnId(`inv_${invoiceOptions[0].id}`);
+      // 2. Prioritize verified GRN so the actual inspected goods receipt note renders
+      if (grnOptions.length > 0) {
+        setSelectedGrnId(`grn_${grnOptions[0].id}`);
         return;
       }
 
-      // 3. Else auto-select first linked Dispatch Note if available
-      if (grnOptions.length > 0) {
-        setSelectedGrnId(`grn_${grnOptions[0].id}`);
+      // 3. Else auto-select first linked Vendor Invoice if available
+      if (invoiceOptions.length > 0) {
+        setSelectedGrnId(`inv_${invoiceOptions[0].id}`);
         return;
       }
     }
@@ -788,7 +805,7 @@ export default function CreatePurchaseInvoicePage() {
         );
       }
     }
-  }, [selectedPoId, poList, creationMode]);
+  }, [selectedPoId, poList, creationMode, grnRefreshTrigger]);
 
   // When selected GRN or Vendor Invoice changes, populate form & item details
   useEffect(() => {
@@ -801,8 +818,53 @@ export default function CreatePurchaseInvoicePage() {
 
     const resolveItemsForSelection = (foundInv: any, foundGRN: any, poObj: any) => {
       const isDirectMasterRfq = poObj?.rfq?.title === 'Direct PO Master' || poObj?.rfq?.rfqNumber?.startsWith('RFQ-DIRECT');
+      const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
+      const invTotalAmount = Number(foundInv?.amount || 0);
+      const totalPOValue = Number(poObj?.totalAmount || invTotalAmount || 0);
 
-      // ── PRIORITY 1: Direct Line Items from Vendor Invoice ──
+      // Check if GRN is selected or prioritized
+      const isGrnSelected = selectedGrnId.startsWith('grn_') || Boolean(grnIdParam) || (!selectedGrnId.startsWith('inv_') && Boolean(activeGRN));
+
+      // ── PRIORITY 1: When GRN is selected (or when creating from GRN), render from activeGRN items! ──
+      if (isGrnSelected && activeGRN && activeGRN.items && activeGRN.items.length > 0) {
+        return activeGRN.items.map((gi: any, idx: number) => {
+          const poMatch = poObj?.items?.find((p: any) => p.itemName === gi.itemName || p.itemCode === gi.itemCode) ||
+            poObj?.items?.[idx] ||
+            (!isDirectMasterRfq ? (poObj?.rfq?.items?.[idx] || poObj?.rfq?.selectedQuotation?.items?.[idx]) : null);
+          const poQty = Math.max(1, Number(gi.orderedQty || poMatch?.quantity || 1));
+
+          // In GRN, acceptedQty is the inspected quantity accepted. Fall back to receivedQty if acceptedQty is not defined.
+          const accVal = gi.acceptedQty !== undefined && gi.acceptedQty !== null ? Number(gi.acceptedQty) : null;
+          const recVal = gi.receivedQty !== undefined && gi.receivedQty !== null ? Number(gi.receivedQty) : null;
+          const grnQty = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 1);
+
+          let unitPrice = Number(gi.unitPrice || poMatch?.unitPrice || (foundInv?.amount ? foundInv.amount / (grnQty || 1) : 0) || 0);
+          if (totalPOValue > 0 && grnQty > 0 && unitPrice * grnQty > totalPOValue * 1.5) {
+            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
+          } else if (!unitPrice && totalPOValue > 0 && grnQty > 0) {
+            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
+          }
+
+          let rawItemName = gi.itemName || poMatch?.itemName || poMatch?.name || poMatch?.description || '';
+          if (!rawItemName || rawItemName.startsWith('Items for PO') || rawItemName.startsWith('Line Item')) {
+            rawItemName = poObj?.rfq?.title || poMatch?.itemName || `Line Item ${idx + 1}`;
+          }
+
+          return {
+            id: gi.id || `grn_item_${idx}_${Date.now()}`,
+            itemCode: gi.itemCode || poMatch?.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: rawItemName,
+            description: gi.remarks || poMatch?.description || '',
+            poQty: poQty,
+            grnQty: grnQty,
+            supplierQty: grnQty,
+            unitPrice: unitPrice,
+            taxPercent: Number(poMatch?.taxPercent ?? 18),
+          };
+        });
+      }
+
+      // ── PRIORITY 2: Direct Line Items from Vendor Invoice ──
       let vendorItems = foundInv?.lineItems || foundInv?.items;
       if (typeof vendorItems === 'string') {
         try {
@@ -827,15 +889,19 @@ export default function CreatePurchaseInvoicePage() {
         }
       }
 
-      const invTotalAmount = Number(foundInv?.amount || 0);
-      const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
-      const totalPOValue = Number(poObj?.totalAmount || invTotalAmount || 0);
-
       if (vendorItems && Array.isArray(vendorItems) && vendorItems.length > 0) {
         return vendorItems.map((vi: any, idx: number) => {
           const poMatch = poObj?.items?.[idx] || (!isDirectMasterRfq ? poObj?.rfq?.items?.[idx] : null);
           const poQty = Number(vi.poQty ?? poMatch?.quantity ?? 1);
-          const grnQty = Number(vi.grnQty ?? vi.invoicedQty ?? vi.supplierQty ?? 1);
+
+          // Match with activeGRN item if available
+          const matchingGrnItem = activeGRN?.items?.find((g: any) => g.itemName === vi.itemName || g.itemCode === vi.itemCode) || activeGRN?.items?.[idx];
+          const accVal = matchingGrnItem?.acceptedQty !== undefined && matchingGrnItem?.acceptedQty !== null ? Number(matchingGrnItem.acceptedQty) : null;
+          const recVal = matchingGrnItem?.receivedQty !== undefined && matchingGrnItem?.receivedQty !== null ? Number(matchingGrnItem.receivedQty) : null;
+          const grnQty = matchingGrnItem
+            ? (accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 1))
+            : Number(vi.grnQty ?? vi.invoicedQty ?? vi.supplierQty ?? 1);
+
           const supplierQty =
             vi.invoicedQty !== undefined && vi.invoicedQty !== ''
               ? Number(vi.invoicedQty)
@@ -880,7 +946,9 @@ export default function CreatePurchaseInvoicePage() {
           return baseItems.map((item: any, idx: number) => {
             const poMatch = poObj?.items?.[idx] || (!isDirectMasterRfq ? poObj?.rfq?.items?.[idx] : null);
             const poQty = Math.max(1, Number(item.quantity || item.orderedQty || poMatch?.quantity || 1));
-            const grnQty = Math.max(1, Number(item.receivedQty ?? item.acceptedQty ?? poQty));
+            const accVal = item.acceptedQty !== undefined && item.acceptedQty !== null ? Number(item.acceptedQty) : null;
+            const recVal = item.receivedQty !== undefined && item.receivedQty !== null ? Number(item.receivedQty) : null;
+            const grnQty = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : poQty);
             let unitPrice = Number(item.unitPrice || poMatch?.unitPrice || 2);
             if (totalPOValue > 0 && unitPrice * poQty > totalPOValue * 1.5) {
               unitPrice = Number((totalPOValue / (baseItems.length || 1) / poQty).toFixed(2));
@@ -922,12 +990,14 @@ export default function CreatePurchaseInvoicePage() {
         return activeGRN.items.map((gi: any, idx: number) => {
           const poMatch = poObj?.items?.[idx] || (!isDirectMasterRfq ? (poObj?.rfq?.items?.[idx] || poObj?.rfq?.selectedQuotation?.items?.[idx]) : null);
           const poQty = Math.max(1, Number(gi.orderedQty || poMatch?.quantity || 1));
-          const grnQty = Math.max(1, Number(gi.receivedQty ?? gi.acceptedQty ?? 1));
+          const accVal = gi.acceptedQty !== undefined && gi.acceptedQty !== null ? Number(gi.acceptedQty) : null;
+          const recVal = gi.receivedQty !== undefined && gi.receivedQty !== null ? Number(gi.receivedQty) : null;
+          const grnQty = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 1);
 
-          let unitPrice = Number(poMatch?.unitPrice || (foundInv?.amount ? foundInv.amount / grnQty : 0) || gi.unitPrice || 0);
-          if (totalPOValue > 0 && unitPrice * grnQty > totalPOValue * 1.5) {
+          let unitPrice = Number(gi.unitPrice || poMatch?.unitPrice || (foundInv?.amount ? foundInv.amount / (grnQty || 1) : 0) || 0);
+          if (totalPOValue > 0 && grnQty > 0 && unitPrice * grnQty > totalPOValue * 1.5) {
             unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
-          } else if (!unitPrice && totalPOValue > 0) {
+          } else if (!unitPrice && totalPOValue > 0 && grnQty > 0) {
             unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
           }
 
@@ -1061,7 +1131,7 @@ export default function CreatePurchaseInvoicePage() {
       const rawGrnId = selectedGrnId.replace('grn_', '');
       const foundGRN = grnOptions.find(
         (g) => String(g.id) === String(rawGrnId) || String(g.grnNumber) === String(rawGrnId) || String(g.id) === String(selectedGrnId)
-      );
+      ) || (grnOptions.length > 0 ? grnOptions[0] : null);
 
       const resolved = resolveItemsForSelection(null, foundGRN, foundPO);
       if (resolved) {
@@ -2202,9 +2272,23 @@ export default function CreatePurchaseInvoicePage() {
                 </label>
                 <div className="cpi-auto-linked-box">
                   <div className="cpi-auto-linked-text">
-                    {grnOptions.length > 0 ? (
+                    {grnOptions.length > 1 ? (
+                      <select
+                        value={selectedGrnId}
+                        disabled={isReadOnly}
+                        onChange={(e) => setSelectedGrnId(e.target.value)}
+                        className="cpi-table-input"
+                        style={{ fontWeight: 600, color: '#10b981', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                      >
+                        {grnOptions.map((g) => (
+                          <option key={g.id} value={`grn_${g.id}`}>
+                            {g.grnNumber} ({g.items?.length || 0} items)
+                          </option>
+                        ))}
+                      </select>
+                    ) : grnOptions.length === 1 ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#10b981', fontWeight: 600 }}>
-                        <CheckCircle2 size={16} /> {grnOptions[0].grnNumber || selectedGrnId || 'Verified GRN'}
+                        <CheckCircle2 size={16} /> {grnOptions[0].grnNumber || 'Verified GRN'}
                       </span>
                     ) : selectedPoId ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#f59e0b', fontWeight: 500 }}>

@@ -105,7 +105,7 @@ export const grnService = {
     if (params?.vendorId) query.set('vendorId', params.vendorId);
     if (params?.search) query.set('search', params.search);
 
-    const data = await apiRequest<{ grns: GoodsReceivedNote[]; total: number }>(`/grn?${query.toString()}`);
+    const data = await apiRequest<{ grns: GoodsReceivedNote[]; total: number }>(`/grn?${query.toString()}`, { cacheTtlMs: 0 });
     return data;
   },
 
@@ -163,7 +163,7 @@ export const grnService = {
       if (!found) throw new Error('GRN not found');
       return found;
     }
-    const data = await apiRequest<{ data: GoodsReceivedNote }>(`/grn/${id}`);
+    const data = await apiRequest<{ data: GoodsReceivedNote }>(`/grn/${id}`, { cacheTtlMs: 0 });
     return data.data;
   },
 
@@ -172,7 +172,7 @@ export const grnService = {
       return MOCK_GRNS.filter((g) => g.poId === poId || g.purchaseOrder?.poNumber === poId);
     }
     try {
-      const res = await apiRequest<any>(`/grn/by-po/${poId}`);
+      const res = await apiRequest<any>(`/grn/by-po/${poId}`, { cacheTtlMs: 0 });
       let list: GoodsReceivedNote[] = [];
       if (Array.isArray(res)) list = res;
       else if (Array.isArray(res?.data)) list = res.data;

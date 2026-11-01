@@ -8,7 +8,7 @@ import { grnService, type GRNItemPayload } from '../../services/grnService';
 import { invoiceService } from '../../services/invoiceService';
 import { dispatchNoteService, type DispatchNote } from '../../services/dispatchNoteService';
 import { companySettingsService, type Warehouse } from '../../services/companySettingsService';
-import { apiRequest } from '../../api/client';
+import { apiRequest, invalidateApiCache } from '../../api/client';
 import {
   ArrowLeft,
   Truck,
@@ -711,18 +711,22 @@ export default function CreateGRNPage() {
     }
   }, [poIdParam, rawPoList]);
 
-  // Handle line item edits
+  // Handle line item edits (Bidirectional Accepted <-> Rejected auto calculation)
   const handleUpdateItem = (id: string, field: keyof LineItemState, value: any) => {
     setLineItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
         const updated = { ...item, [field]: value };
-        if (field === 'receivedQty') {
-          const rec = typeof value === 'number' ? value : 0;
-          updated.acceptedQty = Math.max(0, rec - (typeof updated.rejectedQty === 'number' ? updated.rejectedQty : 0));
+        const rec = updated.receivedQty === '' || updated.receivedQty == null ? 0 : Number(updated.receivedQty) || 0;
+
+        if (field === 'acceptedQty') {
+          const acc = value === '' || value == null ? 0 : Number(value) || 0;
+          updated.rejectedQty = Math.max(0, rec - acc);
         } else if (field === 'rejectedQty') {
-          const rej = typeof value === 'number' ? value : 0;
-          const rec = typeof updated.receivedQty === 'number' ? updated.receivedQty : 0;
+          const rej = value === '' || value == null ? 0 : Number(value) || 0;
+          updated.acceptedQty = Math.max(0, rec - rej);
+        } else if (field === 'receivedQty') {
+          const rej = updated.rejectedQty === '' || updated.rejectedQty == null ? 0 : Number(updated.rejectedQty) || 0;
           updated.acceptedQty = Math.max(0, rec - rej);
         }
         return updated;
@@ -772,10 +776,10 @@ export default function CreateGRNPage() {
     let totalAcceptedValue = 0;
 
     lineItems.forEach((item) => {
-      const ordQty = typeof item.orderedQty === 'number' ? item.orderedQty : 0;
-      const recQty = typeof item.receivedQty === 'number' ? item.receivedQty : 0;
-      const accQty = typeof item.acceptedQty === 'number' ? item.acceptedQty : 0;
-      const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
+      const ordQty = Number(item.orderedQty) || 0;
+      const recQty = Number(item.receivedQty) || 0;
+      const accQty = Number(item.acceptedQty) || 0;
+      const price = Number(item.unitPrice) || 0;
 
       totalPoValue += ordQty * price;
       totalGrnValue += recQty * price;
@@ -817,11 +821,11 @@ export default function CreateGRNPage() {
     try {
       const payloadItems: GRNItemPayload[] = lineItems.map((item) => ({
         itemName: item.itemName || 'Received Item',
-        orderedQty: item.orderedQty || 1,
-        receivedQty: typeof item.receivedQty === 'number' ? item.receivedQty : 0,
-        acceptedQty: typeof item.acceptedQty === 'number' ? item.acceptedQty : 0,
-        rejectedQty: typeof item.rejectedQty === 'number' ? item.rejectedQty : 0,
-        unitPrice: item.unitPrice || 0,
+        orderedQty: Number(item.orderedQty) || 1,
+        receivedQty: Number(item.receivedQty) || 0,
+        acceptedQty: item.acceptedQty !== '' && item.acceptedQty != null ? Number(item.acceptedQty) : (Number(item.receivedQty) || 0),
+        rejectedQty: item.rejectedQty !== '' && item.rejectedQty != null ? Number(item.rejectedQty) : 0,
+        unitPrice: Number(item.unitPrice) || 0,
         unit: item.unit,
         remarks: item.remarks,
       }));
@@ -841,6 +845,8 @@ export default function CreateGRNPage() {
       });
 
       // Immediately invalidate and trigger fresh refetch across all service caches
+      invalidateApiCache('/grn');
+      invalidateApiCache('/purchase-orders');
       window.dispatchEvent(new CustomEvent('heliflow:grn-updated'));
       window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
       await queryClient.invalidateQueries({ queryKey: ['svc'] });
@@ -1310,7 +1316,7 @@ export default function CreateGRNPage() {
                               handleUpdateItem(
                                 item.id,
                                 'receivedQty',
-                                e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
+                                e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0)
                               )
                             }
                             className="h-9 text-sm text-center font-bold text-primary border-primary/40 bg-background"
@@ -1320,12 +1326,13 @@ export default function CreateGRNPage() {
                           <Input
                             type="number"
                             min="0"
+                            step="any"
                             value={item.acceptedQty}
                             onChange={(e) =>
                               handleUpdateItem(
                                 item.id,
                                 'acceptedQty',
-                                e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
+                                e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0)
                               )
                             }
                             className="h-9 text-sm text-center font-bold text-emerald-600 dark:text-emerald-400 bg-background"
@@ -1335,12 +1342,13 @@ export default function CreateGRNPage() {
                           <Input
                             type="number"
                             min="0"
+                            step="any"
                             value={item.rejectedQty}
                             onChange={(e) =>
                               handleUpdateItem(
                                 item.id,
                                 'rejectedQty',
-                                e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0)
+                                e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0)
                               )
                             }
                             className="h-9 text-sm text-center font-bold text-destructive bg-background"
