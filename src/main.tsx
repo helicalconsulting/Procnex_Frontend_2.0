@@ -16,6 +16,22 @@ document.addEventListener(
   { passive: true }
 );
 
+// Auto-reload on dynamic import failure (e.g. after a new deployment when chunk hashes change)
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  const reloadKey = 'procnex_chunk_reload_attempted';
+  const hasReloaded = sessionStorage.getItem(reloadKey);
+
+  if (!hasReloaded) {
+    sessionStorage.setItem(reloadKey, 'true');
+    window.location.reload();
+  }
+});
+
+window.addEventListener('load', () => {
+  sessionStorage.removeItem('procnex_chunk_reload_attempted');
+});
+
 createRoot(document.getElementById('root')!).render(
   <App />,
 )

@@ -52,20 +52,37 @@ export default class ErrorBoundary extends React.Component<
         errText = 'An unexpected error occurred.';
       }
 
+      const isChunkError =
+        errText.includes('Failed to fetch dynamically imported module') ||
+        errText.includes('error loading dynamically imported module') ||
+        errText.includes('Importing a module script failed');
+
       return (
         <div className="cs-error-boundary" style={{ padding: 24, textAlign: 'center' }}>
-          <div className="cs-error-boundary__icon" style={{ fontSize: 33, marginBottom: 12 }}>⚠️</div>
-          <h3 className="cs-error-boundary__title" style={{ fontSize: 19, fontWeight: 700, margin: '0 0 8px' }}>Something went wrong</h3>
+          <div className="cs-error-boundary__icon" style={{ fontSize: 33, marginBottom: 12 }}>
+            {isChunkError ? '🔄' : '⚠️'}
+          </div>
+          <h3 className="cs-error-boundary__title" style={{ fontSize: 19, fontWeight: 700, margin: '0 0 8px' }}>
+            {isChunkError ? 'New Version Available' : 'Something went wrong'}
+          </h3>
           <p className="cs-error-boundary__message" style={{ color: 'var(--text-secondary, #64748b)', margin: '0 0 16px' }}>
-            {errText}
+            {isChunkError
+              ? 'A newer version of the application was deployed. Please reload the page to load the latest updates.'
+              : errText}
           </p>
           <button
             type="button"
             className="company-settings__btn company-settings__btn--primary"
             style={{ padding: '8px 16px', borderRadius: 6, cursor: 'pointer' }}
-            onClick={() => this.setState({ hasError: false, error: null })}
+            onClick={() => {
+              if (isChunkError) {
+                window.location.reload();
+              } else {
+                this.setState({ hasError: false, error: null });
+              }
+            }}
           >
-            Try Again
+            {isChunkError ? 'Update & Reload' : 'Try Again'}
           </button>
         </div>
       );
