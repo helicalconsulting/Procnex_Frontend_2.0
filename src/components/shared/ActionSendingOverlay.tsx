@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import './ActionSendingOverlay.css';
 
-export type DocType = 'po' | 'invoice' | 'payment_voucher' | 'rfq' | 'grn' | 'quotation';
+export type DocType = 'po' | 'invoice' | 'payment_voucher' | 'rfq' | 'grn' | 'quotation' | 'dispatch_note';
 
 export interface ActionSendingOverlayProps {
   isOpen: boolean;
@@ -510,6 +510,33 @@ const QUOTATION_STEPS: StepItem[] = [
   },
 ];
 
+const DISPATCH_NOTE_STEPS: StepItem[] = [
+  {
+    id: 1,
+    label: 'Packaging dispatch line items & delivery quantities',
+    icon: <PackageCheck size={16} />,
+    delay: 0,
+  },
+  {
+    id: 2,
+    label: 'Validating transporter, vehicle & delivery schedule',
+    icon: <ShieldCheck size={16} />,
+    delay: 600,
+  },
+  {
+    id: 3,
+    label: 'Routing delivery challan to warehouse receiving queue',
+    icon: <Send size={16} />,
+    delay: 1300,
+  },
+  {
+    id: 4,
+    label: 'Notifying buyer receiving team & issuing shipment advice',
+    icon: <Mail size={16} />,
+    delay: 2100,
+  },
+];
+
 const DRAFT_STEPS: StepItem[] = [
   {
     id: 1,
@@ -613,6 +640,7 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
     if (mode === 'draft') return DRAFT_STEPS;
     if (docType === 'quotation') return QUOTATION_STEPS;
     if (docType === 'grn') return GRN_STEPS;
+    if (docType === 'dispatch_note') return DISPATCH_NOTE_STEPS;
 
     if (mode === 'reject') {
       if (docType === 'rfq') return RFQ_REJECT_STEPS;
@@ -849,6 +877,8 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
         return 'Goods Receipt Note';
       case 'quotation':
         return 'Quotation Proposal';
+      case 'dispatch_note':
+        return 'Dispatch Note (Delivery Challan)';
       default:
         return 'Document';
     }
@@ -859,8 +889,8 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
     if (mode === 'reject') return <X size={38} className="action-sending-hero__svg" />;
     if (mode === 'return') return <RotateCcw size={38} className="action-sending-hero__svg" />;
 
-    if (docType === 'quotation' || docType === 'rfq') {
-      return <Send size={38} className="action-sending-hero__svg" />;
+    if (docType === 'quotation' || docType === 'rfq' || docType === 'dispatch_note') {
+      return <Send size={38} className="action-sending-hero__svg action-sending-hero__svg--send" />;
     }
     switch (docType) {
       case 'po':
@@ -872,10 +902,20 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
       case 'grn':
         return <PackageCheck size={38} className="action-sending-hero__svg" />;
       default:
-        return <Send size={38} className="action-sending-hero__svg" />;
+        return <Send size={38} className="action-sending-hero__svg action-sending-hero__svg--send" />;
     }
   };
 
+  const isSendHero =
+    mode !== 'approve' &&
+    mode !== 'reject' &&
+    mode !== 'return' &&
+    (docType === 'quotation' ||
+      docType === 'rfq' ||
+      docType === 'dispatch_note' ||
+      !['po', 'invoice', 'payment_voucher', 'grn'].includes(docType as string));
+
+  const sendModifier = isSendHero ? 'action-sending-hero__icon-wrap--send' : '';
   const modeModifier = mode === 'reject' || mode === 'return' || mode === 'approve' ? `action-sending-hero__icon-wrap--mode-${mode}` : '';
   const pillModeModifier = mode === 'reject' || mode === 'return' || mode === 'approve' ? `action-sending-card__pill--mode-${mode}` : '';
   const glowModeModifier = mode === 'reject' || mode === 'return' || mode === 'approve' ? `action-sending-overlay__glow--mode-${mode}` : '';
@@ -920,7 +960,7 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
               <div className="action-sending-hero__radar-ring action-sending-hero__radar-ring--2" />
               <div className="action-sending-hero__radar-ring action-sending-hero__radar-ring--3" />
 
-              <div className={`action-sending-hero__icon-wrap action-sending-hero__icon-wrap--${docType} ${modeModifier}`}>
+              <div className={`action-sending-hero__icon-wrap action-sending-hero__icon-wrap--${docType} ${sendModifier} ${modeModifier}`}>
                 <motion.div
                   className="action-sending-hero__floating-icon"
                   animate={{

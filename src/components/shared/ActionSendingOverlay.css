@@ -76,6 +76,9 @@
 .action-sending-overlay__glow--quotation {
   background: radial-gradient(circle, rgba(14, 165, 233, 0.55) 0%, rgba(99, 102, 241, 0.25) 70%, transparent 100%);
 }
+.action-sending-overlay__glow--dispatch_note {
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.55) 0%, rgba(99, 102, 241, 0.25) 70%, transparent 100%);
+}
 
 @keyframes action-glow-pulse {
   0% { transform: scale(0.9) translate(0, 0); opacity: 0.35; }
@@ -198,6 +201,17 @@
   color: #0284c7;
 }
 
+.action-sending-card__pill--dispatch_note {
+  background: rgba(14, 165, 233, 0.16);
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  color: #38bdf8;
+}
+[data-theme="light"] .action-sending-card__pill--dispatch_note {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.3);
+  color: #0284c7;
+}
+
 /* Radar & Hero Icon */
 .action-sending-hero {
   position: relative;
@@ -297,6 +311,59 @@
   box-shadow: 0 10px 25px -4px rgba(14, 165, 233, 0.55),
               0 0 0 3px rgba(255, 255, 255, 0.18),
               inset 0 2px 4px rgba(255, 255, 255, 0.35);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Sender (Paper Airplane / Send Icon) Blue Styling
+   Applies in both Light Mode and Dark Mode
+   ═══════════════════════════════════════════════════════════ */
+
+/* Sender Icon Wrap: Clean circular disc with blue aura */
+.action-sending-hero__icon-wrap--send,
+.action-sending-hero__icon-wrap--dispatch_note {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.45) 100%);
+  border: 2px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 12px 30px -4px rgba(14, 165, 233, 0.5),
+              0 0 0 4px rgba(56, 189, 248, 0.16),
+              inset 0 2px 4px rgba(255, 255, 255, 0.15);
+  color: #38bdf8;
+}
+
+:root:not([data-theme="dark"]) .action-sending-hero__icon-wrap--send,
+:root:not([data-theme="dark"]) .action-sending-hero__icon-wrap--dispatch_note,
+[data-theme="light"] .action-sending-hero__icon-wrap--send,
+[data-theme="light"] .action-sending-hero__icon-wrap--dispatch_note,
+.light .action-sending-hero__icon-wrap--send,
+.light .action-sending-hero__icon-wrap--dispatch_note {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 50%, #e0f2fe 100%);
+  border: 2px solid rgba(10, 110, 209, 0.25);
+  box-shadow: 0 12px 28px -4px rgba(10, 110, 209, 0.32),
+              0 0 0 4px rgba(10, 110, 209, 0.08),
+              inset 0 2px 4px rgba(255, 255, 255, 0.95);
+  color: #0a6ed1;
+}
+
+/* Sender SVG (Paper Plane) — Vibrant Blue in Light Mode, Electric Blue in Dark Mode */
+.action-sending-hero__svg--send,
+.action-sending-hero__icon-wrap--send .action-sending-hero__svg,
+.action-sending-hero__icon-wrap--dispatch_note .action-sending-hero__svg {
+  color: #38bdf8 !important;
+  stroke: #38bdf8 !important;
+  filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.8)) drop-shadow(0 2px 5px rgba(14, 165, 233, 0.5)) !important;
+}
+
+:root:not([data-theme="dark"]) .action-sending-hero__svg--send,
+:root:not([data-theme="dark"]) .action-sending-hero__icon-wrap--send .action-sending-hero__svg,
+:root:not([data-theme="dark"]) .action-sending-hero__icon-wrap--dispatch_note .action-sending-hero__svg,
+[data-theme="light"] .action-sending-hero__svg--send,
+[data-theme="light"] .action-sending-hero__icon-wrap--send .action-sending-hero__svg,
+[data-theme="light"] .action-sending-hero__icon-wrap--dispatch_note .action-sending-hero__svg,
+.light .action-sending-hero__svg--send,
+.light .action-sending-hero__icon-wrap--send .action-sending-hero__svg,
+.light .action-sending-hero__icon-wrap--dispatch_note .action-sending-hero__svg {
+  color: #0a6ed1 !important;
+  stroke: #0a6ed1 !important;
+  filter: drop-shadow(0 2px 8px rgba(10, 110, 209, 0.45)) !important;
 }
 
 .action-sending-hero__floating-icon {

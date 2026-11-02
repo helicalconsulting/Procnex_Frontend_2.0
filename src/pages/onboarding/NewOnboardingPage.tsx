@@ -122,8 +122,18 @@ function calculateFuzzyNameMatchScore(s1: string, s2: string): number {
 
   const wordSim = (w1: string, w2: string) => {
     if (w1 === w2) return 100;
-    if (w2.startsWith(w1)) return Math.round(80 + (w1.length / w2.length) * 20);
-    if (w1.startsWith(w2)) return Math.round(80 + (w2.length / w1.length) * 20);
+
+    const prefixSim = (shorter: string, longer: string) => {
+      const ratio = shorter.length / longer.length;
+      if (shorter.length <= 1) return Math.round(ratio * 30);
+      if (shorter.length === 2) return Math.round(ratio * 85);
+      if (ratio >= 0.8) return Math.round(75 + ratio * 25);
+      if (ratio >= 0.6) return Math.round(60 + (ratio - 0.6) * 75);
+      return Math.round(35 + ratio * 40);
+    };
+
+    if (w2.startsWith(w1)) return prefixSim(w1, w2);
+    if (w1.startsWith(w2)) return prefixSim(w2, w1);
     const maxL = Math.max(w1.length, w2.length);
     const d = levenshteinDistance(w1, w2);
     if (d === 1 && maxL >= 4) return Math.max(75, Math.round(((maxL - d) / maxL) * 100));
@@ -139,13 +149,13 @@ function calculateFuzzyNameMatchScore(s1: string, s2: string): number {
   if (words1.length === 1) {
     if (words2.length === 1) return w1Score;
     const penalty = Math.min(15, (words2.length - 1) * 3);
-    return Math.max(40, w1Score - penalty);
+    return Math.max(0, w1Score - penalty);
   }
 
   // Rule 2: Multi-word query (evaluates Word 1 then Word 2)
   const w2Score = words2.length > 1 ? wordSim(words1[1], words2[1]) : 0;
   const combined = Math.round(w1Score * 0.6 + w2Score * 0.4);
-  return combined >= 40 ? combined : 0;
+  return combined;
 }
 
 export default function NewOnboardingPage() {
@@ -340,12 +350,17 @@ export default function NewOnboardingPage() {
     score: number;
     duplicationRisk: 'LOW' | 'MEDIUM' | 'HIGH';
     matchedVendor: { name: string; email: string; score: number } | null;
-    separateNameMatch?: { name: string; email: string; score: number } | null;
+    isMultiVendorMatch?: boolean;
+    multiVendorSummary?: string;
     breakdown?: {
       nameScore: number;
+      nameVendor?: string;
       emailScore: number;
+      emailVendor?: string;
       personScore: number;
+      personVendor?: string;
       phoneScore: number;
+      phoneVendor?: string;
     };
   } | null>(null);
 
@@ -723,16 +738,18 @@ export default function NewOnboardingPage() {
         phone: 0.10,
       };
 
-      let bestScore = 0;
-      let bestMatchedVendor: { name: string; email: string; score: number } | null = null;
-      let bestBreakdown = { nameScore: 0, emailScore: 0, personScore: 0, phoneScore: 0 };
-      let bestNameVendor: { name: string; email: string; score: number } | null = null;
+      let bestNameMatch: { name: string; email: string; score: number } | null = null;
+      let bestEmailMatch: { name: string; email: string; score: number } | null = null;
+      let bestPersonMatch: { name: string; email: string; score: number } | null = null;
+      let bestPhoneMatch: { name: string; email: string; score: number } | null = null;
+      let bestSingleVendor: { name: string; email: string; score: number } | null = null;
+      let bestSingleScore = 0;
 
       candidates.forEach((cand) => {
         // 1. Company Name Match (Main Priority · 40% - Rule 1 & 2: Positional Word 1 then Word 2)
         const nameScore = calculateFuzzyNameMatchScore(currentInput.companyName, cand.companyName);
-        if (nameScore > (bestNameVendor?.score || 0)) {
-          bestNameVendor = { name: cand.companyName, email: cand.contactEmail, score: nameScore };
+        if (nameScore > (bestNameMatch?.score || 0)) {
+          bestNameMatch = { name: cand.companyName, email: cand.contactEmail, score: nameScore };
         }
 
         // 2. Email Match (Main Priority · 40% - Rule 3: Validate @ se pehle and @ k baad me e.g. jai@helical.com vs jai@syspro.com)
@@ -760,6 +777,9 @@ export default function NewOnboardingPage() {
             }
           }
         }
+        if (emailScore > (bestEmailMatch?.score || 0)) {
+          bestEmailMatch = { name: cand.companyName, email: cand.contactEmail, score: emailScore };
+        }
 
         // 3. Contact Person Match (Lower Priority · 10%)
         const inPerson = norm(currentInput.contactPerson);
@@ -784,6 +804,9 @@ export default function NewOnboardingPage() {
             }
           }
         }
+        if (personScore > (bestPersonMatch?.score || 0)) {
+          bestPersonMatch = { name: cand.companyName, email: cand.contactEmail, score: personScore };
+        }
 
         // 4. Phone Match (Lower Priority · 10% - Rule 4: Match phone numbers with country code e.g. +254755809333 vs +91755809333)
         const inPhoneDigits = (currentInput.contactPhone || '').replace(/\D/g, '');
@@ -802,32 +825,77 @@ export default function NewOnboardingPage() {
             }
           }
         }
+        if (phoneScore > (bestPhoneMatch?.score || 0)) {
+          bestPhoneMatch = { name: cand.companyName, email: cand.contactEmail, score: phoneScore };
+        }
 
-        // Priority-weighted duplication total
-        const total = Math.round(
+        // Single candidate composite score
+        const candTotal = Math.round(
           nameScore * WEIGHTS.name +
           emailScore * WEIGHTS.email +
           personScore * WEIGHTS.person +
           phoneScore * WEIGHTS.phone
         );
 
-        if (total > bestScore) {
-          bestScore = total;
-          bestMatchedVendor = { name: cand.companyName, email: cand.contactEmail, score: total };
-          bestBreakdown = { nameScore, emailScore, personScore, phoneScore };
+        if (candTotal > bestSingleScore) {
+          bestSingleScore = candTotal;
+          bestSingleVendor = { name: cand.companyName, email: cand.contactEmail, score: candTotal };
         }
       });
 
+      const nameScore = bestNameMatch?.score || 0;
+      const emailScore = bestEmailMatch?.score || 0;
+      const personScore = bestPersonMatch?.score || 0;
+      const phoneScore = bestPhoneMatch?.score || 0;
+
+      // Priority-weighted comprehensive duplication score across DB matches
+      const multiFieldScore = Math.round(
+        nameScore * WEIGHTS.name +
+        emailScore * WEIGHTS.email +
+        personScore * WEIGHTS.person +
+        phoneScore * WEIGHTS.phone
+      );
+
+      const finalScore = Math.max(bestSingleScore, multiFieldScore);
+
       let risk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
-      if (bestScore >= 60) risk = 'HIGH';
-      else if (bestScore >= 25) risk = 'MEDIUM';
+      if (finalScore >= 60) risk = 'HIGH';
+      else if (finalScore >= 25) risk = 'MEDIUM';
+
+      // Detect if key fields matched different vendors (e.g. Name matched Ajabu Consulting, Email matched Embedded)
+      const isMultiVendor = Boolean(
+        bestNameMatch &&
+        nameScore >= 40 &&
+        bestEmailMatch &&
+        emailScore >= 50 &&
+        norm(bestNameMatch.name) !== norm(bestEmailMatch.name)
+      );
+
+      let multiSummary = '';
+      if (isMultiVendor && bestNameMatch && bestEmailMatch) {
+        multiSummary = `${bestNameMatch.name} (Name ${nameScore}%) & ${bestEmailMatch.name} (Email ${emailScore}%)`;
+      }
+
+      const primaryMatchedVendor = isMultiVendor
+        ? (bestSingleVendor || bestNameMatch)
+        : (bestSingleVendor || bestNameMatch || bestEmailMatch || bestPersonMatch || bestPhoneMatch);
 
       setAuditResult({
-        score: bestScore,
+        score: finalScore,
         duplicationRisk: risk,
-        matchedVendor: bestMatchedVendor,
-        separateNameMatch: bestNameVendor && (bestNameVendor as any).score >= 40 ? bestNameVendor : null,
-        breakdown: bestBreakdown,
+        matchedVendor: finalScore > 0 && primaryMatchedVendor ? primaryMatchedVendor : null,
+        isMultiVendorMatch: isMultiVendor,
+        multiVendorSummary: multiSummary,
+        breakdown: {
+          nameScore,
+          nameVendor: bestNameMatch && nameScore > 0 ? bestNameMatch.name : undefined,
+          emailScore,
+          emailVendor: bestEmailMatch && emailScore > 0 ? bestEmailMatch.name : undefined,
+          personScore,
+          personVendor: bestPersonMatch && personScore > 0 ? bestPersonMatch.name : undefined,
+          phoneScore,
+          phoneVendor: bestPhoneMatch && phoneScore > 0 ? bestPhoneMatch.name : undefined,
+        },
       });
     } catch {
       setAuditResult({
@@ -3152,7 +3220,9 @@ export default function NewOnboardingPage() {
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
                         {auditResult?.matchedVendor
-                          ? `Duplicate Vendor Record: ${auditResult.matchedVendor.name}`
+                          ? auditResult.isMultiVendorMatch && auditResult.multiVendorSummary
+                            ? `Duplicate Vendor Records: ${auditResult.multiVendorSummary}`
+                            : `Duplicate Vendor Record: ${auditResult.matchedVendor.name}`
                           : '0% Duplication Risk · Unique Vendor Entry'}
                       </div>
                     </div>
@@ -3171,22 +3241,22 @@ export default function NewOnboardingPage() {
                   </div>
 
 
-                  {/* Separate Name Match Alert (if another vendor matched company name) */}
-                  {auditResult?.separateNameMatch && auditResult.separateNameMatch.name.toLowerCase() !== auditResult.matchedVendor?.name.toLowerCase() && (
+                  {/* Cross-Vendor Duplicate Alert (if name and email matched different vendors) */}
+                  {auditResult?.isMultiVendorMatch && (
                     <div style={{
                       display: 'flex',
                       gap: 10,
                       alignItems: 'center',
                       padding: '10px 14px',
                       borderRadius: 'var(--radius-md)',
-                      background: 'rgba(245, 158, 11, 0.08)',
-                      border: '1px solid rgba(245, 158, 11, 0.25)',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
                       fontSize: 12.5,
                       color: 'var(--text-primary)',
                     }}>
-                      <AlertTriangle size={16} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                      <AlertTriangle size={16} style={{ color: '#ef4444', flexShrink: 0 }} />
                       <div>
-                        <strong>Separate Company Name Match:</strong> Another vendor <strong>"{auditResult.separateNameMatch.name}"</strong> exists in database with <strong>{auditResult.separateNameMatch.score}% name similarity</strong>.
+                        <strong>Cross-Vendor Match:</strong> Company Name matches <strong>"{auditResult.breakdown?.nameVendor}" ({auditResult.breakdown?.nameScore}%)</strong>, while Vendor Email matches <strong>"{auditResult.breakdown?.emailVendor}" ({auditResult.breakdown?.emailScore}%)</strong>.
                       </div>
                     </div>
                   )}
@@ -3211,9 +3281,9 @@ export default function NewOnboardingPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                           <div>
                             <span style={{ color: 'var(--text-secondary)' }}>Company Name</span>
-                            {auditResult.matchedVendor && (
+                            {auditResult.breakdown.nameVendor && auditResult.breakdown.nameScore > 0 && (
                               <span style={{ fontSize: 10.5, color: 'var(--text-placeholder)', marginLeft: 4 }}>
-                                (vs {auditResult.matchedVendor.name})
+                                (vs {auditResult.breakdown.nameVendor})
                               </span>
                             )}
                             <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', fontWeight: 600 }}>Main · 40%</span>
@@ -3225,6 +3295,11 @@ export default function NewOnboardingPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                           <div>
                             <span style={{ color: 'var(--text-secondary)' }}>Vendor Email</span>
+                            {auditResult.breakdown.emailVendor && auditResult.breakdown.emailScore > 0 && (
+                              <span style={{ fontSize: 10.5, color: 'var(--text-placeholder)', marginLeft: 4 }}>
+                                (vs {auditResult.breakdown.emailVendor})
+                              </span>
+                            )}
                             <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', fontWeight: 600 }}>Main · 40%</span>
                           </div>
                           <span style={{ fontWeight: 700, color: auditResult.breakdown.emailScore > 0 ? (auditResult.breakdown.emailScore >= 70 ? '#ef4444' : '#f59e0b') : '#10b981' }}>
@@ -3234,6 +3309,11 @@ export default function NewOnboardingPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                           <div>
                             <span style={{ color: 'var(--text-secondary)' }}>Contact Person</span>
+                            {auditResult.breakdown.personVendor && auditResult.breakdown.personScore > 0 && (
+                              <span style={{ fontSize: 10.5, color: 'var(--text-placeholder)', marginLeft: 4 }}>
+                                (vs {auditResult.breakdown.personVendor})
+                              </span>
+                            )}
                             <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(107, 114, 128, 0.18)', color: 'var(--text-secondary)', fontWeight: 600 }}>Low · 10%</span>
                           </div>
                           <span style={{ fontWeight: 700, color: auditResult.breakdown.personScore > 0 ? (auditResult.breakdown.personScore >= 70 ? '#ef4444' : '#f59e0b') : '#10b981' }}>
@@ -3243,24 +3323,17 @@ export default function NewOnboardingPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                           <div>
                             <span style={{ color: 'var(--text-secondary)' }}>Phone Number</span>
+                            {auditResult.breakdown.phoneVendor && auditResult.breakdown.phoneScore > 0 && (
+                              <span style={{ fontSize: 10.5, color: 'var(--text-placeholder)', marginLeft: 4 }}>
+                                (vs {auditResult.breakdown.phoneVendor})
+                              </span>
+                            )}
                             <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(107, 114, 128, 0.18)', color: 'var(--text-secondary)', fontWeight: 600 }}>Low · 10%</span>
                           </div>
                           <span style={{ fontWeight: 700, color: auditResult.breakdown.phoneScore > 0 ? (auditResult.breakdown.phoneScore >= 70 ? '#ef4444' : '#f59e0b') : '#10b981' }}>
                             {auditResult.breakdown.phoneScore}%
                           </span>
                         </div>
-
-                        {/* Optional row showing separate company name match if different vendor */}
-                        {auditResult?.separateNameMatch && auditResult.separateNameMatch.name.toLowerCase() !== auditResult.matchedVendor?.name.toLowerCase() && (
-                          <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, background: 'rgba(245, 158, 11, 0.08)', padding: '5px 10px', borderRadius: 4, border: '1px dashed rgba(245, 158, 11, 0.3)' }}>
-                            <span style={{ color: 'var(--text-secondary)' }}>
-                              Separate Name Match (vs <strong>{auditResult.separateNameMatch.name}</strong>)
-                            </span>
-                            <span style={{ fontWeight: 700, color: '#f59e0b' }}>
-                              {auditResult.separateNameMatch.score}%
-                            </span>
-                          </div>
-                        )}
                       </div>
                     )}
 

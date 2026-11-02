@@ -1953,7 +1953,7 @@ export default function CompanySettingsPage() {
       };
 
       // Start polling after a short initial delay
-      setTimeout(poll, 3000);
+      setTimeout(poll, 1000);
     } catch (err) {
       ocrPollActiveRef.current = false;
       setContractTemplates(prev => prev.map(t =>
@@ -2292,7 +2292,7 @@ export default function CompanySettingsPage() {
           setTimeout(poll, interval);
         }
       };
-      setTimeout(poll, 3000);
+      setTimeout(poll, 1000);
     } catch (err) {
       docOcrPollActiveRef.current = false;
       setDocumentTemplates(prev => prev.map(t =>

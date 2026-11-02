@@ -1260,7 +1260,7 @@ async function mockGetDocumentOcrStatus(type: string): Promise<{ ocrText: string
 }
 
 async function apiGetDocumentOcrStatus(type: string): Promise<{ ocrText: string | null; ocrStatus: string | null; ocrProcessedAt: string | null }> {
-  return apiRequest(`/company-settings/document-templates/${encodeURIComponent(type)}/ocr/status`);
+  return apiRequest(`/company-settings/document-templates/${encodeURIComponent(type)}/ocr/status`, { cacheTtlMs: 0 });
 }
 
 async function mockSaveDocumentOcrText(type: string, ocrText: string): Promise<void> {
@@ -1501,7 +1501,7 @@ async function mockGetContractOcrStatus(type: string): Promise<{ ocrText: string
 }
 
 async function apiGetContractOcrStatus(type: string): Promise<{ ocrText: string | null; ocrStatus: string | null; ocrProcessedAt: string | null }> {
-  return apiRequest(`/company-settings/contract-templates/${encodeURIComponent(type)}/ocr/status`);
+  return apiRequest(`/company-settings/contract-templates/${encodeURIComponent(type)}/ocr/status`, { cacheTtlMs: 0 });
 }
 
 async function mockSaveContractOcrText(type: string, ocrText: string): Promise<void> {
