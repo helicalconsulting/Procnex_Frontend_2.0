@@ -1,6 +1,7 @@
 import { findVendorWithPhone } from '../../services/vendorPhoneService';
 import { normalizeVendorPhone } from '../../utils/vendorPhone';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import DOMPurify from 'dompurify';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -374,6 +375,10 @@ export default function NewOnboardingPage() {
     documentsCount: number;
   } | null>(null);
 
+  // ── Resend Invitation Success Modal ──
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resentSuccessModal, setResentSuccessModal] = useState<VendorInvitationRow | null>(null);
+
   // Load available documents from Company Settings
   useEffect(() => {
     (async () => {
@@ -545,19 +550,21 @@ export default function NewOnboardingPage() {
   useBodyScrollLock(!!showDuplicateAlert);
   useBodyScrollLock(showTemplatePreview);
   useBodyScrollLock(!!sentSuccessModal);
+  useBodyScrollLock(!!resentSuccessModal);
   useBodyScrollLock(!!eyeViewModal);
   useBodyScrollLock(showPreSendConfidenceModal);
   useBodyScrollLock(!!previewDoc);
 
   // Escape key closes expanded modals, template preview, success modal, eye view modal, pre-send modal and doc preview
   useEffect(() => {
-    if (!isInviteExpanded && !isSentExpanded && !showTemplatePreview && !sentSuccessModal && !eyeViewModal && !showPreSendConfidenceModal && !previewDoc) return;
+    if (!isInviteExpanded && !isSentExpanded && !showTemplatePreview && !sentSuccessModal && !resentSuccessModal && !eyeViewModal && !showPreSendConfidenceModal && !previewDoc) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsInviteExpanded(false);
         setIsSentExpanded(false);
         setShowTemplatePreview(false);
         setSentSuccessModal(null);
+        setResentSuccessModal(null);
         setEyeViewModal(null);
         setShowPreSendConfidenceModal(false);
         setPreviewDoc(null);
@@ -565,7 +572,7 @@ export default function NewOnboardingPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isInviteExpanded, isSentExpanded, showTemplatePreview, sentSuccessModal, eyeViewModal, showPreSendConfidenceModal, previewDoc]);
+  }, [isInviteExpanded, isSentExpanded, showTemplatePreview, sentSuccessModal, resentSuccessModal, eyeViewModal, showPreSendConfidenceModal, previewDoc]);
 
 
 
@@ -992,15 +999,17 @@ export default function NewOnboardingPage() {
     setTimeout(() => setCopiedCode(null), 2000);
   }, []);
 
-  const handleResend = useCallback(async (id: number) => {
+  const handleResend = useCallback(async (inv: VendorInvitationRow) => {
     setFormError(null);
+    setResendingId(inv.id);
     try {
-      await procurementService.resendInvitation(id);
+      await procurementService.resendInvitation(inv.id);
       reload();
-      setSentSuccess('Invitation email resent.');
-      setTimeout(() => setSentSuccess(''), 4000);
+      setResentSuccessModal(inv);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to resend invitation');
+    } finally {
+      setResendingId(null);
     }
   }, [reload]);
 
@@ -1096,11 +1105,12 @@ export default function NewOnboardingPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={(e) => { e.stopPropagation(); if (canCreateOnboarding) handleResend(inv.id); }}
-                disabled={!canCreateOnboarding}
+                onClick={(e) => { e.stopPropagation(); if (canCreateOnboarding) handleResend(inv); }}
+                disabled={!canCreateOnboarding || resendingId === inv.id}
                 title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to resend invitations.' : 'Resend Email'}
               >
-                <RefreshCw className="size-3.5 mr-1" /> Resend
+                <RefreshCw className={cn("size-3.5 mr-1", resendingId === inv.id && "animate-spin")} />
+                {resendingId === inv.id ? 'Resending…' : 'Resend'}
               </Button>
             )}
 
@@ -2234,8 +2244,7 @@ export default function NewOnboardingPage() {
           </DesktopWindow>
 
           {/* ── Template Preview Overlay ── */}
-          {showTemplatePreview && previewTemplate && (
-
+          {showTemplatePreview && previewTemplate && createPortal(
             <div
               className="onb-template-preview-overlay"
               onClick={() => setShowTemplatePreview(false)}
@@ -2288,15 +2297,15 @@ export default function NewOnboardingPage() {
                   </button>
                 </div>
               </div>
-          </div>
-        )}
+            </div>,
+            document.body
+          )}
 
       {/* ── Required Document Preview Modal ── */}
-      {previewDoc && (
+      {previewDoc && createPortal(
         <div
           className="onb-template-preview-overlay"
           onClick={() => setPreviewDoc(null)}
-          style={{ zIndex: 12000 }}
         >
           <div
             className="onb-template-preview-card"
@@ -2641,11 +2650,12 @@ export default function NewOnboardingPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Invitation Detail Popup ── */}
-      {detailInvitation && (
+      {detailInvitation && createPortal(
         <div
           className="onb-detail-backdrop"
           onClick={() => setDetailInvitation(null)}
@@ -2869,7 +2879,8 @@ export default function NewOnboardingPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Vendor Detail Modal (from suggestion click) ── */}
@@ -2898,7 +2909,7 @@ export default function NewOnboardingPage() {
       )}
 
       {/* ── SAP Style Invitation Sent Success Modal ── */}
-      {sentSuccessModal && (
+      {sentSuccessModal && createPortal(
         <div className="onb-modal-backdrop" onClick={() => setSentSuccessModal(null)}>
           <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()}>
             <div className="onb-modal__header onb-modal__header--blue">
@@ -2984,12 +2995,85 @@ export default function NewOnboardingPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Invitation Resent Success Modal ── */}
+      {resentSuccessModal && createPortal(
+        <div className="onb-modal-backdrop" onClick={() => setResentSuccessModal(null)}>
+          <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="onb-modal__header onb-modal__header--blue">
+              <div className="onb-modal__title">
+                <CheckCircle2 size={20} />
+                <span>Invitation Resent</span>
+              </div>
+              <button
+                type="button"
+                className="onb-modal__close-btn"
+                onClick={() => setResentSuccessModal(null)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="onb-modal__body">
+              <div className="onb-modal__success-banner">
+                <CheckCircle2 size={24} className="onb-modal__success-icon" />
+                <div>
+                  <h4 className="onb-modal__success-title">Invitation Email Resent!</h4>
+                  <p className="onb-modal__success-text">
+                    A fresh invitation has been resent to <strong>{resentSuccessModal.contactEmail}</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="onb-modal__summary">
+                <div className="onb-modal__summary-row">
+                  <span className="onb-modal__summary-label">Company Name</span>
+                  <span className="onb-modal__summary-value">{resentSuccessModal.companyName}</span>
+                </div>
+                {resentSuccessModal.contactPerson && (
+                  <div className="onb-modal__summary-row">
+                    <span className="onb-modal__summary-label">Contact Person</span>
+                    <span className="onb-modal__summary-value">{resentSuccessModal.contactPerson}</span>
+                  </div>
+                )}
+                <div className="onb-modal__summary-row">
+                  <span className="onb-modal__summary-label">Invite Code</span>
+                  <span className="onb-modal__summary-value onb-modal__summary-value--code">{resentSuccessModal.inviteCode}</span>
+                </div>
+                <div className="onb-modal__summary-row">
+                  <span className="onb-modal__summary-label">Status</span>
+                  <span className="onb-modal__summary-value" style={{ color: '#e9730c', fontWeight: 600 }}>Waiting for user response</span>
+                </div>
+                {resentSuccessModal.expiresAt && (
+                  <div className="onb-modal__summary-row">
+                    <span className="onb-modal__summary-label">Expires At</span>
+                    <span className="onb-modal__summary-value">{resentSuccessModal.expiresAt}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="onb-modal__footer" style={{ justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="onb-modal__btn onb-modal__btn--primary"
+                onClick={() => setResentSuccessModal(null)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Eye View Popup Modal (Dedicated Preview Window) ── */}
-      {eyeViewModal && (
-        <div className="onb-detail-backdrop" style={{ zIndex: 11000 }} onClick={() => setEyeViewModal(null)}>
+      {eyeViewModal && createPortal(
+        <div className="onb-detail-backdrop" style={{ zIndex: 12000 }} onClick={() => setEyeViewModal(null)}>
           <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
             {/* Header */}
             <div className="onb-modal__header onb-modal__header--blue">
@@ -3148,11 +3232,12 @@ export default function NewOnboardingPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Pre-Send Predictive Match Confidence Modal ── */}
-      {showPreSendConfidenceModal && (
+      {showPreSendConfidenceModal && createPortal(
         <div className="onb-modal-backdrop" style={{ zIndex: 10500 }} onClick={() => setShowPreSendConfidenceModal(false)}>
           <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
             {/* Header */}
@@ -3403,7 +3488,8 @@ export default function NewOnboardingPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </PageFrame>

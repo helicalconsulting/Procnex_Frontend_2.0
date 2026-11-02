@@ -856,12 +856,14 @@ img {
 .snapshot-modal-overlay,
 .custom-plan-modal-backdrop,
 .view-plan-modal-backdrop,
+.onb-template-preview-overlay,
 [class*="custom-plan-modal-backdrop"],
 [class*="view-plan-modal-backdrop"],
 [class*="vquot-snapshot-modal-overlay"],
 [class*="snapshot-modal-overlay"],
 [class*="-snapshot-modal-overlay"],
-[class*="-snapshot-overlay"] {
+[class*="-snapshot-overlay"],
+[class*="onb-template-preview-overlay"] {
   z-index: 999990 !important;
 }
 
@@ -870,12 +872,14 @@ img {
 .snapshot-modal-content,
 .custom-plan-modal,
 .view-plan-modal,
+.onb-template-preview-card,
 [class*="custom-plan-modal"],
 [class*="view-plan-modal"],
 [class*="vquot-snapshot-modal-content"],
 [class*="snapshot-modal-content"],
 [class*="-snapshot-modal-content"],
-[class*="-snapshot-content"] {
+[class*="-snapshot-content"],
+[class*="onb-template-preview-card"] {
   z-index: 999995 !important;
 }
 
