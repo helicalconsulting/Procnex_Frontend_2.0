@@ -333,7 +333,7 @@ export default function Sidebar({
         <div
           className={cn(
             'flex h-16 shrink-0 cursor-pointer items-center gap-3 border-b border-[var(--shell-border)] px-5 transition-[padding] duration-200',
-            collapsed && 'lg:justify-center lg:px-0',
+            collapsed && 'justify-center px-0',
           )}
           onClick={() => {
             navigate(dashboardPath);
@@ -364,7 +364,7 @@ export default function Sidebar({
           <span
             className={cn(
               'min-w-0 truncate text-[18px] font-semibold tracking-[-0.03em] text-[var(--shell-text)] transition-opacity',
-              collapsed && 'lg:hidden lg:pointer-events-none lg:opacity-0',
+              collapsed && 'hidden pointer-events-none opacity-0',
             )}
           >
             {companyName}
@@ -377,7 +377,7 @@ export default function Sidebar({
               <span
                 className={cn(
                   'block px-3 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--shell-section-label)] transition-opacity',
-                  collapsed && 'lg:h-2 lg:overflow-hidden lg:px-0 lg:py-0 lg:opacity-0',
+                  collapsed && 'h-2 overflow-hidden px-0 py-0 opacity-0',
                 )}
               >
                 {isFrench ? (FR_SECTION_MAP[section.title] || section.title) : section.title}
@@ -398,7 +398,7 @@ export default function Sidebar({
                     title={collapsed ? displayLabel : undefined}
                     className={cn(
                       'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[14px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--shell-bg)]',
-                      collapsed && 'lg:justify-center lg:px-0',
+                      collapsed && 'justify-center px-0',
                       isActive
                         ? 'bg-[var(--shell-item-active-bg)] font-semibold text-[var(--shell-item-active-text)] shadow-xs'
                         : 'text-[var(--shell-item-text)] hover:bg-[var(--shell-item-hover-bg)] hover:text-[var(--shell-item-hover-text)]',
@@ -423,7 +423,7 @@ export default function Sidebar({
                     <span
                       className={cn(
                         'min-w-0 truncate transition-opacity',
-                        collapsed && 'lg:absolute lg:pointer-events-none lg:opacity-0',
+                        collapsed && 'hidden pointer-events-none opacity-0',
                       )}
                     >
                       {displayLabel}

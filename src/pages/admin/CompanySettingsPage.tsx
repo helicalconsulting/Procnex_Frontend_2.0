@@ -2105,7 +2105,7 @@ export default function CompanySettingsPage() {
               setContractTemplateDirty(true);
               setPageMsg('OCR completed! Extracted text loaded into editor. Review the text and click "Save" to apply changes.');
             } else if (status.ocrStatus === 'FAILED') {
-              setPageMsg('OCR failed. The uploaded file may contain no readable text.');
+              setPageMsg(status.ocrText || 'OCR failed. The uploaded file may contain no readable text.');
             }
           } else {
             // Use longer interval if we've already waited a while
@@ -2173,6 +2173,23 @@ export default function CompanySettingsPage() {
   const [docSearchQuery, setDocSearchQuery] = useState('');
   const [docTypeFilter, setDocTypeFilter] = useState<'ALL' | 'NDA' | 'MNDA' | 'ANY_OTHER'>('ALL');
   const docOcrPollActiveRef = useRef(false);
+  const docEditorRef = useRef<RichTextEditorRef>(null);
+  const [selectedDocPlaceholderCategory, setSelectedDocPlaceholderCategory] = useState<string>('all');
+  const [insertedDocPlaceholderNotice, setInsertedDocPlaceholderNotice] = useState<string | null>(null);
+
+  const handleInsertDocPlaceholderTag = (tagCode: string) => {
+    if (docEditorRef.current) {
+      docEditorRef.current.insertText(tagCode);
+    } else {
+      setEditedDocContent((prev) => {
+        const spacePrefix = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
+        return `${prev}${spacePrefix}${tagCode} `;
+      });
+    }
+    setDocTemplateDirty(true);
+    setInsertedDocPlaceholderNotice(tagCode);
+    setTimeout(() => setInsertedDocPlaceholderNotice(null), 2500);
+  };
 
   // Derived values for the currently selected document template
   const selectedDocTemplate = useMemo(
@@ -2446,7 +2463,7 @@ export default function CompanySettingsPage() {
               setDocTemplateDirty(true);
               setPageMsg('OCR completed! Text extracted and applied as template content.');
             } else if (status.ocrStatus === 'FAILED') {
-              setPageMsg('OCR failed. The uploaded file may contain no readable text.');
+              setPageMsg(status.ocrText || 'OCR failed. The uploaded file may contain no readable text.');
             }
           } else {
             // Use longer interval if we've already waited a while
@@ -6054,15 +6071,66 @@ export default function CompanySettingsPage() {
                               <FileSignature size={14} /> Template Content
                             </div>
                             <RichTextEditor
+                              ref={docEditorRef}
                               key={selectedDocId ?? 'none'}
                               value={editedDocContent}
                               onChange={handleDocContentChange}
                               placeholder="Write template content here… use {{companyName}}, {{vendorName}}, {{currentDate}}, etc."
-                              minHeight={320}
+                              minHeight={360}
                             />
                           </div>
 
-                          {/* Signature Configuration Block inside Editor */}
+                          {/* Placeholders Banner */}
+                          <div className="cs-doc-placeholders">
+                            <div className="cs-doc-placeholders__header">
+                              <div className="cs-doc-placeholders__title">
+                                <Tag size={14} className="text-blue-500" /> Click-to-Insert Placeholders
+                              </div>
+                              <div className="cs-doc-placeholders__sub">
+                                Click any tag to insert it into the template editor at your cursor position.
+                              </div>
+                            </div>
+
+                            <div className="cs-doc-placeholders__tabs">
+                              {PLACEHOLDER_CATEGORIES.map((cat) => (
+                                <button
+                                  key={cat.id}
+                                  type="button"
+                                  className={`cs-doc-placeholders__tab ${selectedDocPlaceholderCategory === cat.id ? 'cs-doc-placeholders__tab--active' : ''}`}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => setSelectedDocPlaceholderCategory(cat.id)}
+                                >
+                                  {(() => { const Icon = ({company:Building2,vendor:Users,contract:FileText,commercial:CreditCard,signature:FileSignature,all:Tag} as const)[cat.id]; return <><Icon size={13}/>{cat.id === 'all' ? cat.label : cat.label.substring(cat.label.indexOf(' ') + 1)}</>; })()}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="cs-doc-placeholders__grid" style={{ maxHeight: '180px' }}>
+                              {ALL_PLACEHOLDERS.filter((ph) => selectedDocPlaceholderCategory === 'all' || ph.category === selectedDocPlaceholderCategory).map((ph) => (
+                                <button
+                                  key={ph.code}
+                                  type="button"
+                                  className="cs-doc-placeholders__chip"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleInsertDocPlaceholderTag(ph.code)}
+                                  title={`Click to insert ${ph.code} (${ph.description})`}
+                                >
+                                  <code className="cs-doc-placeholders__chip-code">{ph.code}</code>
+                                  <span className="cs-doc-placeholders__chip-desc">{ph.label}</span>
+                                  <Plus size={12} className="cs-doc-placeholders__chip-add" />
+                                </button>
+                              ))}
+                            </div>
+
+                            {insertedDocPlaceholderNotice && (
+                              <div className="cs-doc-placeholders__notice">
+                                <CheckCircle2 size={13} className="text-emerald-500" />
+                                <span>Inserted <strong>{insertedDocPlaceholderNotice}</strong>!</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Company Signature Configuration */}
                           <div className="cs-dt-signature-block">
                             <div className="cs-dt-signature-block__header">
                               <FileSignature size={16} />

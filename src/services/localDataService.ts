@@ -378,8 +378,8 @@ export const localDataService = {
     };
   },
   deletePayment: async (payment: Payment): Promise<void> => {
-    const targetId = payment.paymentId || String(payment.id);
-    await apiRequest(`/payments/${targetId}`, { method: 'DELETE' });
+    const targetId = (payment as any).paymentNumber || payment.paymentId || String(payment.id);
+    await apiRequest(`/payments/${encodeURIComponent(targetId)}`, { method: 'DELETE' });
   },
   getSalesOrders: async () => {
     if (!USE_MOCK) {

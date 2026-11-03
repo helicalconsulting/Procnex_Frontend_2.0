@@ -1101,18 +1101,50 @@ export default function CreatePurchaseInvoicePage() {
         if ((foundInv as any).currency) setCurrency((foundInv as any).currency);
         if (foundInv.comments) setNotes(foundInv.comments);
         let invAttachments = foundInv.attachments && Array.isArray(foundInv.attachments) ? foundInv.attachments : [];
-        if (!invAttachments.length && foundInv.invoiceNumber) {
+        if (foundInv.invoiceNumber) {
           try {
             const cached = localStorage.getItem(`invoice_attachments_${foundInv.invoiceNumber}`);
             if (cached) {
               const parsed = JSON.parse(cached);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                invAttachments = parsed;
+                if (!invAttachments.length) {
+                  invAttachments = parsed;
+                } else {
+                  invAttachments = invAttachments.map((att: any) => {
+                    if (!att.dataUrl && !att.url) {
+                      const found = parsed.find((p: any) => p.name === att.name || String(p.id) === String(att.id));
+                      if (found?.dataUrl) return { ...att, dataUrl: found.dataUrl, url: found.dataUrl };
+                    }
+                    return att;
+                  });
+                }
               }
             }
           } catch (e) {}
         }
         setAttachments(invAttachments);
+
+        // If any attachment is missing dataUrl/url, fetch the full invoice record from backend
+        const invTargetId = foundInv.id || foundInv.invoiceNumber;
+        if (invTargetId && invAttachments.some((a: any) => !a.dataUrl && !a.url)) {
+          invoiceService.get(invTargetId).then((fullInv) => {
+            if (fullInv && fullInv.attachments && Array.isArray(fullInv.attachments)) {
+              setAttachments((prev) =>
+                prev.map((att) => {
+                  if (!att.dataUrl && !att.url) {
+                    const match = (fullInv.attachments as any[]).find(
+                      (fa: any) => fa.name === att.name || String(fa.id) === String(att.id)
+                    );
+                    if (match && (match.dataUrl || match.url)) {
+                      return { ...att, dataUrl: match.dataUrl, url: match.url || match.dataUrl };
+                    }
+                  }
+                  return att;
+                })
+              );
+            }
+          }).catch(() => {});
+        }
 
         const foundGRN =
           grnOptions.find((g) => String(g.id) === String(foundInv.grnId) || String(g.grnNumber) === String(foundInv.grnId)) ||
@@ -1235,33 +1267,116 @@ export default function CreatePurchaseInvoicePage() {
   };
 
   const handleDownloadAttachment = (att: { id?: string; name: string; size?: string; dataUrl?: string; url?: string }) => {
-    const src = att.dataUrl || att.url;
+    let src = att.dataUrl || att.url;
+    if (!src) {
+      const keys = [
+        invoiceNumber ? `invoice_attachments_${invoiceNumber}` : null,
+        selectedPoId ? `invoice_attachments_${selectedPoId}` : null,
+        selectedPO?.poNumber ? `invoice_attachments_${selectedPO.poNumber}` : null,
+      ].filter(Boolean) as string[];
+
+      for (const k of keys) {
+        try {
+          const cached = localStorage.getItem(k);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+              const found = parsed.find((p: any) => p.name === att.name || (att.id && String(p.id) === String(att.id)));
+              if (found?.dataUrl || found?.url) {
+                src = found.dataUrl || found.url;
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
     if (src) {
       const link = document.createElement('a');
       link.href = src;
       link.download = att.name || 'invoice-document';
+      if (src.startsWith('http') || src.startsWith('/api')) {
+        link.target = '_blank';
+      }
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } else {
-      try {
-        const cached = localStorage.getItem(`invoice_attachments_${invoiceNumber}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          const found = parsed.find((p: any) => p.name === att.name);
-          if (found?.dataUrl) {
-            const link = document.createElement('a');
-            link.href = found.dataUrl;
-            link.download = found.name || 'invoice-document';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            return;
-          }
-        }
-      } catch (e) {}
-      alert(`Downloading ${att.name}...`);
+      return;
     }
+
+    const invTarget = invoiceNumber || selectedPoId;
+    if (invTarget && att.id) {
+      window.open(
+        `/api/invoices/${encodeURIComponent(invTarget)}/attachments/${encodeURIComponent(String(att.id))}?download=true`,
+        '_blank'
+      );
+      return;
+    }
+
+    alert(`Download not available for ${att.name}`);
+  };
+
+  const handlePrintAttachment = (att: { id?: string; name: string; size?: string; dataUrl?: string; url?: string }, idx: number) => {
+    let src = att.dataUrl || att.url;
+    if (!src) {
+      const keys = [
+        invoiceNumber ? `invoice_attachments_${invoiceNumber}` : null,
+        selectedPoId ? `invoice_attachments_${selectedPoId}` : null,
+        selectedPO?.poNumber ? `invoice_attachments_${selectedPO.poNumber}` : null,
+      ].filter(Boolean) as string[];
+
+      for (const k of keys) {
+        try {
+          const cached = localStorage.getItem(k);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+              const found = parsed.find((p: any) => p.name === att.name || (att.id && String(p.id) === String(att.id)));
+              if (found?.dataUrl || found?.url) {
+                src = found.dataUrl || found.url;
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!src && (invoiceNumber || selectedPoId) && att.id) {
+      src = `/api/invoices/${encodeURIComponent(invoiceNumber || selectedPoId)}/attachments/${encodeURIComponent(String(att.id))}`;
+    }
+
+    if (src) {
+      if (src.startsWith('data:application/pdf') || att.name.toLowerCase().endsWith('.pdf') || src.includes('.pdf')) {
+        const printWindow = window.open(src, '_blank');
+        if (printWindow) {
+          printWindow.focus();
+          setTimeout(() => {
+            try { printWindow.print(); } catch {}
+          }, 600);
+          return;
+        }
+      } else {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`
+            <html>
+              <head><title>Print - ${att.name}</title></head>
+              <body style="margin:0;display:flex;align-items:center;justify-content:center;background:#fff;">
+                <img src="${src}" style="max-width:100%;height:auto;" onload="window.print();window.close();" />
+              </body>
+            </html>
+          `);
+          printWindow.document.close();
+          return;
+        }
+      }
+    }
+
+    // Fallback: open in Viewer Modal
+    setViewerDocIndex(idx);
+    setViewerModalOpen(true);
   };
 
   const handleRemoveAttachment = (attId: string) => {
@@ -2660,29 +2775,7 @@ export default function CreatePurchaseInvoicePage() {
                         >
                           <Download size={13} /> Download
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setViewerDocIndex(idx);
-                            setViewerModalOpen(true);
-                          }}
-                          style={{
-                            padding: '6px 10px',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            borderRadius: 6,
-                            background: 'var(--surface-elevated, #ffffff)',
-                            color: 'var(--text-primary, #334155)',
-                            border: '1px solid var(--border, #cbd5e1)',
-                            cursor: 'pointer',
-                          }}
-                          title="Print Document"
-                        >
-                          <Printer size={13} /> Print
-                        </button>
+
                         {!isReadOnly && (
                           <button
                             type="button"
@@ -3121,6 +3214,7 @@ export default function CreatePurchaseInvoicePage() {
         open={viewerModalOpen}
         onClose={() => setViewerModalOpen(false)}
         invoice={{
+          id: editingInvoiceId || invoiceNumber,
           invoiceNumber,
           poNumber: selectedPoId,
           vendorName,

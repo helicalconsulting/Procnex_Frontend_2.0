@@ -135,7 +135,7 @@ export default function AppLayout() {
             id="main-content"
             ref={mainRef}
             tabIndex={-1}
-            className="w-full min-w-0 flex-1 scroll-mt-20 px-2 py-4 pb-8 outline-none sm:px-3 sm:py-5 lg:px-4 lg:py-5"
+            className="w-full min-w-0 flex-1 scroll-mt-20 px-2 py-4 pb-8 outline-none sm:px-4 sm:py-5 lg:px-5 lg:py-5"
           >
             <AnimatePresence mode="wait" initial={false}>
               <PageTransition key={location.pathname}>

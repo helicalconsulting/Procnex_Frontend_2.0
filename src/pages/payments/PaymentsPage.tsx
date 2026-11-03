@@ -424,12 +424,12 @@ export default function PaymentsPage() {
         const allApproved = rows.length > 0 && rows.every((r) => r.status === 'APPROVED');
 
         const isUserMatchingPendingStep = pendingRow
-          ? isAdmin ||
-            isRoleMatching(reqRole, authRoles) ||
+          ? isRoleMatching(reqRole, authRoles) ||
             (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
             ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
             (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
-            (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase())
+            (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase()) ||
+            (!reqRole && isAdmin)
           : false;
 
         const canAct =
@@ -501,7 +501,9 @@ export default function PaymentsPage() {
           };
         }
 
-        const isL1User = isAdmin || isRoleMatching(dynamicL1Role, authRoles);
+        const isL1User = dynamicL1Role
+          ? isRoleMatching(dynamicL1Role, authRoles)
+          : (paymentLevels.length === 0 && isAdmin);
         const canActFallback = base.status === 'PENDING' && isL1User;
 
         return {

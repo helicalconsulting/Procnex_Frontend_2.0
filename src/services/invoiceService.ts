@@ -139,8 +139,18 @@ async function deleteInvoice(id: string): Promise<boolean> {
   }
 }
 
+async function getInvoice(id: string): Promise<APInvoice | null> {
+  try {
+    const res = await apiRequest<{ data?: APInvoice }>(`/invoices/${encodeURIComponent(id)}`);
+    return (res as any)?.data || (res as any) || null;
+  } catch {
+    return null;
+  }
+}
+
 export const invoiceService = {
   list: USE_MOCK ? mockList : apiList,
+  get: getInvoice,
   updateStatus: USE_MOCK ? async () => true : updateStatus,
   delete: USE_MOCK ? async () => true : deleteInvoice,
 };

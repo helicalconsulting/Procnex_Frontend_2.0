@@ -96,10 +96,49 @@ export function InvoiceDocumentViewerModal({
       }
     }
 
+    // Fallback: check localStorage for missing dataUrls
+    const invId = invoice?.id || invoice?.invoiceNumber;
+    list = list.map((att) => {
+      let dataUrl = att.dataUrl;
+      let url = att.url;
+
+      if (!dataUrl && !url) {
+        const keys = [
+          invoice?.invoiceNumber ? `invoice_attachments_${invoice.invoiceNumber}` : null,
+          invoice?.poNumber ? `invoice_attachments_${invoice.poNumber}` : null,
+          invoice?.id ? `invoice_attachments_${invoice.id}` : null,
+        ].filter(Boolean) as string[];
+
+        for (const k of keys) {
+          try {
+            const saved = localStorage.getItem(k);
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed)) {
+                const found = parsed.find((p: any) => p.name === att.name || String(p.id) === String(att.id));
+                if (found?.dataUrl) {
+                  dataUrl = found.dataUrl;
+                  url = found.dataUrl;
+                  break;
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
+      if (!dataUrl && !url && invId && att.id) {
+        url = `/api/invoices/${encodeURIComponent(invId)}/attachments/${encodeURIComponent(String(att.id))}`;
+      }
+
+      return { ...att, dataUrl, url };
+    });
+
     setResolvedAttachments(list);
-    setActiveDocIndex(0);
+    const targetIdx = initialDocIndex >= 0 && initialDocIndex < list.length ? initialDocIndex : 0;
+    setActiveDocIndex(targetIdx);
     setZoom(100);
-  }, [open, invoice, passedAttachments]);
+  }, [open, invoice, passedAttachments, initialDocIndex]);
 
   if (!open) return null;
 
@@ -117,7 +156,21 @@ export function InvoiceDocumentViewerModal({
       link.click();
       document.body.removeChild(link);
     } else if (target.url) {
-      window.open(target.url, '_blank');
+      const link = document.createElement('a');
+      link.href = target.url;
+      link.download = target.name || `invoice-document-${invoice?.invoiceNumber || 'file'}`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      const invId = invoice?.id || invoice?.invoiceNumber;
+      if (invId && target.id) {
+        window.open(
+          `/api/invoices/${encodeURIComponent(invId)}/attachments/${encodeURIComponent(String(target.id))}?download=true`,
+          '_blank'
+        );
+      }
     }
   };
 
@@ -125,20 +178,23 @@ export function InvoiceDocumentViewerModal({
     const target = doc || currentDoc;
     if (!target) return;
 
-    if (target.dataUrl) {
-      const isPdf = target.dataUrl.startsWith('data:application/pdf') || target.name.toLowerCase().endsWith('.pdf');
-      const isImg = target.dataUrl.startsWith('data:image') || /\.(png|jpe?g|webp)$/i.test(target.name);
+    const fileSrc = target.dataUrl || target.url;
+    if (fileSrc) {
+      const isPdf = fileSrc.startsWith('data:application/pdf') || target.name.toLowerCase().endsWith('.pdf') || fileSrc.includes('.pdf');
+      const isImg = fileSrc.startsWith('data:image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(target.name);
 
       if (isPdf) {
-        const printWindow = window.open(target.dataUrl, '_blank');
+        const printWindow = window.open(fileSrc, '_blank');
         if (printWindow) {
           printWindow.focus();
-          printWindow.print();
+          setTimeout(() => {
+            try { printWindow.print(); } catch {}
+          }, 500);
         } else {
           // Fallback iframe print
           const iframe = printIframeRef.current;
           if (iframe) {
-            iframe.src = target.dataUrl;
+            iframe.src = fileSrc;
             iframe.onload = () => {
               iframe.contentWindow?.focus();
               iframe.contentWindow?.print();
@@ -160,7 +216,7 @@ export function InvoiceDocumentViewerModal({
                 </style>
               </head>
               <body>
-                <img src="${target.dataUrl}" alt="${target.name}" />
+                <img src="${fileSrc}" alt="${target.name}" />
                 <script>
                   window.onload = function() {
                     window.focus();
@@ -173,10 +229,18 @@ export function InvoiceDocumentViewerModal({
           printWindow.document.close();
         }
       } else {
-        window.open(target.dataUrl, '_blank');
+        window.open(fileSrc, '_blank');
       }
-    } else if (target.url) {
-      window.open(target.url, '_blank');
+    } else {
+      const invId = invoice?.id || invoice?.invoiceNumber;
+      if (invId && target.id) {
+        const url = `/api/invoices/${encodeURIComponent(invId)}/attachments/${encodeURIComponent(String(target.id))}`;
+        const printWindow = window.open(url, '_blank');
+        if (printWindow) {
+          printWindow.focus();
+          setTimeout(() => { try { printWindow.print(); } catch {} }, 500);
+        }
+      }
     }
   };
 
