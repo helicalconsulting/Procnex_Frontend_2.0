@@ -177,11 +177,15 @@ async function createStandalonePO(payload: StandalonePOPayload): Promise<{ poNum
     MOCK_PURCHASE_ORDERS.unshift(newPO);
     return { id: newPO.id, poNumber };
   }
-  const data = await apiRequest<{ poNumber: string; id: string }>('/purchase-orders', {
+  const data = await apiRequest<any>('/purchase-orders', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
-  return data;
+  const po = data?.po || data;
+  return {
+    id: po?.id || data?.id || '',
+    poNumber: po?.poNumber || data?.poNumber || (payload as any).poNumber || '',
+  };
 }
 
 export const purchaseOrderService = {

@@ -248,20 +248,22 @@
 [data-theme="light"] .rte-editor__content table,
 :root:not([data-theme="dark"]) .rte-editor__content table {
   background: #ffffff !important;
-  border-color: #cbd5e1 !important;
+  border: 1.5px solid #1e293b !important;
 }
 
 [data-theme="light"] .rte-editor__content table td,
 [data-theme="light"] .rte-editor__content table th,
 :root:not([data-theme="dark"]) .rte-editor__content table td,
 :root:not([data-theme="dark"]) .rte-editor__content table th {
-  border-color: #cbd5e1 !important;
+  border: 1px solid #1e293b !important;
 }
 
 [data-theme="light"] .rte-editor__content table th,
 :root:not([data-theme="dark"]) .rte-editor__content table th {
-  background: #f1f5f9 !important;
+  background: #f8fafc !important;
   color: #0f172a !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
 }
 
 [data-theme="light"] .rte-editor__content hr,
@@ -543,10 +545,18 @@
 }
 
 .rte-editor__content table {
-  width: 100%;
-  display: block;
-  overflow-x: auto;
-  max-width: 100%;
+  width: 100% !important;
+  display: table !important;
+  border-collapse: collapse !important;
+  margin: 16px 0 !important;
+  table-layout: auto !important;
+  box-sizing: border-box !important;
+}
+
+.rte-editor__content table th,
+.rte-editor__content table td {
+  box-sizing: border-box !important;
+  vertical-align: middle;
 }
 
 .rte-editor__content img {

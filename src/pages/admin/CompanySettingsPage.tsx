@@ -242,7 +242,7 @@ function PredictiveMatchCard({
 // ─── Utility: Convert structured plain text to HTML ─────────
 // Converts extracted OCR plain text into rich, beautifully formatted HTML
 // matching enterprise SRM software standards (headings, bold clause titles,
-// bulleted/numbered lists, key-value pairs, metadata headers, paragraph blocks).
+// responsive tables, signature blocks, bulleted/numbered lists, key-value pairs).
 function textToHtml(text: string): string {
   if (!text || !text.trim()) return '';
 
@@ -263,142 +263,309 @@ function textToHtml(text: string): string {
     }
   };
 
+  let i = 0;
   let isFirstContentLine = true;
   let isSecondContentLine = false;
 
-  for (let i = 0; i < rawLines.length; i++) {
+  while (i < rawLines.length) {
     const line = rawLines[i];
     const trimmed = line.trim();
 
-    if (trimmed === '') {
+    if (!trimmed) {
       flushList();
-      htmlBlocks.push('<p><br></p>');
+      i++;
       continue;
     }
 
-    // Split lines containing bullet symbols like • or ● embedded in sentence text
-    let subLines: string[] = [line];
-    if ((line.includes('•') || line.includes('●') || line.includes('▪')) && !/^[•●▪]/.test(trimmed)) {
-      const parts = line.split(/(?=[•●▪])/);
-      if (parts.length > 1) {
-        subLines = parts;
+    // ── Pattern 1: Table Detection (e.g. Stage / Work Completed / Payment or Pipe Tables) ──
+    if (
+      (trimmed.toLowerCase().includes('stage') && trimmed.toLowerCase().includes('payment')) ||
+      /^(?:Sr\.?\s+.*|Item\s+.*Amount|#\s+.*|No\.?\s+.*Rate.*)/i.test(trimmed)
+    ) {
+      flushList();
+      const tableRows: Array<{ col1: string; col2: string; col3: string }> = [];
+      let nextIdx = i + 1;
+
+      while (nextIdx < rawLines.length) {
+        const nextLine = rawLines[nextIdx].trim();
+        if (!nextLine) {
+          nextIdx++;
+          continue;
+        }
+        // Match row pattern: "1. Mobilisation 10%" or "1. Plinth Level 10%" or similar
+        const rowMatch = nextLine.match(/^(\d+[\.\)]\s*)\s+(.+?)\s+(\d+(?:\.\d+)?%|\$?\d[\d,.]*)$/);
+        if (rowMatch) {
+          tableRows.push({
+            col1: rowMatch[1].trim(),
+            col2: rowMatch[2].trim(),
+            col3: rowMatch[3].trim(),
+          });
+          nextIdx++;
+        } else {
+          break;
+        }
+      }
+
+      if (tableRows.length >= 2) {
+        const rowsHtml = tableRows
+          .map(
+            (r, rIdx) => `
+          <tr style="background-color: ${rIdx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+            <td style="padding: 10px 14px; border: 1px solid #1e293b; text-align: center; font-weight: 600; width: 14%; white-space: nowrap;">${r.col1}</td>
+            <td style="padding: 10px 14px; border: 1px solid #1e293b; text-align: left; width: 66%;">${r.col2}</td>
+            <td style="padding: 10px 14px; border: 1px solid #1e293b; text-align: center; font-weight: 600; color: #0f172a; width: 20%; white-space: nowrap;">${r.col3}</td>
+          </tr>`
+          )
+          .join('');
+
+        htmlBlocks.push(`
+          <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #1e293b; font-size: 14px; margin: 18px 0; table-layout: auto;">
+            <thead>
+              <tr style="background-color: #f8fafc;">
+                <th style="padding: 11px 14px; border: 1px solid #1e293b; text-align: center; width: 14%; font-weight: 700; white-space: nowrap; color: #0f172a;">Stage</th>
+                <th style="padding: 11px 14px; border: 1px solid #1e293b; text-align: left; width: 66%; font-weight: 700; color: #0f172a;">Work Completed</th>
+                <th style="padding: 11px 14px; border: 1px solid #1e293b; text-align: center; width: 20%; font-weight: 700; white-space: nowrap; color: #0f172a;">Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        `);
+        i = nextIdx;
+        continue;
       }
     }
 
-    for (let j = 0; j < subLines.length; j++) {
-      const subLine = subLines[j];
-      const subTrimmed = subLine.trim();
-      if (!subTrimmed) continue;
+    // ── Pattern 2: Signatures Block ──
+    if (/^SIGNATURES$/i.test(trimmed)) {
+      flushList();
+      htmlBlocks.push(
+        `<h3 style="margin-top: 30px; margin-bottom: 14px; font-size: 1.25em; font-weight: 700; color: #002d62; border-bottom: 2px solid #002d62; padding-bottom: 5px; text-transform: uppercase;">Signatures</h3>`
+      );
 
-      // Escape HTML entities to prevent invalid injection while preserving placeholders like {{companyName}}
-      let escaped = subTrimmed
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+      const clientLines: string[] = [];
+      const contractorLines: string[] = [];
+      let currentParty: 'client' | 'contractor' | null = null;
+      let nextIdx = i + 1;
 
-      // Preserve indentation if present
-      const leadingSpaces = subLine.match(/^ +/);
-      const spaceCount = leadingSpaces ? leadingSpaces[0].length : 0;
-      const indentPrefix = spaceCount >= 4 ? '&nbsp;&nbsp;&nbsp;&nbsp;' : spaceCount >= 2 ? '&nbsp;&nbsp;' : '';
+      while (nextIdx < rawLines.length) {
+        const nextLine = rawLines[nextIdx].trim();
+        if (!nextLine) {
+          nextIdx++;
+          continue;
+        }
+        if (/^Client:?$/i.test(nextLine)) {
+          currentParty = 'client';
+          nextIdx++;
+          continue;
+        } else if (/^Contractor:?$/i.test(nextLine)) {
+          currentParty = 'contractor';
+          nextIdx++;
+          continue;
+        } else if (/^(?:\d+[\.\)]|SECTION|ARTICLE)/i.test(nextLine)) {
+          break;
+        }
 
-      // Rule 1: Horizontal Dividers / Separators (e.g. "---", "===", "___")
-      if (/^[-=_*]{3,}$/.test(subTrimmed)) {
-        flushList();
-        htmlBlocks.push('<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 16px 0;" />');
-        continue;
+        if (currentParty === 'client') {
+          clientLines.push(nextLine);
+          nextIdx++;
+        } else if (currentParty === 'contractor') {
+          contractorLines.push(nextLine);
+          nextIdx++;
+        } else {
+          break;
+        }
       }
 
-      // Rule 2: Bullet points or Numbered lists
-      const bulletMatch = escaped.match(/^(?:[•●▪\-\*\+]\s*|\(?\d+[\.\)]\s+|\(?[a-zA-Z][\.\)]\s+)(.*)/);
-      const isHeaderClause = /^(?:SECTION|ARTICLE|CLAUSE|\d+[\.\)]\s+[A-Z0-9\s,&-]{4,})/i.test(subTrimmed);
+      if (clientLines.length > 0 || contractorLines.length > 0) {
+        const formatParty = (lines: string[]) =>
+          lines
+            .map((l) => {
+              const m = l.match(/^([A-Za-z\s]+:)\s*(.*)/);
+              if (m) {
+                return `<p style="margin: 6px 0; font-size: 13.5px;"><strong style="color: #334155;">${m[1]}</strong> ${m[2]}</p>`;
+              }
+              return `<p style="margin: 6px 0; font-size: 13.5px;">${l}</p>`;
+            })
+            .join('');
 
-      if (bulletMatch && !isHeaderClause) {
-        const listContent = bulletMatch[1].trim();
-        const isNumeric = /^\(?\d+[\.\)]/.test(escaped);
-        const targetListType = isNumeric ? 'ol' : 'ul';
+        htmlBlocks.push(`
+          <div style="display: flex; gap: 24px; margin: 20px 0; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 260px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 18px; background-color: #f8fafc;">
+              <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 700; color: #002d62; text-transform: uppercase;">Client</h4>
+              ${formatParty(clientLines)}
+            </div>
+            <div style="flex: 1; min-width: 260px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 18px; background-color: #f8fafc;">
+              <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 700; color: #002d62; text-transform: uppercase;">Contractor</h4>
+              ${formatParty(contractorLines)}
+            </div>
+          </div>
+        `);
+        i = nextIdx;
+        continue;
+      }
+    }
 
-        if (listType && listType !== targetListType) {
+    // Escape entities for safety while preserving structure
+    const escaped = trimmed
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // ── Pattern 3: Main Document Title ──
+    if (
+      isFirstContentLine ||
+      (/^(?:TURNKEY\s+CONSTRUCTION\s+AGREEMENT|CONTRACT\s+AGREEMENT|NON-DISCLOSURE\s+AGREEMENT|MASTER\s+SERVICES\s+AGREEMENT)/i.test(
+        trimmed
+      ) &&
+        trimmed.length < 80)
+    ) {
+      flushList();
+      isFirstContentLine = false;
+      isSecondContentLine = true;
+      htmlBlocks.push(
+        `<h2 style="margin-top: 8px; margin-bottom: 8px; font-size: 1.6em; font-weight: 800; color: #002d62; text-align: center; letter-spacing: -0.01em;">${escaped}</h2>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 4: Subtitle in parentheses ──
+    if (isSecondContentLine && /^\(.*\)$/.test(trimmed) && trimmed.length < 120) {
+      flushList();
+      isSecondContentLine = false;
+      htmlBlocks.push(
+        `<p style="margin-top: 0; margin-bottom: 16px; font-size: 1.05em; font-style: italic; color: #64748b; text-align: center;">${escaped}</p>`
+      );
+      i++;
+      continue;
+    }
+    isSecondContentLine = false;
+
+    // ── Pattern 5: Numbered Section Headings (e.g. "1. Project Details", "2. Scope of Work") ──
+    const sectionHeadingMatch = trimmed.match(/^(\d+[\.\)]\s+[A-Z][A-Za-z0-9\s,&()/-]{2,70})$/);
+    if (sectionHeadingMatch && !trimmed.endsWith('.')) {
+      flushList();
+      htmlBlocks.push(
+        `<h3 style="margin-top: 24px; margin-bottom: 10px; font-size: 1.25em; font-weight: 700; color: #002d62; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 5px;">${escaped}</h3>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 6: Sub-clause numbering (e.g. "1.1 The Client is...", "3.2 The following...") ──
+    const subClauseMatch = trimmed.match(/^(\d+\.\d+(?:\.\d+)?|\b[A-Z]\.\d+)\s+(.*)/);
+    if (subClauseMatch) {
+      flushList();
+      htmlBlocks.push(
+        `<p style="margin-bottom: 10px; line-height: 1.6; font-size: 14px;"><strong style="color: #002d62;">${subClauseMatch[1]}</strong> ${subClauseMatch[2]}</p>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 6.5: Payment Conditions Block ──
+    if (/^Payment\s+Conditions/i.test(trimmed)) {
+      flushList();
+      htmlBlocks.push(
+        `<h4 style="margin-top: 18px; margin-bottom: 8px; font-size: 1.05em; font-weight: 700; color: #0f172a;">${escaped}</h4>`
+      );
+      let pIdx = i + 1;
+      const paymentBullets: string[] = [];
+      let currentBullet = '';
+
+      while (pIdx < rawLines.length) {
+        const pLine = rawLines[pIdx].trim();
+        if (!pLine) {
+          pIdx++;
+          continue;
+        }
+        if (/^(?:\d+[\.\)]\s+[A-Z]|SIGNATURES)/i.test(pLine)) {
+          break;
+        }
+        if (currentBullet && (/^[a-z]/.test(pLine) || pLine.length < 25 || !/[.:;!?\)\"]$/.test(currentBullet))) {
+          currentBullet += ' ' + pLine;
+        } else {
+          if (currentBullet) paymentBullets.push(currentBullet);
+          currentBullet = pLine.replace(/^[•●▪\-\*\+]\s*/, '');
+        }
+        pIdx++;
+      }
+      if (currentBullet) paymentBullets.push(currentBullet);
+
+      if (paymentBullets.length > 0) {
+        const bulletsHtml = paymentBullets
+          .map((b) => `<li style="margin-bottom: 5px; line-height: 1.6;">${b}</li>`)
+          .join('');
+        htmlBlocks.push(`<ul style="margin-top: 6px; margin-bottom: 16px; padding-left: 24px; color: #1e293b;">${bulletsHtml}</ul>`);
+      }
+      i = pIdx;
+      continue;
+    }
+
+    // ── Pattern 7: Section Highlight Headers (e.g. "Between", "AND", "Items EXCLUDED...") ──
+    if (/^(?:Items\s+EXCLUDED.*|Between|AND|By\s+Client:|By\s+Contractor:)/i.test(trimmed)) {
+      flushList();
+      const isParties = /^(?:Between|AND)$/i.test(trimmed);
+      htmlBlocks.push(
+        `<h4 style="margin-top: ${isParties ? '12px' : '18px'}; margin-bottom: 6px; font-size: 1.05em; font-weight: 700; color: ${
+          isParties ? '#475569' : '#0f172a'
+        };">${escaped}</h4>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 8: Key-Value Pairs (e.g. "Cement: Ultratech / ACC / equivalent") ──
+    const kvMatch = trimmed.match(/^([A-Za-z0-9_\s]{2,35}:)\s*(.+)/);
+    if (kvMatch && !kvMatch[1].toLowerCase().startsWith('http')) {
+      flushList();
+      htmlBlocks.push(
+        `<p style="margin-bottom: 6px; line-height: 1.5; font-size: 13.5px;"><strong style="color: #334155; min-width: 120px; display: inline-block;">${kvMatch[1]}</strong> ${kvMatch[2]}</p>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 9: Bullet points or Scope Items ──
+    const isExplicitBullet = /^[•●▪\-\*\+]\s*(.*)/.test(trimmed);
+    if (isExplicitBullet) {
+      const bulletContent = trimmed.replace(/^[•●▪\-\*\+]\s*/, '');
+      if (listType !== 'ul') {
+        flushList();
+      }
+      listType = 'ul';
+      currentListItems.push(bulletContent);
+      i++;
+      continue;
+    }
+
+    // Short scope items without terminal punctuation (e.g. "Boundary wall", "Gate", "Septic tank")
+    if (trimmed.length < 65 && !trimmed.endsWith('.') && !trimmed.includes(':') && !trimmed.includes('(')) {
+      const prevLine = i > 0 ? rawLines[i - 1].trim() : '';
+      const nextLine = i + 1 < rawLines.length ? rawLines[i + 1].trim() : '';
+      if (
+        (prevLine && prevLine.length < 65 && !prevLine.endsWith('.')) ||
+        (nextLine && nextLine.length < 65 && !nextLine.endsWith('.'))
+      ) {
+        if (listType !== 'ul') {
           flushList();
         }
-        listType = targetListType;
-        currentListItems.push(indentPrefix + listContent);
+        listType = 'ul';
+        currentListItems.push(escaped);
+        i++;
         continue;
       }
-
-      // Encountered non-list content → flush active list
-      flushList();
-
-      // Rule 3: Main Document Title (First non-empty line)
-      if (isFirstContentLine) {
-        isFirstContentLine = false;
-        isSecondContentLine = true;
-        if (subTrimmed.length <= 80 && !subTrimmed.endsWith('.')) {
-          htmlBlocks.push(
-            `<h2 style="margin-top: 4px; margin-bottom: 6px; font-size: 1.45em; font-weight: 700; color: #0f172a; line-height: 1.3;">${escaped}</h2>`
-          );
-          continue;
-        }
-      } else if (isSecondContentLine) {
-        isSecondContentLine = false;
-        if (subTrimmed.length <= 80 && !subTrimmed.endsWith('.') && !/^(SECTION|ARTICLE|DEFINITIONS|\d+[\.\)])/i.test(subTrimmed)) {
-          htmlBlocks.push(
-            `<p style="margin-top: 0; margin-bottom: 12px; font-size: 1.05em; font-weight: 600; color: #475569;">${escaped}</p>`
-          );
-          continue;
-        }
-      }
-
-      // Rule 4: Contact / Link / Metadata bar (e.g. "email@domain.com | +91-123456 | Linkedin")
-      if (subTrimmed.includes('|') && (subTrimmed.includes('@') || subTrimmed.includes('+') || /linkedin|github|leetcode|website|phone|email/i.test(subTrimmed))) {
-        const parts = escaped.split('|').map(p => p.trim());
-        const formattedPipe = parts.join(' &nbsp;<span style="color:#cbd5e1;">|</span>&nbsp; ');
-        htmlBlocks.push(
-          `<p style="margin-top: 2px; margin-bottom: 14px; color: #64748b; font-size: 0.9em; font-weight: 500;">${formattedPipe}</p>`
-        );
-        continue;
-      }
-
-      // Rule 5: Section Headings & Clause Titles
-      const isAllCapsHeading = /^[A-Z0-9\s,&/\\'\(\)-]{3,60}$/.test(subTrimmed) && !/[a-z]/.test(subTrimmed) && subTrimmed.length > 2;
-      const isNumberedClauseHeading = /^(?:\d+[\.\)]\s+|ARTICLE\s+[IVXLCDM\d]+|SECTION\s+\d+|CLAUSE\s+\d+)\s+[A-Z0-9\s,&/\\'-]+/i.test(subTrimmed) && subTrimmed.length <= 90;
-      const isColonTitle = subTrimmed.endsWith(':') && subTrimmed.length <= 60 && !subTrimmed.includes('http');
-
-      if (isAllCapsHeading || isNumberedClauseHeading || isColonTitle) {
-        htmlBlocks.push(
-          `<h3 style="margin-top: 18px; margin-bottom: 8px; font-size: 1.15em; font-weight: 700; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">${escaped}</h3>`
-        );
-        continue;
-      }
-
-      // Rule 6: Sub-clause numbering (e.g. "1.1 Confidential Information", "Section 2.3")
-      const subClauseMatch = escaped.match(/^(\d+\.\d+(?:\.\d+)?|\b[A-Z]\.\d+)\s+(.*)/);
-      if (subClauseMatch) {
-        const clauseNum = subClauseMatch[1];
-        const clauseRest = subClauseMatch[2];
-        htmlBlocks.push(
-          `<p style="margin-bottom: 8px; line-height: 1.55;"><strong>${clauseNum}</strong> ${clauseRest}</p>`
-        );
-        continue;
-      }
-
-      // Rule 7: Key-Value Pairs (e.g. "EFFECTIVE DATE: September 10, 2026", "Vendor Name: {{vendorName}}")
-      const keyValueMatch = escaped.match(/^([A-Za-z0-9_\s\{\}]+:)\s*(.*)/);
-      if (keyValueMatch && keyValueMatch[1].length <= 40 && !keyValueMatch[1].toLowerCase().startsWith('http')) {
-        const keyLabel = keyValueMatch[1];
-        const valueText = keyValueMatch[2];
-        htmlBlocks.push(
-          `<p style="margin-bottom: 6px; line-height: 1.5;"><strong style="color: #334155;">${keyLabel}</strong> ${valueText}</p>`
-        );
-        continue;
-      }
-
-      // Rule 8: Normal Paragraphs
-      htmlBlocks.push(`<p style="margin-bottom: 8px; line-height: 1.6; color: #1e293b;">${indentPrefix}${escaped}</p>`);
     }
+
+    // ── Pattern 10: Standard Paragraph ──
+    flushList();
+    htmlBlocks.push(`<p style="margin-bottom: 10px; line-height: 1.6; font-size: 14px; color: #1e293b;">${escaped}</p>`);
+    i++;
   }
 
   flushList();
-
   return htmlBlocks.join('\n');
 }
 

@@ -960,105 +960,23 @@ export default function CreatePurchaseOrderPage() {
         },
       };
 
-      // Always create/update in the PO table so it shows on PO Creation & Orders list
+      // Create or update in the PO and PR tables and initiate approval in a single unified backend transaction
       const createdPO = await purchaseOrderService.createStandalonePO(standalonePayload);
       const finalPoNumber = createdPO?.poNumber || poNumber;
 
-      // Also save to PR table so it appears in the PO Creation & Orders list page
-      // (PurchaseRequisitionsListPage reads from purchaseRequisitionService)
-      const compAddressFinal = companyAddress || ([profile?.companyAddress, profile?.companyCity, profile?.companyState, profile?.companyCountry].filter(Boolean).join(', ')) || '';
-      const prPayload: any = {
-        ...(editId ? { id: editId } : {}),
-        rfqId: rfqNo || editId || `rfq-direct-${Date.now()}`,
-        poNumber: finalPoNumber,
-        status: statusPayload,
-        isStandalone: true,
-        vendorFulfillmentAllowed,
-        companyName: companyName || brandingCompanyName || 'Organization',
-        companyAddress: compAddressFinal,
-        companyPhone: companyPhone || brandingPhone || '',
-        companyEmail: companyEmail || brandingEmail || '',
-        companyWebsite: companyWebsite || '',
-        supplierType: supplierType,
-        supplierCode: supplierCode,
-        selectedVendorId: selectedVendorId,
-        vendorId: selectedVendorId,
-        vendorName: supplierName,
-        vendorAddress: supplierAddress,
-        vendorContactPerson: contactPerson,
-        vendorPhone: contactPhone,
-        vendorEmail: contactEmail,
-        vendorGstVat: supplierTaxId,
-        shipToCompany: shipToCompany || brandingCompanyName || 'Procnex Warehouse',
-        shipToWarehouse: shipToWarehouse || 'Central Warehouse',
-        shipToAddress: shipToAddress || '',
-        shipToContact: shipToContact || '',
-        shipToPhone: shipToPhone || '',
-        poDate: poDate,
-        currency: currency,
-        requisitioner: 'Procurement Officer',
-        shipVia: 'Surface',
-        fob: 'Destination',
-        paymentTerms: paymentTerms,
-        paymentPlanId: selectedPaymentPlanId || null,
-        paymentPlanSnapshot: paymentPlanSnapshot || (selectedCustomPlan ? selectedCustomPlan.milestones : null),
-        deliveryDate: deliveryDate,
-        shippingTerms: shippingTerms,
-        items: items.map((i, idx) => ({
-          itemNo: idx + 1,
-          itemCode: i.itemCode,
-          itemName: i.itemName,
-          description: i.description || '',
-          quantity: Number(i.quantity) || 1,
-          unit: i.unit || 'pcs',
-          unitPrice: Number(i.unitPrice) || 0,
-          taxPercent: Number(i.taxPercent) || 0,
-          discount: 0,
-          total: (Number(i.quantity) || 1) * (Number(i.unitPrice) || 0),
-        })),
-        shippingCharges: Number(shippingCharges) || 0,
-        otherCharges: Number(otherCharges) || 0,
-        internalNotes: internalNotes,
-        specialInstructions: specialInstructions,
-        subtotal: subtotal,
-        taxTotal: taxTotal,
-        discountTotal: 0,
-        grandTotal: grandTotal,
-        totalAmount: grandTotal,
-        budgetLineId: selectedBudgetLineId || undefined,
-        sourceReferences: {
-          prNo,
-          contractNo,
-          rfqNo,
-          tenderNo,
-          supplierQuotationNo,
-          quotationDate,
-          blanketOrderNo,
-          frameworkAgreement,
-        },
-      };
-      await purchaseRequisitionService.save(prPayload).catch(() => {});
-
-      if (targetStatus === 'Pending Approval') {
-        const poRef = finalPoNumber || poNumber || editId;
-        if (poRef) {
-          await approvalService.resubmit('PurchaseOrders', poRef, 1).catch(() => null);
-        }
-      }
-
       // 🔔 Instant sync notification across open tabs and windows
-      window.dispatchEvent(new CustomEvent('heliflow:po-created', { detail: { poNumber, status: statusPayload } }));
+      window.dispatchEvent(new CustomEvent('heliflow:po-created', { detail: { poNumber: finalPoNumber, status: statusPayload } }));
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       try {
         const bc = new BroadcastChannel('heliflow_sync');
-        bc.postMessage({ type: 'PO_CREATED', poNumber, status: statusPayload, timestamp: Date.now() });
+        bc.postMessage({ type: 'PO_CREATED', poNumber: finalPoNumber, status: statusPayload, timestamp: Date.now() });
         bc.close();
       } catch {}
 
       setMsg({
         text: targetStatus === 'Draft'
-          ? `Purchase Order ${poNumber} saved successfully as Draft!`
-          : `Purchase Order ${poNumber} submitted successfully for approval!`,
+          ? `Purchase Order ${finalPoNumber} saved successfully as Draft!`
+          : `Purchase Order ${finalPoNumber} submitted successfully for approval!`,
         type: 'success',
       });
       setTimeout(() => {
