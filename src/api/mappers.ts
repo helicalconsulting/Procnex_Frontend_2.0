@@ -251,7 +251,8 @@ export function mapVendorToTableRow(v: Vendor & Record<string, unknown>): Vendor
 }
 
 function formatApprovalAmount(amount: number, currency?: string): string {
-  const curr = currency || 'KES';
+  const defaultCurr = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'AED';
+  const curr = currency || defaultCurr;
   try {
     return formatCurrency(amount, curr);
   } catch {
@@ -290,7 +291,8 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
   };
   const level = a.level as { levelNumber?: number; requiredRole?: string } | undefined;
   const amount = Number(a.amount || 0);
-  const currency = (a.currency as string) || 'KES';
+  const defaultCurr = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'AED';
+  const currency = (a.currency as string) || defaultCurr;
 
   const rawLevelNum = Number(
     (a.currentLevel as number) ?? (a.current_level as number) ?? level?.levelNumber ?? 1

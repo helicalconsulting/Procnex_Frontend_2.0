@@ -202,6 +202,17 @@ export const purchaseOrderService = {
     return data;
   },
   createStandalonePO,
+  async getById(id: number | string): Promise<any | null> {
+    if (USE_MOCK) {
+      return MOCK_PURCHASE_ORDERS.find(p => String(p.id) === String(id) || p.poNumber === String(id)) || null;
+    }
+    try {
+      const data = await apiRequest<{ po?: any; purchaseOrder?: any }>(`/purchase-orders/${id}`);
+      return data.po || data.purchaseOrder || data || null;
+    } catch {
+      return null;
+    }
+  },
   async delete(id: number | string): Promise<void> {
     if (USE_MOCK) {
       await new Promise(r => setTimeout(r, 200));

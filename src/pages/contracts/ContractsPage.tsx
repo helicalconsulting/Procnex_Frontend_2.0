@@ -10,7 +10,7 @@ import { sseClient } from '../../services/sseClient';
 import { companySettingsService } from '../../services/companySettingsService';
 import {
   FileText, Search, Plus, Eye, Edit3, X, ChevronLeft, ChevronRight,
-  LayoutList, LayoutGrid, Calendar, DollarSign, AlertTriangle,
+  LayoutList, LayoutGrid, Calendar, DollarSign, Wallet, AlertTriangle,
   Clock, CheckCircle2, XCircle, FileSignature, Trash2, Download,
   Ban, Bell, ArrowRight, CheckSquare,
 } from 'lucide-react';
@@ -107,7 +107,7 @@ export default function ContractsPage() {
   const { hasPermission } = useAuth();
   const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
   const canCreateContract = hasPermission('Contract Management', 'canCreate') || hasPermission('Contracts', 'canCreate');
-  const { formatAmount, companyDefaultCurrency: displayCurrency } = useCurrency();
+  const { formatAmount, companyDefaultCurrency: displayCurrency, convert } = useCurrency();
 
   const [contractTypeLabels, setContractTypeLabels] = useState<Record<string, string>>({});
 
@@ -118,7 +118,7 @@ export default function ContractsPage() {
     })),
     { rawContracts: [] as Contract[], total: 0 },
     [],
-    { cacheKey: 'contracts:list', cacheTtlMs: 0 }
+    { cacheKey: 'contracts:list', cacheTtlMs: 15000 }
   );
 
   const contracts = useMemo(() => {
@@ -135,14 +135,14 @@ export default function ContractsPage() {
       contractType: contractTypeLabels[c.contractType] || c.contractType,
       sourceRfq: c.rfq?.rfqNumber || '',
       contractValue: Number(c.contractValue || 0),
-      currency: c.currency || 'KES',
+      currency: c.currency || displayCurrency,
       startDate: c.effectiveDate,
       endDate: c.expirationDate,
       status: (c.status || 'DRAFT') as ContractStatus,
       contractOwner: c.contractOwner?.fullName || '—',
       hasPO: ((c as any)._count?.purchaseOrders ?? 0) > 0 || ((c as any).purchaseOrders?.length ?? 0) > 0,
     }));
-  }, [rawResult, contractTypeLabels]);
+  }, [rawResult, contractTypeLabels, displayCurrency]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -172,10 +172,21 @@ export default function ContractsPage() {
     rfqTitle: string | null;
   }>>([]);
 
+  const lastFocusRef = useRef<number>(0);
+
   useEffect(() => {
     const handleRefresh = () => forceRefresh();
 
-    window.addEventListener('focus', handleRefresh);
+    const handleFocus = () => {
+      const now = Date.now();
+      // Throttle window focus refresh to at most once per 30 seconds
+      if (now - lastFocusRef.current > 30_000) {
+        lastFocusRef.current = now;
+        forceRefresh();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
     window.addEventListener('heliflow:contract-created', handleRefresh);
     window.addEventListener('heliflow:contract-updated', handleRefresh);
     window.addEventListener('heliflow:contract-deleted', handleRefresh);
@@ -223,12 +234,13 @@ export default function ContractsPage() {
       bc.onmessage = () => { handleRefresh(); };
     } catch {}
 
+    // Fallback heartbeat every 60s (SSE handles instant live updates)
     const interval = setInterval(() => {
       handleRefresh();
-    }, 5000);
+    }, 60_000);
 
     return () => {
-      window.removeEventListener('focus', handleRefresh);
+      window.removeEventListener('focus', handleFocus);
       window.removeEventListener('heliflow:contract-created', handleRefresh);
       window.removeEventListener('heliflow:contract-updated', handleRefresh);
       window.removeEventListener('heliflow:contract-deleted', handleRefresh);
@@ -370,8 +382,11 @@ export default function ContractsPage() {
     total: contracts.length,
     vendorSigned: contracts.filter(r => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(r.status)).length,
     pendingSignature: contracts.filter(r => ['PENDING_VENDOR_SIGNATURE', 'AWAITING_CUSTOMER_SIGNATURE', 'AWAITING_VENDOR_SIGNATURE'].includes(r.status)).length,
-    totalValue: contracts.reduce((s, r) => s + r.contractValue, 0),
-  }), [contracts]);
+    totalValue: contracts.reduce((s, r) => {
+      const fromCurr = r.currency || displayCurrency;
+      return s + (convert ? convert(r.contractValue, fromCurr, displayCurrency) : r.contractValue);
+    }, 0),
+  }), [contracts, convert, displayCurrency]);
 
   const formatDate = useCallback((d: string) =>
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -569,7 +584,7 @@ export default function ContractsPage() {
           { icon: FileText, tone: 'primary' as const, value: summary.total, label: 'TOTAL CONTRACTS', detail: 'Across all contracts', filter: 'ALL' },
           { icon: CheckCircle2, tone: 'success' as const, value: summary.vendorSigned, label: 'VENDOR SIGNED', detail: 'Signed & active', filter: 'VENDOR_SIGNED_GROUP' },
           { icon: Clock, tone: 'warning' as const, value: summary.pendingSignature, label: 'PENDING SIGNATURE', detail: 'Awaiting signatures', filter: 'PENDING_SIGNATURE_GROUP' },
-          { icon: DollarSign, tone: 'primary' as const, value: formatAmount(summary.totalValue, displayCurrency), label: 'TOTAL VALUE', detail: 'Cumulative contract value', filter: 'TOTAL_VALUE' },
+          { icon: Wallet, tone: 'primary' as const, value: formatAmount(summary.totalValue, displayCurrency), label: 'TOTAL VALUE', detail: 'Cumulative contract value', filter: 'TOTAL_VALUE' },
         ].map((c) => {
           const isActive = c.filter === 'TOTAL_VALUE' ? false : statusFilter === c.filter;
           return (

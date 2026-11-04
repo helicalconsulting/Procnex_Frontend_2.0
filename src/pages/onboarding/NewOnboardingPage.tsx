@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   Tag,
   ChevronDown,
+  Globe,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import DesktopWindow from '../../components/shared/DesktopWindow';
@@ -202,6 +203,7 @@ export default function NewOnboardingPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [supplierType, setSupplierType] = useState('');
 
   // Load vendor categories from Company Settings
   useEffect(() => {
@@ -933,6 +935,7 @@ export default function NewOnboardingPage() {
         contactPhone: contactPhone.trim() ? normalizeVendorPhone(contactPhone, contactCountryCode) : undefined,
         category: selectedCategory.trim() || undefined,
         categoryId: selectedCategoryId || undefined,
+        supplierType: supplierType.trim() || undefined,
         notes: notes.trim() || undefined,
         documentIds: selectedDocIds.length > 0 ? selectedDocIds : undefined,
         flexiFields: onboardingFlexiFields.length > 0
@@ -952,6 +955,7 @@ export default function NewOnboardingPage() {
       setContactPhone('');
       setSelectedCategory('');
       setSelectedCategoryId(null);
+      setSupplierType('');
       setNotes('');
       setItems([]);
       setSelectedDocIds([]);
@@ -991,7 +995,7 @@ export default function NewOnboardingPage() {
     } finally {
       setSending(false);
     }
-  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedCategory, selectedCategoryId, selectedDocIds, onboardingFlexiFields, ndaRequired, mndaRequired, anyOtherRequired, ndaTemplateId, mndaTemplateId, anyOtherTemplateId, reload, verifyPhone]);
+  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedCategory, selectedCategoryId, supplierType, selectedDocIds, onboardingFlexiFields, ndaRequired, mndaRequired, anyOtherRequired, ndaTemplateId, mndaTemplateId, anyOtherTemplateId, reload, verifyPhone]);
 
   const handleCopyCode = useCallback((code: string) => {
     navigator.clipboard.writeText(code).catch(() => {});
@@ -1060,6 +1064,11 @@ export default function NewOnboardingPage() {
               {inv.category && (
                 <span className="flex items-center gap-1 font-medium text-primary">
                   <Tag size={12} /> {inv.category}
+                </span>
+              )}
+              {inv.supplierType && (
+                <span className="flex items-center gap-1 font-medium text-muted-foreground">
+                  <Globe size={12} /> {inv.supplierType}
                 </span>
               )}
             </div>
@@ -1338,35 +1347,57 @@ export default function NewOnboardingPage() {
               </div>
 
               <div className="space-y-4">
-                {/* Vendor Category */}
-                <div className="onb-form-field">
-                  <label className="onb-form-field__label" htmlFor="onb-category">Vendor Category</label>
-                  <div className="onb-form-field__input-wrap">
-                    <Tag size={16} className="onb-form-field__icon" />
-                    <Select
-                      id="onb-category"
-                      value={selectedCategoryId || (categories.some((c) => c.name === selectedCategory) ? categories.find((c) => c.name === selectedCategory)?.id : '')}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const catObj = categories.find((c) => c.id === val);
-                        if (catObj) {
-                          setSelectedCategory(catObj.name);
-                          setSelectedCategoryId(catObj.id);
-                        } else {
-                          setSelectedCategory('');
-                          setSelectedCategoryId(null);
-                        }
-                      }}
-                      className="onb-form-field__input"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <option value="">Select Vendor Category (optional)</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </Select>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* Vendor Category */}
+                  <div className="onb-form-field">
+                    <label className="onb-form-field__label" htmlFor="onb-category">Vendor Category</label>
+                    <div className="onb-form-field__input-wrap">
+                      <Tag size={16} className="onb-form-field__icon" />
+                      <Select
+                        id="onb-category"
+                        value={selectedCategoryId || (categories.some((c) => c.name === selectedCategory) ? categories.find((c) => c.name === selectedCategory)?.id : '')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const catObj = categories.find((c) => c.id === val);
+                          if (catObj) {
+                            setSelectedCategory(catObj.name);
+                            setSelectedCategoryId(catObj.id);
+                          } else {
+                            setSelectedCategory('');
+                            setSelectedCategoryId(null);
+                          }
+                        }}
+                        className="onb-form-field__input"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <option value="">Select Vendor Category (optional)</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Supplier Type */}
+                  <div className="onb-form-field">
+                    <label className="onb-form-field__label" htmlFor="onb-supplier-type">Supplier Type</label>
+                    <div className="onb-form-field__input-wrap">
+                      <Globe size={16} className="onb-form-field__icon" />
+                      <Select
+                        id="onb-supplier-type"
+                        value={supplierType}
+                        onChange={(e) => setSupplierType(e.target.value)}
+                        className="onb-form-field__input"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <option value="">Select Supplier Type (optional)</option>
+                        <option value="Domestic Supplier">Domestic Supplier</option>
+                        <option value="Overseas Supplier">Overseas Supplier</option>
+                        <option value="International Supplier">International Supplier</option>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
@@ -1708,6 +1739,12 @@ export default function NewOnboardingPage() {
                 <span className="text-muted-foreground">Category</span>
                 <span className="font-medium text-foreground">
                   {selectedCategory || 'Not specified'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Supplier Type</span>
+                <span className="font-medium text-foreground">
+                  {supplierType || 'Not specified'}
                 </span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/40">
@@ -2722,6 +2759,12 @@ export default function NewOnboardingPage() {
                     <div>
                       <div className="onb-detail-info-grid__label">Vendor Category</div>
                       <div className="onb-detail-info-grid__value">{detailInvitation.category}</div>
+                    </div>
+                  )}
+                  {detailInvitation.supplierType && (
+                    <div>
+                      <div className="onb-detail-info-grid__label">Supplier Type</div>
+                      <div className="onb-detail-info-grid__value">{detailInvitation.supplierType}</div>
                     </div>
                   )}
                   <div>

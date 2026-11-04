@@ -108,7 +108,7 @@ const ALL_QUOT_COLS: QuotColDef[] = [
   { key: 'totalPrice',   label: 'Total Price'  },
   { key: 'leadTime',     label: 'Lead Time'    },
   { key: 'paymentTerms', label: 'Payment Terms'},
-  { key: 'score',        label: 'Score'        },
+  { key: 'score',        label: 'System Score' },
   { key: 'itemCount',    label: 'Items'        },
   { key: 'status',       label: 'Status'       },
   { key: 'submittedAt',  label: 'Submitted'    },
@@ -211,7 +211,7 @@ const ALL_LISTING_COLUMNS: ListingColumnDef[] = [
     ),
   },
   {
-    key: 'score', label: 'Score', defaultVisible: true, width: '130px', align: 'center',
+    key: 'score', label: 'System Score', defaultVisible: true, width: '130px', align: 'center',
     render: (q, _ctx) => {
       const rawScore = q.recommendationScore ?? q.score ?? 0;
       const displayScore = Math.min(100, Math.max(0, Math.round(rawScore)));
@@ -3998,7 +3998,7 @@ export default function QuotationsPage() {
       case 'totalPrice':   return <div className="quot-compare__col-inner quot-compare__col-inner--right">TOTAL PRICE</div>;
       case 'leadTime':     return <div className="quot-compare__col-inner quot-compare__col-inner--center">LEAD TIME</div>;
       case 'paymentTerms': return <div className="quot-compare__col-inner">PAYMENT TERMS</div>;
-      case 'score':        return <div className="quot-compare__col-inner quot-compare__col-inner--center">RECOMMENDATION</div>;
+      case 'score':        return <div className="quot-compare__col-inner quot-compare__col-inner--center">SYSTEM SCORE</div>;
       case 'itemCount':    return <div className="quot-compare__col-inner quot-compare__col-inner--center">ITEMS</div>;
       case 'status':       return <div className="quot-compare__col-inner quot-compare__col-inner--center">STATUS</div>;
       case 'submittedAt':  return <div className="quot-compare__col-inner quot-compare__col-inner--center">SUBMITTED</div>;

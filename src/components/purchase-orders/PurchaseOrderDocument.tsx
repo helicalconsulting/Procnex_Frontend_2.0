@@ -190,49 +190,73 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
       </div>
 
       {/* ── Items Table ── */}
-      <div className="po-doc__table-wrap">
-        <table className="po-doc__items-table">
-          <colgroup>
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '41%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '18%' }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th className="po-doc__th--no" style={{ textAlign: 'center' }}>#</th>
-              <th className="po-doc__th--desc" style={{ textAlign: 'left' }}>Description</th>
-              <th className="po-doc__th--qty" style={{ textAlign: 'center' }}>Quantity</th>
-              <th className="po-doc__th--unit" style={{ textAlign: 'center' }}>Unit</th>
-              <th className="po-doc__th--price" style={{ textAlign: 'right' }}>Unit Price</th>
-              <th className="po-doc__th--total" style={{ textAlign: 'right' }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pr.items.map((item) => (
-              <tr key={item.itemNo}>
-                <td className="po-doc__td--no" style={{ textAlign: 'center' }}>{item.itemNo}</td>
-                <td className="po-doc__td--desc" style={{ textAlign: 'left' }}>
-                  <div style={{ fontWeight: 600 }}>{val(item.itemName || item.description)}</div>
-                  {item.description && item.itemName && item.description !== item.itemName && (
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{item.description}</div>
-                  )}
-                </td>
-                <td className="po-doc__td--qty" style={{ textAlign: 'center' }}>{item.quantity}</td>
-                <td className="po-doc__td--unit" style={{ textAlign: 'center' }}>{val(item.unit)}</td>
-                <td className="po-doc__td--price" style={{ textAlign: 'right' }}>{formatCurrency(item.unitPrice, pr.currency)}</td>
-                <td className="po-doc__td--total" style={{ textAlign: 'right' }}>{formatCurrency(item.total, pr.currency)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {(() => {
+        const hasLineTax = (pr.items || []).some(i => (Number(i.taxPercent) || 0) > 0);
+        return (
+          <div className="po-doc__table-wrap">
+            <table className="po-doc__items-table">
+              <colgroup>
+                <col style={{ width: '5%' }} />
+                <col style={{ width: hasLineTax ? '35%' : '41%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: hasLineTax ? '14%' : '18%' }} />
+                {hasLineTax && <col style={{ width: '10%' }} />}
+                <col style={{ width: hasLineTax ? '18%' : '18%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="po-doc__th--no" style={{ textAlign: 'center' }}>#</th>
+                  <th className="po-doc__th--desc" style={{ textAlign: 'left' }}>Description</th>
+                  <th className="po-doc__th--qty" style={{ textAlign: 'center' }}>Quantity</th>
+                  <th className="po-doc__th--unit" style={{ textAlign: 'center' }}>Unit</th>
+                  <th className="po-doc__th--price" style={{ textAlign: 'right' }}>Unit Price</th>
+                  {hasLineTax && <th className="po-doc__th--tax" style={{ textAlign: 'center' }}>Tax</th>}
+                  <th className="po-doc__th--total" style={{ textAlign: 'right' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pr.items.map((item) => (
+                  <tr key={item.itemNo}>
+                    <td className="po-doc__td--no" style={{ textAlign: 'center' }}>{item.itemNo}</td>
+                    <td className="po-doc__td--desc" style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 600 }}>{val(item.itemName || item.description)}</div>
+                      {item.description && item.itemName && item.description !== item.itemName && (
+                        <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{item.description}</div>
+                      )}
+                    </td>
+                    <td className="po-doc__td--qty" style={{ textAlign: 'center' }}>{item.quantity}</td>
+                    <td className="po-doc__td--unit" style={{ textAlign: 'center' }}>{val(item.unit)}</td>
+                    <td className="po-doc__td--price" style={{ textAlign: 'right' }}>{formatCurrency(item.unitPrice, pr.currency)}</td>
+                    {hasLineTax && (
+                      <td className="po-doc__td--tax" style={{ textAlign: 'center', fontSize: '11px', fontWeight: 600, color: '#059669' }}>
+                        {item.taxPercent ? `${item.taxPercent}%` : '0%'}
+                      </td>
+                    )}
+                    <td className="po-doc__td--total" style={{ textAlign: 'right' }}>{formatCurrency(item.total, pr.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
 
       {/* ── Totals ── */}
       <div className="po-doc__totals">
         <div className="po-doc__totals-table">
+          {Number(pr.taxTotal) > 0 && (
+            <>
+              <div className="po-doc__total-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '12px' }}>
+                <span className="po-doc__total-label" style={{ color: '#64748b' }}>Subtotal</span>
+                <span className="po-doc__total-value" style={{ fontWeight: 600 }}>{formatCurrency(pr.subtotal, pr.currency)}</span>
+              </div>
+              <div className="po-doc__total-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '12px' }}>
+                <span className="po-doc__total-label" style={{ color: '#059669' }}>Tax Total</span>
+                <span className="po-doc__total-value" style={{ fontWeight: 600, color: '#059669' }}>+{formatCurrency(pr.taxTotal, pr.currency)}</span>
+              </div>
+            </>
+          )}
           <div className="po-doc__total-row po-doc__total-row--grand">
             <span className="po-doc__total-label po-doc__total-label--grand">Grand Total</span>
             <span className="po-doc__total-value po-doc__total-value--grand">{formatCurrency(pr.grandTotal, pr.currency)}</span>

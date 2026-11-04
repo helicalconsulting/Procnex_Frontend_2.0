@@ -50,6 +50,7 @@ import PrintPurchaseOrderModal from '../../components/purchase-orders/PrintPurch
 import { signatureService } from '../../services/signatureService';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -249,6 +250,16 @@ function getInvoiceAttachments(req: any): any[] {
 
 export default function ApprovalsPage() {
   const navigate = useNavigate();
+  const { formatAmount, companyDefaultCurrency } = useCurrency();
+
+  const getDisplayAmount = useCallback((req: ApprovalRequest) => {
+    if (req.amountNum !== undefined && req.amountNum !== null && !isNaN(req.amountNum) && req.amountNum > 0) {
+      const docCurrency = (req.currency && req.currency !== 'KES') ? req.currency : companyDefaultCurrency;
+      return formatAmount(req.amountNum, docCurrency);
+    }
+    return req.amount || '—';
+  }, [formatAmount, companyDefaultCurrency]);
+
   const [searchParams] = useSearchParams();
   const initialModule = searchParams.get('module');
   const initialStatus = searchParams.get('status');
@@ -417,8 +428,24 @@ export default function ApprovalsPage() {
   const colBtnRef = useRef<HTMLButtonElement>(null);
 
   const visibleColumns = useMemo(
-    () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
-    [columnOrder, visibleKeys],
+    () =>
+      columnOrder
+        .map((k) => ALL_COLUMNS.find((c) => c.key === k)!)
+        .filter((c) => c && visibleKeys.has(c.key))
+        .map((c) => {
+          if (c.key === 'amount') {
+            return {
+              ...c,
+              render: (req: ApprovalRequest) => (
+                <span className="tabular-nums font-semibold text-foreground whitespace-nowrap">
+                  {getDisplayAmount(req)}
+                </span>
+              ),
+            };
+          }
+          return c;
+        }),
+    [columnOrder, visibleKeys, getDisplayAmount],
   );
 
   const [optimisticMap, setOptimisticMap] = useState<Record<string, { status: ApprovalStatusType; currentLevel?: number }>>({});
@@ -564,7 +591,7 @@ export default function ApprovalsPage() {
       message: defaultMsg,
       comment,
       details: [
-        { label: 'Amount', value: req.amount },
+        { label: 'Amount', value: getDisplayAmount(req) },
         { label: 'Requested By', value: req.requestedBy },
       ],
     });
@@ -942,7 +969,7 @@ export default function ApprovalsPage() {
             { label: 'Reference Number', value: actionModal.request.referenceNumber },
             { label: 'Module', value: actionModal.request.module },
             { label: 'Subject / Title', value: actionModal.request.title },
-            { label: 'Amount', value: actionModal.request.amount },
+            { label: 'Amount', value: getDisplayAmount(actionModal.request) },
             { label: 'Requested By', value: actionModal.request.requestedBy },
           ]}
         />
@@ -995,7 +1022,7 @@ export default function ApprovalsPage() {
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Amount</span>
                   <div className="text-sm sm:text-base font-bold text-foreground tabular-nums tracking-tight">
-                    {actionModal.request.amount}
+                    {getDisplayAmount(actionModal.request)}
                   </div>
                 </div>
 
@@ -1151,7 +1178,7 @@ export default function ApprovalsPage() {
                 })()}
               </div>
               <DialogDescription className="text-sm font-medium text-muted-foreground">
-                {detailRequest.requestedBy} · <span className="font-bold text-foreground tabular-nums">{detailRequest.amount}</span>
+                {detailRequest.requestedBy} · <span className="font-bold text-foreground tabular-nums">{getDisplayAmount(detailRequest)}</span>
               </DialogDescription>
             </DialogHeader>
 
@@ -1186,7 +1213,7 @@ export default function ApprovalsPage() {
                         AMOUNT
                       </div>
                       <div className="mt-1 text-base font-bold text-foreground tabular-nums">
-                        {detailRequest.amount}
+                        {getDisplayAmount(detailRequest)}
                       </div>
                     </div>
                   </div>

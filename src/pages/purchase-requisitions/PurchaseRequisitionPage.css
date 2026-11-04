@@ -2215,3 +2215,365 @@
   font-size: 13px !important;
   color: var(--text-secondary) !important;
 }
+
+/* ── Items Section Tax Mode Dropdown & Styling ── */
+.pr-tax-menu-container {
+  position: relative;
+  display: inline-block;
+  font-family: inherit;
+  z-index: 60;
+}
+
+.pr-section:has(.pr-tax-menu-container),
+.cpo-section:has(.pr-tax-menu-container) {
+  overflow: visible !important;
+  z-index: 40;
+}
+
+.pr-tax-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #0f172a);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.pr-tax-trigger-btn:hover {
+  border-color: var(--primary-500, #0a6ed1);
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 5%, var(--bg-card, #ffffff));
+}
+
+.pr-tax-trigger-btn--active {
+  border-color: var(--primary-500, #0a6ed1);
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 10%, var(--bg-card, #ffffff));
+  color: var(--primary-600, #0a6ed1);
+  box-shadow: 0 0 0 1px var(--primary-500, #0a6ed1);
+}
+
+.pr-tax-trigger-label {
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.pr-tax-chevron {
+  transition: transform 0.2s ease;
+  color: var(--text-secondary, #64748b);
+}
+
+.pr-tax-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 300px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.22), 0 6px 16px -2px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  z-index: 99999;
+  animation: prTaxFadeIn 0.15s ease-out;
+}
+
+@keyframes prTaxFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pr-tax-dropdown-header {
+  padding: 6px 10px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary, #64748b);
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  margin-bottom: 6px;
+}
+
+.pr-tax-dropdown-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  margin-bottom: 3px;
+  color: inherit;
+}
+
+.pr-tax-dropdown-item:hover {
+  background: var(--bg-subtle, #f8fafc);
+  border-color: var(--border, #e2e8f0);
+}
+
+.pr-tax-dropdown-item--selected {
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 9%, var(--bg-card, #ffffff));
+  border-color: color-mix(in srgb, var(--primary-500, #0a6ed1) 30%, transparent);
+}
+
+.pr-tax-dropdown-item--total {
+  flex-direction: column;
+}
+
+.pr-tax-item-clickable {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.pr-tax-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-subtle, #f1f5f9);
+  color: var(--primary-500, #0a6ed1);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.pr-tax-dropdown-item--selected .pr-tax-item-icon {
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 20%, transparent);
+}
+
+.pr-tax-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.pr-tax-item-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+
+.pr-tax-item-check {
+  color: var(--primary-500, #0a6ed1);
+}
+
+.pr-tax-item-desc {
+  font-size: 11.5px;
+  color: var(--text-secondary, #64748b);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.pr-tax-rate-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--bg-subtle, #f8fafc);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.pr-tax-rate-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+}
+
+.pr-tax-rate-quick-input {
+  width: 48px;
+  padding: 3px 6px;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #0f172a);
+}
+
+.pr-tax-rate-pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary, #64748b);
+}
+
+.pr-tax-preset-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.pr-tax-preset-chip {
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #0f172a);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pr-tax-preset-chip:hover {
+  border-color: var(--primary-500, #0a6ed1);
+  color: var(--primary-500, #0a6ed1);
+}
+
+.pr-tax-preset-chip--active {
+  background: var(--primary-500, #0a6ed1);
+  border-color: var(--primary-500, #0a6ed1);
+  color: #ffffff;
+}
+
+/* ── Items Table Tax Column ── */
+.pr-col--tax {
+  width: 110px;
+}
+
+.pr-th--tax {
+  text-align: center !important;
+  width: 110px;
+}
+
+.pr-td--tax {
+  text-align: center !important;
+  vertical-align: middle;
+  padding: 8px 6px !important;
+}
+
+.pr-tax-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* ── Spin button removal for all tax inputs ── */
+input[type="number"].pr-tax-cell-input::-webkit-outer-spin-button,
+input[type="number"].pr-tax-cell-input::-webkit-inner-spin-button,
+input[type="number"].pr-totals-tax-input::-webkit-outer-spin-button,
+input[type="number"].pr-totals-tax-input::-webkit-inner-spin-button,
+input[type="number"].pr-tax-rate-quick-input::-webkit-outer-spin-button,
+input[type="number"].pr-tax-rate-quick-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"].pr-tax-cell-input,
+input[type="number"].pr-totals-tax-input,
+input[type="number"].pr-tax-rate-quick-input {
+  -moz-appearance: textfield;
+}
+
+.pr-tax-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 6px;
+  padding: 0 6px 0 0;
+  transition: all 0.15s ease;
+}
+
+.pr-tax-input-wrap:hover {
+  border-color: var(--primary-500, #0a6ed1);
+}
+
+.pr-tax-input-wrap:focus-within {
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-500, #0a6ed1) 15%, transparent);
+}
+
+.pr-tax-cell-input {
+  width: 38px !important;
+  padding: 4px 0 4px 6px !important;
+  text-align: right !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--text-primary, #0f172a) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.pr-tax-input-suffix {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary, #64748b);
+  margin-left: 1px;
+}
+
+.pr-tax-cell-hint {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #059669;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+/* ── Totals Tax Row & Sleek Percentage Pill ── */
+.pr-total-row--tax {
+  color: var(--text-primary, #0f172a);
+}
+
+.pr-totals-tax-rate-wrap {
+  display: inline-flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 8%, var(--bg-card, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--primary-500, #0a6ed1) 22%, transparent);
+  border-radius: 9999px;
+  padding: 1px 7px 1px 6px;
+  margin-left: 2px;
+  cursor: text;
+  transition: all 0.15s ease;
+}
+
+.pr-totals-tax-rate-wrap:hover,
+.pr-totals-tax-rate-wrap:focus-within {
+  border-color: var(--primary-500, #0a6ed1);
+  background: var(--bg-card, #ffffff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-500, #0a6ed1) 15%, transparent);
+}
+
+.pr-totals-tax-input {
+  width: 24px;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-600, #0a6ed1);
+  outline: none !important;
+  box-shadow: none !important;
+  font-family: inherit;
+}
+
+.pr-totals-tax-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary-600, #0a6ed1);
+  margin-left: 1px;
+  user-select: none;
+}
+

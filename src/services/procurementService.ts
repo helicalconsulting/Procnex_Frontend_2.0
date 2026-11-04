@@ -22,6 +22,7 @@ export interface OnboardingVendor {
   bankBranch?: string | null;
   onboardingNotes?: string | null;
   category?: string | null;
+  supplierType?: string | null;
   location?: string | null;
   rejectionReason?: string | null;
   isSubmitted?: boolean;
@@ -77,6 +78,7 @@ export interface VendorInvitationRow {
   contactPhone?: string;
   category?: string | null;
   categoryId?: string | null;
+  supplierType?: string | null;
   notes?: string;
   sentAt: string;
   expiresAt: string;
@@ -96,6 +98,7 @@ export interface SendInvitationPayload {
   contactPhone?: string;
   category?: string;
   categoryId?: string;
+  supplierType?: string;
   notes?: string;
   items?: Array<{ itemCode: string; itemName: string }>;
   documentIds?: string[];
@@ -138,6 +141,7 @@ async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
       bankBranch?: string | null;
       onboardingNotes?: string | null;
       category?: string | null;
+      supplierType?: string | null;
       location?: string | null;
       createdAt?: string;
       updatedAt?: string;
@@ -166,6 +170,7 @@ async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
       bankBranch: extended.bankBranch ?? null,
       onboardingNotes: extended.onboardingNotes ?? null,
       category: extended.category ?? null,
+      supplierType: extended.supplierType ?? null,
       location: extended.location ?? null,
       isSubmitted: extended.isSubmitted,
       documentSummary: extended.documentSummary,
@@ -227,6 +232,9 @@ async function mockSendInvitation(payload: SendInvitationPayload): Promise<SendI
     contactEmail: payload.contactEmail,
     contactPerson: payload.contactPerson,
     contactPhone: payload.contactPhone,
+    category: payload.category || null,
+    categoryId: payload.categoryId || null,
+    supplierType: payload.supplierType || null,
     notes: payload.notes,
     sentAt: new Date().toISOString().slice(0, 10),
     expiresAt: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
@@ -250,6 +258,7 @@ async function apiSendInvitation(payload: SendInvitationPayload): Promise<SendIn
         contactPhone: payload.contactPhone,
         category: payload.category,
         categoryId: payload.categoryId,
+        supplierType: payload.supplierType,
         notes: payload.notes,
         items: payload.items,
         documentIds: payload.documentIds,

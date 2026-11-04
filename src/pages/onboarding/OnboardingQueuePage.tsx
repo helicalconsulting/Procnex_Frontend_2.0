@@ -81,6 +81,7 @@ interface QueueRow {
   bankBranch?: string | null;
   onboardingNotes?: string | null;
   category?: string | null;
+  supplierType?: string | null;
   location?: string | null;
   rejectionReason?: string | null;
 }
@@ -118,6 +119,7 @@ function mapOnboardingVendor(v: OnboardingVendor): QueueRow {
     bankBranch: v.bankBranch ?? null,
     onboardingNotes: v.onboardingNotes ?? null,
     category: v.category ?? null,
+    supplierType: v.supplierType ?? null,
     location: v.location ?? null,
     rejectionReason: v.rejectionReason ?? null,
   };
@@ -919,6 +921,7 @@ export default function OnboardingQueuePage() {
                       <div><div className="text-muted-foreground font-medium">Phone</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.phone || '—')}</div></div>
                       <div><div className="text-muted-foreground font-medium">Contact Person</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.contactPerson || '—')}</div></div>
                       <div><div className="text-muted-foreground font-medium">Category</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.category || '—')}</div></div>
+                      <div><div className="text-muted-foreground font-medium">Supplier Type</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.supplierType || '—')}</div></div>
                       <div><div className="text-muted-foreground font-medium">Location</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.location || '—')}</div></div>
                       <div><div className="text-muted-foreground font-medium">Website</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.website || '—')}</div></div>
                       <div className="sm:col-span-2"><div className="text-muted-foreground font-medium">Address</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.address || '—')}</div></div>

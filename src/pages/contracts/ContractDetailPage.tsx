@@ -476,6 +476,7 @@ export default function ContractDetailPage() {
   const [contractBalance, setContractBalance] = useState<ContractBalance | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const poTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastFocusRef = useRef<number>(0);
 
   useBodyScrollLock(showSignModal || showTerminateConfirm || showDeleteConfirm);
 
@@ -542,7 +543,13 @@ export default function ContractDetailPage() {
     // 2. Custom Window Events (Instant same-window sync)
     const handlePoCreated = () => refreshAll();
     const handleApprovalUpdated = () => refreshAll();
-    const handleFocus = () => refreshAll();
+    const handleFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusRef.current > 30_000) {
+        lastFocusRef.current = now;
+        refreshAll();
+      }
+    };
 
     window.addEventListener('heliflow:po-created', handlePoCreated);
     window.addEventListener('heliflow:approval-updated', handleApprovalUpdated);
@@ -600,16 +607,29 @@ export default function ContractDetailPage() {
     }
   }, [id, reload, handleCloseSignModal]);
 
-  // Fetch contract balance when contract is accepted
+  // Immediately compute contract balance when contract is loaded from purchaseOrders
   const isAccepted = ['ACCEPTED', 'VENDOR_SIGNED', 'ACTIVE', 'COMPLETED'].includes(data?.contract?.status || '');
   useEffect(() => {
-    if (!id || !isAccepted) return;
-    setBalanceLoading(true);
-    contractService.getContractBalance(id)
-      .then(setContractBalance)
-      .catch(() => {})
-      .finally(() => setBalanceLoading(false));
-  }, [id, isAccepted, reload]);
+    if (!id || !isAccepted || !data?.contract) return;
+    const contract = data.contract;
+    const pos = (contract as any).purchaseOrders || [];
+    const consumedValue = pos.reduce((sum: number, po: any) => {
+      if (po.status !== 'CANCELLED' && po.status !== 'REJECTED') {
+        return sum + (Number(po.totalAmount) || 0);
+      }
+      return sum;
+    }, 0);
+    const contractValue = Number(contract.contractValue) || 0;
+
+    // Immediately set balance without waiting for network round-trip
+    setContractBalance({
+      contractValue,
+      currency: contract.currency || 'KES',
+      consumedValue,
+      remainingValue: Math.max(0, contractValue - consumedValue),
+      totalPOs: pos.length,
+    });
+  }, [id, isAccepted, data?.contract]);
 
   // Refresh balance after PO creation
   const refreshBalance = useCallback(async () => {

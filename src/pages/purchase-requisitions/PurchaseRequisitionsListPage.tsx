@@ -124,7 +124,7 @@ export default function PurchaseRequisitionsListPage() {
     hasPermission('Purchase Orders', 'canEdit') ||
     hasPermission('PO', 'canCreate');
 
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
 
   const [requisitions, setRequisitions] = useState<ListPurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -337,8 +337,12 @@ export default function PurchaseRequisitionsListPage() {
     [requisitions]
   );
   const totalValue = useMemo(
-    () => requisitions.reduce((acc, r) => acc + (Number(r.grandTotal) || 0), 0),
-    [requisitions]
+    () => requisitions.reduce((acc, r) => {
+      const amt = Number(r.grandTotal || r.totalAmount || 0);
+      const fromCurr = r.currency || companyDefaultCurrency;
+      return acc + (convert ? convert(amt, fromCurr, companyDefaultCurrency) : amt);
+    }, 0),
+    [requisitions, convert, companyDefaultCurrency]
   );
 
   const visibleColumns = useMemo(
@@ -457,7 +461,7 @@ export default function PurchaseRequisitionsListPage() {
           <MetricCard
             icon={ShoppingCart}
             label="Total volume"
-            value={formatAmount(totalValue, requisitions[0]?.currency || companyDefaultCurrency)}
+            value={formatAmount(totalValue, companyDefaultCurrency)}
             detail="Value across listed documents"
             tone="violet"
           />

@@ -503,7 +503,20 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
   const [rates, setRates] = useState<CurrencyRates | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [companyDefaultCurrency, setCompanyDefaultCurrency] = useState<string>(DEFAULT_CURRENCY);
+  const [companyDefaultCurrency, setCompanyDefaultCurrencyState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('company_default_currency');
+      if (saved) return saved;
+    }
+    return DEFAULT_CURRENCY;
+  });
+
+  const setCompanyDefaultCurrency = useCallback((currency: string) => {
+    setCompanyDefaultCurrencyState(currency);
+    if (typeof window !== 'undefined' && currency) {
+      localStorage.setItem('company_default_currency', currency);
+    }
+  }, []);
 
   // Fetch the company default currency from the backend.
   // Works for BOTH admin and vendor users (backend resolves company via req.user or req.vendor).
@@ -520,11 +533,11 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
           setCompanyDefaultCurrency(currency);
         }
       } catch {
-        // Keep default KES if fetch fails
+        // Keep default if fetch fails
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id, isAuthenticated]);
+  }, [user?.id, isAuthenticated, setCompanyDefaultCurrency]);
 
 /** Fetch with timeout using AbortController */
 const fetchWithTimeout = (url: string, timeoutMs = 5000): Promise<Response> => {
@@ -612,7 +625,7 @@ const RATE_SOURCES = [
       companyDefaultCurrency,
       setCompanyDefaultCurrency,
     }),
-    [currencies, rates, loading, error, convert, fetchRates, companyDefaultCurrency]
+    [currencies, rates, loading, error, convert, fetchRates, companyDefaultCurrency, setCompanyDefaultCurrency]
   );
 
   return <CurrencyContext.Provider value={ctxValue}>{children}</CurrencyContext.Provider>;

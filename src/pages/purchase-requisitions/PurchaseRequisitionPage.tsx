@@ -14,7 +14,7 @@ import {
   ShoppingCart, Building2, Truck, ClipboardList, Hash, DollarSign,
   Percent, Calculator, X, Loader2, AlertTriangle, Settings,
   AlertCircle, Download, FileCheck, ShieldAlert, CheckCircle2, PieChart, IndianRupee, Pencil,
-  ArrowLeftRight, Globe,
+  ArrowLeftRight, Globe, Receipt, Check, ChevronDown, Layers,
 } from 'lucide-react';
 import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
@@ -61,10 +61,17 @@ function generatePONumber(): string {
   return `PO-${year}${month}${day}-${seq}`;
 }
 
-function calcItemTotal(item: Partial<PurchaseRequisitionItem>): number {
-  const qty = item.quantity || 0;
-  const price = item.unitPrice || 0;
-  return price * qty;
+function calcItemTotal(
+  item: Partial<PurchaseRequisitionItem>,
+  currentTaxMode: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT' = 'NONE'
+): number {
+  const qty = Number(item.quantity) || 0;
+  const price = Number(item.unitPrice) || 0;
+  const base = price * qty;
+  if (currentTaxMode === 'LINE_ITEM' && (Number(item.taxPercent) || 0) > 0) {
+    return Math.round(base * (1 + (Number(item.taxPercent) || 0) / 100) * 100) / 100;
+  }
+  return base;
 }
 
 function sanitizePrItems(rawItems: any[]): PurchaseRequisitionItem[] {
@@ -192,6 +199,25 @@ export default function PurchaseRequisitionPage() {
       return copy;
     });
   }, []);
+
+  // Tax Mode state: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT'
+  const [taxMode, setTaxMode] = useState<'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT'>('NONE');
+  const [totalTaxRate, setTotalTaxRate] = useState<number>(5);
+  const [taxMenuOpen, setTaxMenuOpen] = useState(false);
+  const taxMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close tax menu on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (taxMenuRef.current && !taxMenuRef.current.contains(event.target as Node)) {
+        setTaxMenuOpen(false);
+      }
+    }
+    if (taxMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [taxMenuOpen]);
 
   // Country Codes for Phone Inputs
   const [companyCountryCode, setCompanyCountryCode] = useState('+91');
@@ -380,16 +406,32 @@ export default function PurchaseRequisitionPage() {
                 });
               }
             }
+            const hasLineTax = items.some(i => (Number(i.taxPercent) || 0) > 0);
+            const initialTaxMode: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT' = hasLineTax ? 'LINE_ITEM' : (Number((existing as any)?.taxTotal) > 0 ? 'TOTAL_AMOUNT' : 'NONE');
+            setTaxMode(initialTaxMode);
+            let initialTaxRate = 5;
+            if (initialTaxMode === 'TOTAL_AMOUNT' && subtotal > 0) {
+              initialTaxRate = Math.round(((Number((existing as any).taxTotal) / subtotal) * 100) * 10) / 10;
+              setTotalTaxRate(initialTaxRate);
+            }
+            let initialTaxTotal = 0;
+            if (initialTaxMode === 'LINE_ITEM') {
+              initialTaxTotal = items.reduce((s, i) => s + ((Number(i.quantity) || 0) * (Number(i.unitPrice) || 0) * (Number(i.taxPercent) || 0)) / 100, 0);
+            } else if (initialTaxMode === 'TOTAL_AMOUNT') {
+              initialTaxTotal = (subtotal * initialTaxRate) / 100;
+            }
+            const grandTotal = Math.round((subtotal + initialTaxTotal) * 100) / 100;
+
             setPr({
               ...existing,
               vendorFulfillmentAllowed: (existing as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE',
-              items,
+              items: items.map(i => ({ ...i, total: calcItemTotal(i, initialTaxMode) })),
               subtotal,
-              taxTotal: 0,
-              discountTotal: 0,
-              shippingCharges: 0,
-              otherCharges: 0,
-              grandTotal: subtotal,
+              taxTotal: initialTaxTotal,
+              discountTotal: Number(existing.discountTotal) || 0,
+              shippingCharges: Number(existing.shippingCharges) || 0,
+              otherCharges: Number(existing.otherCharges) || 0,
+              grandTotal,
             });
             setLoading(false);
             return;
@@ -529,8 +571,16 @@ export default function PurchaseRequisitionPage() {
           ];
         }
 
+        const hasLineTax = items.some(i => (Number(i.taxPercent) || 0) > 0);
+        const initialTaxMode: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT' = hasLineTax ? 'LINE_ITEM' : (Number((contract as any)?.taxPercentage) > 0 ? 'TOTAL_AMOUNT' : 'NONE');
+        setTaxMode(initialTaxMode);
+        let initialTaxRate = Number((contract as any)?.taxPercentage) || 5;
+        if (initialTaxMode === 'TOTAL_AMOUNT') {
+          setTotalTaxRate(initialTaxRate);
+        }
+
         // Recalc totals
-        items.forEach(i => { i.total = calcItemTotal(i); });
+        items.forEach(i => { i.total = calcItemTotal(i, initialTaxMode); });
 
         const rawVendor = quotation?.vendor || rfqData.vendors?.[0] || contract?.vendor || {};
         const matchedVendorFromMaster = vendorsList.find((vl: any) =>
@@ -542,8 +592,15 @@ export default function PurchaseRequisitionPage() {
         const resolvedVendorAddress = vendor?.address || (vendor as any)?.location || vendor?.registeredAddress || matchedVendorFromMaster?.address || matchedVendorFromMaster?.location || '';
 
         const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
-        const taxTotal = 0;
+        let taxTotal = 0;
+        if (initialTaxMode === 'LINE_ITEM') {
+          taxTotal = items.reduce((s, i) => s + ((Number(i.quantity) || 0) * (Number(i.unitPrice) || 0) * (Number(i.taxPercent) || 0)) / 100, 0);
+        } else if (initialTaxMode === 'TOTAL_AMOUNT') {
+          taxTotal = (subtotal * initialTaxRate) / 100;
+        }
+        taxTotal = Math.round(taxTotal * 100) / 100;
         const discountTotal = 0;
+        const grandTotal = Math.round((subtotal + taxTotal) * 100) / 100;
 
         // Build internal notes with contract reference
         const internalNotes = contract 
@@ -610,9 +667,9 @@ export default function PurchaseRequisitionPage() {
           internalNotes,
           specialInstructions: '',
           subtotal,
-          taxTotal: 0,
+          taxTotal,
           discountTotal: 0,
-          grandTotal: subtotal,
+          grandTotal,
         });
 
         if ((quotation as any)?.paymentPlanSnapshot && Array.isArray((quotation as any).paymentPlanSnapshot) && (quotation as any).paymentPlanSnapshot.length > 0) {
@@ -664,14 +721,87 @@ export default function PurchaseRequisitionPage() {
   }, [rfqId]);
 
   // Recalculate totals whenever items change
-  const recalc = useCallback((draft: PurchaseRequisition): PurchaseRequisition => {
-    const items = draft.items.map(i => ({ ...i, total: calcItemTotal(i) }));
-    const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
-    const discountTotal = 0;
-    const taxTotal = 0;
-    const grandTotal = subtotal;
-    return { ...draft, items, subtotal, taxTotal, discountTotal, grandTotal, shippingCharges: 0, otherCharges: 0 };
-  }, []);
+  const recalc = useCallback(
+    (
+      draft: PurchaseRequisition,
+      mode: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT' = taxMode,
+      rate: number = totalTaxRate
+    ): PurchaseRequisition => {
+      const items = (draft.items || []).map((i) => ({
+        ...i,
+        total: calcItemTotal(i, mode),
+      }));
+      const subtotal = items.reduce(
+        (s, i) => s + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0),
+        0
+      );
+      const discountTotal = Number(draft.discountTotal) || 0;
+      let taxTotal = 0;
+      if (mode === 'LINE_ITEM') {
+        taxTotal = items.reduce(
+          (s, i) =>
+            s +
+            ((Number(i.quantity) || 0) *
+              (Number(i.unitPrice) || 0) *
+              (Number(i.taxPercent) || 0)) /
+              100,
+          0
+        );
+      } else if (mode === 'TOTAL_AMOUNT') {
+        taxTotal = (subtotal * (Number(rate) || 0)) / 100;
+      }
+      taxTotal = Math.round(taxTotal * 100) / 100;
+      const shipping = Number(draft.shippingCharges) || 0;
+      const other = Number(draft.otherCharges) || 0;
+      const grandTotal = Math.round((subtotal + taxTotal - discountTotal + shipping + other) * 100) / 100;
+      return {
+        ...draft,
+        items,
+        subtotal,
+        taxTotal,
+        discountTotal,
+        grandTotal,
+        shippingCharges: shipping,
+        otherCharges: other,
+      };
+    },
+    [taxMode, totalTaxRate]
+  );
+
+  const handleSelectTaxMode = useCallback(
+    (newMode: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT') => {
+      setTaxMode(newMode);
+      setTaxMenuOpen(false);
+      if (!pr) return;
+
+      if (newMode === 'LINE_ITEM') {
+        const hasAnyTax = pr.items.some((i) => (Number(i.taxPercent) || 0) > 0);
+        const updatedItems = pr.items.map((i) => ({
+          ...i,
+          taxPercent: hasAnyTax ? (Number(i.taxPercent) || 0) : 5,
+        }));
+        setPr(recalc({ ...pr, items: updatedItems }, 'LINE_ITEM', totalTaxRate));
+      } else if (newMode === 'TOTAL_AMOUNT') {
+        const effectiveRate = totalTaxRate > 0 ? totalTaxRate : 5;
+        if (totalTaxRate === 0) setTotalTaxRate(5);
+        setPr(recalc(pr, 'TOTAL_AMOUNT', effectiveRate));
+      } else {
+        setPr(recalc(pr, 'NONE', totalTaxRate));
+      }
+    },
+    [pr, recalc, totalTaxRate]
+  );
+
+  const handleTotalTaxRateChange = useCallback(
+    (newRate: number) => {
+      const safeRate = Math.max(0, Math.min(100, Number(newRate) || 0));
+      setTotalTaxRate(safeRate);
+      if (pr) {
+        setPr(recalc(pr, taxMode, safeRate));
+      }
+    },
+    [pr, recalc, taxMode]
+  );
 
   // Handle currency change with live/fallback exchange rate conversion
   const handleCurrencyChange = useCallback((newCurrency: string) => {
@@ -685,7 +815,7 @@ export default function PurchaseRequisitionPage() {
         ? Math.round(convert(origPrice, prevCurrency, newCurrency) * 100) / 100
         : origPrice;
       const updatedItem = { ...item, unitPrice: convertedPrice };
-      return { ...updatedItem, total: calcItemTotal(updatedItem) };
+      return { ...updatedItem, total: calcItemTotal(updatedItem, taxMode) };
     });
 
     const draft: PurchaseRequisition = {
@@ -694,7 +824,7 @@ export default function PurchaseRequisitionPage() {
       items: convertedItems,
     };
     setPr(recalc(draft));
-  }, [pr, isReadOnly, companyDefaultCurrency, convert, recalc]);
+  }, [pr, isReadOnly, companyDefaultCurrency, convert, recalc, taxMode]);
 
   // Update a field
   const updateField = useCallback(<K extends keyof PurchaseRequisition>(key: K, value: PurchaseRequisition[K]) => {
@@ -751,7 +881,7 @@ export default function PurchaseRequisitionPage() {
 
   // Update an item field
   const updateItem = useCallback((index: number, key: keyof PurchaseRequisitionItem, value: any) => {
-    if (!pr || isReadOnly) return;
+    if (!pr || (isReadOnly && key !== 'taxPercent')) return;
     const items = [...pr.items];
     const currentItem = { ...items[index], [key]: value };
     items[index] = currentItem;
@@ -2069,18 +2199,134 @@ export default function PurchaseRequisitionPage() {
         {/* ── Items Table ── */}
         <section className="pr-section">
           <div className="pr-section__header">
-            <Hash size={16} /> Items
-            {!isReadOnly && (
-              <button
-                className="pr-btn pr-btn--sm pr-btn--ghost"
-                onClick={canCreatePO ? addItem : undefined}
-                disabled={!canCreatePO}
-                style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to add items." : undefined}
-              >
-                <Plus size={14} /> Add Item
-              </button>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Hash size={16} /> Items
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Tax Selection Dropdown */}
+              <div className="pr-tax-menu-container" ref={taxMenuRef}>
+                <button
+                  type="button"
+                  className={`pr-tax-trigger-btn ${taxMode !== 'NONE' ? 'pr-tax-trigger-btn--active' : ''}`}
+                  onClick={() => setTaxMenuOpen(prev => !prev)}
+                  title="Configure Tax options for items"
+                >
+                  <Receipt size={14} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                  <span className="pr-tax-trigger-label">
+                    Tax: {taxMode === 'LINE_ITEM' ? 'Line Item Tax' : taxMode === 'TOTAL_AMOUNT' ? `Tax on Total (${totalTaxRate}%)` : 'None'}
+                  </span>
+                  <ChevronDown size={14} className={`pr-tax-chevron ${taxMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {taxMenuOpen && (
+                  <div className="pr-tax-dropdown-menu">
+                    <div className="pr-tax-dropdown-header">
+                      <span>Select Tax Method</span>
+                    </div>
+
+                    {/* Option 1: Line Item Tax */}
+                    <button
+                      type="button"
+                      className={`pr-tax-dropdown-item ${taxMode === 'LINE_ITEM' ? 'pr-tax-dropdown-item--selected' : ''}`}
+                      onClick={() => handleSelectTaxMode('LINE_ITEM')}
+                    >
+                      <div className="pr-tax-item-icon">
+                        <Layers size={16} />
+                      </div>
+                      <div className="pr-tax-item-content">
+                        <div className="pr-tax-item-title">
+                          <span>Line Item Tax</span>
+                          {taxMode === 'LINE_ITEM' && <Check size={14} className="pr-tax-item-check" />}
+                        </div>
+                        <div className="pr-tax-item-desc">
+                          Adds individual tax % column for each item in the table
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Option 2: Tax on Total Amount */}
+                    <div className={`pr-tax-dropdown-item pr-tax-dropdown-item--total ${taxMode === 'TOTAL_AMOUNT' ? 'pr-tax-dropdown-item--selected' : ''}`}>
+                      <div
+                        className="pr-tax-item-clickable"
+                        onClick={() => handleSelectTaxMode('TOTAL_AMOUNT')}
+                      >
+                        <div className="pr-tax-item-icon">
+                          <Calculator size={16} />
+                        </div>
+                        <div className="pr-tax-item-content">
+                          <div className="pr-tax-item-title">
+                            <span>Tax on Total Amount</span>
+                            {taxMode === 'TOTAL_AMOUNT' && <Check size={14} className="pr-tax-item-check" />}
+                          </div>
+                          <div className="pr-tax-item-desc">
+                            Flat tax rate applied across order subtotal
+                          </div>
+                        </div>
+                      </div>
+                      {taxMode === 'TOTAL_AMOUNT' && (
+                        <div className="pr-tax-rate-presets">
+                          <span className="pr-tax-rate-label">Rate:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            value={totalTaxRate}
+                            onChange={(e) => handleTotalTaxRateChange(Number(e.target.value) || 0)}
+                            className="pr-tax-rate-quick-input"
+                          />
+                          <span className="pr-tax-rate-pct">%</span>
+                          <div className="pr-tax-preset-buttons">
+                            {[5, 10, 18].map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                className={`pr-tax-preset-chip ${totalTaxRate === p ? 'pr-tax-preset-chip--active' : ''}`}
+                                onClick={() => handleTotalTaxRateChange(p)}
+                              >
+                                {p}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Option 3: No Tax */}
+                    <button
+                      type="button"
+                      className={`pr-tax-dropdown-item ${taxMode === 'NONE' ? 'pr-tax-dropdown-item--selected' : ''}`}
+                      onClick={() => handleSelectTaxMode('NONE')}
+                    >
+                      <div className="pr-tax-item-icon">
+                        <X size={16} />
+                      </div>
+                      <div className="pr-tax-item-content">
+                        <div className="pr-tax-item-title">
+                          <span>No Tax</span>
+                          {taxMode === 'NONE' && <Check size={14} className="pr-tax-item-check" />}
+                        </div>
+                        <div className="pr-tax-item-desc">
+                          No tax applied to this purchase order
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {!isReadOnly && (
+                <button
+                  className="pr-btn pr-btn--sm pr-btn--ghost"
+                  onClick={canCreatePO ? addItem : undefined}
+                  disabled={!canCreatePO}
+                  style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                  title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to add items." : undefined}
+                >
+                  <Plus size={14} /> Add Item
+                </button>
+              )}
+            </div>
           </div>
           <div className="pr-items-table-wrap">
             <table className="pr-items-table">
@@ -2090,6 +2336,7 @@ export default function PurchaseRequisitionPage() {
                 <col className="pr-col--num" />
                 <col className="pr-col--unit" />
                 <col className="pr-col--price" />
+                {taxMode === 'LINE_ITEM' && <col className="pr-col--tax" />}
                 <col className="pr-col--total" />
                 {!isReadOnly && <col className="pr-col--action" />}
               </colgroup>
@@ -2100,6 +2347,7 @@ export default function PurchaseRequisitionPage() {
                   <th className="pr-th--num">Qty {!isReadOnly && <span className="pr-required">*</span>}</th>
                   <th className="pr-th--unit">Unit</th>
                   <th className="pr-th--price">Unit Price {!isReadOnly && <span className="pr-required">*</span>}</th>
+                  {taxMode === 'LINE_ITEM' && <th className="pr-th--tax">Tax (%)</th>}
                   <th className="pr-th--total">Total</th>
                   {!isReadOnly && <th className="pr-th--action"></th>}
                 </tr>
@@ -2156,6 +2404,31 @@ export default function PurchaseRequisitionPage() {
                       />
                       {itemValidationErrors[idx]?.unitPrice && <span className="pr-field__error-msg">{itemValidationErrors[idx].unitPrice}</span>}
                     </td>
+                    {taxMode === 'LINE_ITEM' && (
+                      <td className="pr-td--tax">
+                        <div className="pr-tax-input-wrap">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            value={item.taxPercent === undefined || item.taxPercent === null ? '' : item.taxPercent}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? 0 : Math.max(0, Math.min(100, Number(e.target.value)));
+                              updateItem(idx, 'taxPercent', val);
+                            }}
+                            className="pr-tax-cell-input"
+                          />
+                          <span className="pr-tax-input-suffix">%</span>
+                        </div>
+                        {Number(item.taxPercent) > 0 && (
+                          <span className="pr-tax-cell-hint">
+                            +{formatCurrency(((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * Number(item.taxPercent)) / 100, pr.currency)}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="pr-td--total">{formatCurrency(item.total, pr.currency)}</td>
                     {!isReadOnly && (
                       <td className="pr-td--action">
@@ -2221,6 +2494,42 @@ export default function PurchaseRequisitionPage() {
 
               <div className="pr-totals__grid">
                 <div className="pr-total-row"><span>Subtotal</span><span>{formatCurrency(pr.subtotal, pr.currency)}</span></div>
+
+                {taxMode === 'LINE_ITEM' && pr.taxTotal > 0 && (
+                  <div className="pr-total-row pr-total-row--tax">
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <Layers size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                      <span>Line Item Taxes</span>
+                    </span>
+                    <span style={{ fontWeight: 600, color: '#059669' }}>
+                      +{formatCurrency(pr.taxTotal, pr.currency)}
+                    </span>
+                  </div>
+                )}
+
+                {taxMode === 'TOTAL_AMOUNT' && (
+                  <div className="pr-total-row pr-total-row--tax">
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <Calculator size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                      <span>Tax on Total</span>
+                      <div className="pr-totals-tax-rate-wrap" title="Tax Rate (click to edit)">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={totalTaxRate}
+                          onChange={(e) => handleTotalTaxRateChange(Number(e.target.value) || 0)}
+                          className="pr-totals-tax-input"
+                        />
+                        <span className="pr-totals-tax-pct">%</span>
+                      </div>
+                    </span>
+                    <span style={{ fontWeight: 600, color: '#059669' }}>
+                      +{formatCurrency(pr.taxTotal, pr.currency)}
+                    </span>
+                  </div>
+                )}
                 <div className={`pr-total-row pr-total-row--grand ${contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'pr-total-row--exceeded' : ''}`}>
                   <span>
                     Grand Total

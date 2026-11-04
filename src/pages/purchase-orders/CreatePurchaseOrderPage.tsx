@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart, ArrowLeft, Plus, Trash2, Download, Save, Send,
   Building2, FileText, Calendar, IndianRupee, Tag, UserCheck, ShieldCheck,
   CheckCircle2, AlertCircle, Clock, Search, X, Pencil, Eye, RotateCcw,
-  ArrowLeftRight, Globe, Wallet
+  ArrowLeftRight, Globe, Wallet, Receipt, Check, ChevronDown, Layers, Calculator
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
@@ -285,8 +285,33 @@ export default function CreatePurchaseOrderPage() {
     { id: '1', itemCode: 'ITEM-001', itemName: '', description: '', quantity: 1, unit: 'pcs', unitPrice: 0, taxPercent: 0 },
   ]);
 
+  // Tax Mode state: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT'
+  const [taxMode, setTaxMode] = useState<'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT'>('NONE');
+  const [totalTaxRate, setTotalTaxRate] = useState<number>(5);
+  const [taxMenuOpen, setTaxMenuOpen] = useState(false);
+  const taxMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (taxMenuRef.current && !taxMenuRef.current.contains(event.target as Node)) {
+        setTaxMenuOpen(false);
+      }
+    }
+    if (taxMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [taxMenuOpen]);
+
   // Commercial Terms
   const [currency, setCurrency] = useState(companyDefaultCurrency || 'KES');
+  const userChangedCurrencyRef = useRef(false);
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (!currency || currency === 'KES')) {
+      setCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
   const [paymentTermsList, setPaymentTermsList] = useState<PaymentTerm[]>([]);
   const [customPlans, setCustomPlans] = useState<PaymentPlan[]>([]);
@@ -549,10 +574,23 @@ export default function CreatePurchaseOrderPage() {
     if (!editId) return;
     const loadExisting = async () => {
       try {
-        let existing = await purchaseRequisitionService.getById(editId);
+        let existing: any = null;
+        try {
+          existing = await purchaseRequisitionService.getById(editId);
+        } catch {}
+
         if (!existing) {
-          existing = await purchaseRequisitionService.getByRfqId(editId);
+          try {
+            existing = await purchaseRequisitionService.getByRfqId(editId);
+          } catch {}
         }
+
+        if (!existing) {
+          try {
+            existing = await purchaseOrderService.getById(editId);
+          } catch {}
+        }
+
         if (existing) {
           const loadedPoNum = existing.poNumber || (existing as any).po_number;
           if (loadedPoNum) {
@@ -560,9 +598,13 @@ export default function CreatePurchaseOrderPage() {
           } else if (typeof editId === 'string' && editId.startsWith('PO-')) {
             setPoNumber(editId);
           }
+
           if (existing.poDate) {
             setPoDate(String(existing.poDate).slice(0, 10));
+          } else if (existing.createdAt) {
+            setPoDate(String(existing.createdAt).slice(0, 10));
           }
+
           if ((existing as any).revisionNo !== undefined && (existing as any).revisionNo !== null) {
             setRevisionNo(String((existing as any).revisionNo));
           }
@@ -574,9 +616,10 @@ export default function CreatePurchaseOrderPage() {
           if (existing.companyWebsite) setCompanyWebsite(existing.companyWebsite);
           if (existing.companyPhone) setCompanyPhone(existing.companyPhone);
           if (existing.companyEmail) setCompanyEmail(existing.companyEmail);
+
           if (existing.status) {
             const rawStatus = String(existing.status).toUpperCase();
-            if (rawStatus === 'APPROVED' || rawStatus === 'PO_ISSUED' || rawStatus === 'COMPLETED' || rawStatus === 'SENT_TO_VENDOR') {
+            if (rawStatus === 'APPROVED' || rawStatus === 'PO_ISSUED' || rawStatus === 'COMPLETED' || rawStatus === 'SENT_TO_VENDOR' || rawStatus === 'INVOICED') {
               setStatus('Approved');
             } else if (rawStatus === 'PENDING_APPROVAL' || rawStatus === 'PENDING') {
               setStatus('Pending Approval');
@@ -588,19 +631,28 @@ export default function CreatePurchaseOrderPage() {
               setStatus('Draft');
             }
           }
+
           if ((existing as any).supplierType) setSupplierType((existing as any).supplierType);
           if ((existing as any).supplierCode) setSupplierCode((existing as any).supplierCode);
           if ((existing as any).selectedVendorId || (existing as any).vendorId) {
             setSelectedVendorId((existing as any).selectedVendorId || (existing as any).vendorId);
           }
-          if (existing.vendorName) setSupplierName(existing.vendorName);
-          if (existing.vendorAddress) setSupplierAddress(existing.vendorAddress);
-          if (existing.vendorContactPerson) setContactPerson(existing.vendorContactPerson);
-          if (existing.vendorPhone) setContactPhone(existing.vendorPhone);
-          if (existing.vendorEmail) setContactEmail(existing.vendorEmail);
-          if (existing.vendorGstVat) setSupplierTaxId(existing.vendorGstVat);
+          if (existing.vendorName || existing.vendor?.name) setSupplierName(existing.vendorName || existing.vendor?.name);
+          if (existing.vendorAddress || existing.vendor?.address) setSupplierAddress(existing.vendorAddress || existing.vendor?.address);
+          if (existing.vendorContactPerson || existing.vendor?.contactPerson) setContactPerson(existing.vendorContactPerson || existing.vendor?.contactPerson);
+          if (existing.vendorPhone || existing.vendor?.phone) {
+            const p = existing.vendorPhone || existing.vendor?.phone;
+            setContactPhone(p);
+            setContactCountryCode(detectCountryCode(p, '+91'));
+          }
+          if (existing.vendorEmail || existing.vendor?.email) setContactEmail(existing.vendorEmail || existing.vendor?.email);
+          if (existing.vendorGstVat || existing.vendor?.gstNumber || existing.vendor?.panNumber) {
+            setSupplierTaxId(existing.vendorGstVat || existing.vendor?.gstNumber || existing.vendor?.panNumber);
+          }
+
           if (existing.currency) setCurrency(existing.currency);
-          if (existing.paymentTerms) setPaymentTerms(existing.paymentTerms);
+          setPaymentTerms(existing.paymentTerms || 'Net 30');
+
           if ((existing as any).paymentPlanId) setSelectedPaymentPlanId((existing as any).paymentPlanId);
           if ((existing as any).paymentPlanSnapshot) {
             const snap = (existing as any).paymentPlanSnapshot;
@@ -618,12 +670,28 @@ export default function CreatePurchaseOrderPage() {
               });
             }
           }
-          if (existing.deliveryDate) setDeliveryDate(existing.deliveryDate);
-          if (existing.shippingTerms) setShippingTerms(existing.shippingTerms);
+
+          if (existing.deliveryDate) {
+            setDeliveryDate(String(existing.deliveryDate).slice(0, 10));
+          } else {
+            const baseD = existing.poDate || existing.createdAt || new Date();
+            setDeliveryDate(new Date(new Date(baseD).getTime() + 14 * 86400000).toISOString().slice(0, 10));
+          }
+
+          setShippingTerms(existing.shippingTerms || 'FOB Destination');
           if (existing.shippingCharges !== undefined) setShippingCharges(existing.shippingCharges);
           if (existing.otherCharges !== undefined) setOtherCharges(existing.otherCharges);
           if (existing.internalNotes) setInternalNotes(existing.internalNotes);
           if (existing.specialInstructions) setSpecialInstructions(existing.specialInstructions);
+
+          if (existing.shipToCompany) setShipToCompany(existing.shipToCompany);
+          if (existing.shipToWarehouse) setShipToWarehouse(existing.shipToWarehouse);
+          if (existing.shipToAddress) setShipToAddress(existing.shipToAddress);
+          if (existing.shipToContact) setShipToContact(existing.shipToContact);
+          if (existing.shipToPhone) {
+            setShipToPhone(existing.shipToPhone);
+            setShipToCountryCode(detectCountryCode(existing.shipToPhone, '+91'));
+          }
 
           const isInternalDummyRfq = Boolean(
             !existing.rfqId ||
@@ -654,6 +722,18 @@ export default function CreatePurchaseOrderPage() {
             if (sr.frameworkAgreement) setFrameworkAgreement(sr.frameworkAgreement);
           }
 
+          // Tax configuration
+          if (existing.taxTotal && Number(existing.taxTotal) > 0) {
+            setTaxMode('TOTAL_AMOUNT');
+            const sub = Number(existing.subtotal || existing.grandTotal || 0);
+            if (sub > 0) {
+              setTotalTaxRate(Math.round((Number(existing.taxTotal) / sub) * 100));
+            }
+          } else if (existing.items && existing.items.some((it: any) => Number(it.taxPercent) > 0)) {
+            setTaxMode('LINE_ITEM');
+          }
+
+          // Items loading with automatic fallback reconstruction
           if (existing.items && existing.items.length > 0) {
             setItems(existing.items.map((item: any, idx: number) => {
               const itemName = item.itemName || item.name || '';
@@ -666,60 +746,53 @@ export default function CreatePurchaseOrderPage() {
                 showDescription: !!description.trim(),
                 quantity: item.quantity || 1,
                 unit: item.unit || 'pcs',
-                unitPrice: item.unitPrice || 0,
-                taxPercent: item.taxPercent || 0,
+                unitPrice: Number(item.unitPrice || 0),
+                taxPercent: Number(item.taxPercent || 0),
               };
             }));
+          } else {
+            const fallbackAmount = Number(existing.grandTotal || existing.subtotal || existing.totalAmount || 0);
+            if (fallbackAmount > 0) {
+              setItems([{
+                id: '1',
+                itemCode: 'ITEM-001',
+                itemName: loadedPoNum ? `Order Items (${loadedPoNum})` : 'Order Items',
+                description: existing.vendorName ? `Supplied by ${existing.vendorName}` : 'Procurement Goods & Services',
+                showDescription: false,
+                quantity: 1,
+                unit: 'pcs',
+                unitPrice: fallbackAmount,
+                taxPercent: 0,
+              }]);
+            }
           }
-        }
 
-        if (existing && !existing.poNumber) {
-          try {
-            const posRes = await purchaseOrderService.list();
-            const foundPo = (posRes.orders || []).find((p: any) => p.rfqId === existing.rfqId || p.id === editId || p.id === existing.id);
-            if (foundPo?.poNumber) {
-              setPoNumber(foundPo.poNumber);
+          // Vendor details fallback from loaded vendors list
+          const vId = (existing as any).selectedVendorId || (existing as any).vendorId;
+          const vName = existing.vendorName;
+          const matchedVendor = vendors.find(v => (vId && v.id === vId) || (vName && v.name === vName));
+          if (matchedVendor) {
+            if (!existing.vendorAddress) setSupplierAddress(matchedVendor.address || (matchedVendor as any).location || '');
+            if (!existing.vendorPhone && matchedVendor.phone) {
+              setContactPhone(matchedVendor.phone);
+              setContactCountryCode(detectCountryCode(matchedVendor.phone, '+91'));
             }
-          } catch {}
-        } else if (!existing) {
-          try {
-            const posRes = await purchaseOrderService.list();
-            const foundPo = (posRes.orders || []).find((p: any) => p.id === editId || p.poNumber === editId);
-            if (foundPo) {
-              if (foundPo.poNumber) setPoNumber(foundPo.poNumber);
-              if (foundPo.createdAt) setPoDate(String(foundPo.createdAt).slice(0, 10));
-              if (foundPo.status) {
-                const s = String(foundPo.status).toUpperCase();
-                if (s === 'APPROVED') setStatus('Approved');
-                else if (s === 'PENDING_APPROVAL') setStatus('Pending Approval');
-                else if (s === 'RETURNED') setStatus('Returned');
-                else if (s === 'REJECTED') setStatus('Rejected');
-                else setStatus('Draft');
-              }
-              if (foundPo.vendor) {
-                setSelectedVendorId(foundPo.vendor.id || foundPo.vendorId);
-                setSupplierName(foundPo.vendor.name || '');
-                setContactEmail(foundPo.vendor.email || '');
-              }
-              if (foundPo.rfqId) {
-                const isDummy = (
-                  foundPo.rfqId.startsWith('rfq-direct') ||
-                  foundPo.rfqId.startsWith('direct') ||
-                  foundPo.rfqId.includes('direct') ||
-                  /^[0-9a-fA-F]{24}$/.test(foundPo.rfqId)
-                );
-                if (!isDummy) setRfqNo(foundPo.rfqId);
-                else setRfqNo('');
-              }
+            if (!existing.vendorEmail && matchedVendor.email) setContactEmail(matchedVendor.email);
+            if (!existing.vendorContactPerson && matchedVendor.contactPerson) setContactPerson(matchedVendor.contactPerson);
+            if (!existing.vendorGstVat && ((matchedVendor as any).gstNumber || (matchedVendor as any).panNumber)) {
+              setSupplierTaxId((matchedVendor as any).gstNumber || (matchedVendor as any).panNumber);
             }
-          } catch {}
+            if (!(existing as any).supplierCode && (matchedVendor as any).supplierCode) {
+              setSupplierCode((matchedVendor as any).supplierCode);
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to load existing PO:', err);
       }
     };
     loadExisting();
-  }, [editId]);
+  }, [editId, vendors]);
 
   // ── Sync Vendor and Category when Vendors load or Edit mode ──
   useEffect(() => {
@@ -800,6 +873,7 @@ export default function CreatePurchaseOrderPage() {
 
   const handleCurrencyChange = (newCurrency: string) => {
     if (!newCurrency || newCurrency === currency) return;
+    userChangedCurrencyRef.current = true;
     const prevCurrency = currency || companyDefaultCurrency || 'KES';
     setCurrency(newCurrency);
 
@@ -823,18 +897,37 @@ export default function CreatePurchaseOrderPage() {
     [items]
   );
 
-  const taxTotal = useMemo(
-    () => items.reduce((acc, i) => {
-      const lineSub = (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0);
-      return acc + (lineSub * (Number(i.taxPercent) || 0)) / 100;
-    }, 0),
-    [items]
-  );
+  const taxTotal = useMemo(() => {
+    if (taxMode === 'LINE_ITEM') {
+      const total = items.reduce((acc, i) => {
+        const lineSub = (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0);
+        return acc + (lineSub * (Number(i.taxPercent) || 0)) / 100;
+      }, 0);
+      return Math.round(total * 100) / 100;
+    }
+    if (taxMode === 'TOTAL_AMOUNT') {
+      return Math.round(((subtotal * (Number(totalTaxRate) || 0)) / 100) * 100) / 100;
+    }
+    return 0;
+  }, [items, taxMode, totalTaxRate, subtotal]);
 
   const grandTotal = useMemo(
-    () => subtotal,
-    [subtotal]
+    () => Math.round((subtotal + taxTotal) * 100) / 100,
+    [subtotal, taxTotal]
   );
+
+  const handleSelectTaxMode = (newMode: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT') => {
+    setTaxMode(newMode);
+    setTaxMenuOpen(false);
+    if (newMode === 'LINE_ITEM') {
+      const hasAnyTax = items.some((i) => (Number(i.taxPercent) || 0) > 0);
+      if (!hasAnyTax) {
+        setItems(prev => prev.map(i => ({ ...i, taxPercent: 5 })));
+      }
+    } else if (newMode === 'TOTAL_AMOUNT') {
+      if (totalTaxRate === 0) setTotalTaxRate(5);
+    }
+  };
 
 
   // ── Submit / Save Draft Handler ──
@@ -1089,7 +1182,7 @@ export default function CreatePurchaseOrderPage() {
                 </span>
               )}
             </div>
-            <p>Generate individual PO, link vendor master, and submit for approval</p>
+            <p>{isReadOnly ? 'Viewing purchase order details (Read-only mode)' : 'Generate individual PO, link vendor master, and submit for approval'}</p>
           </div>
         </div>
         <div className="cpo-header__actions">
@@ -1129,12 +1222,13 @@ export default function CreatePurchaseOrderPage() {
                 value={revisionNo}
                 onChange={(e) => setRevisionNo(e.target.value)}
                 placeholder="0"
+                disabled={isReadOnly}
               />
             </div>
             <div className="cpo-field">
               <label>PO DATE</label>
               <span className="cpo-field__sub">Date of issue</span>
-              <input type="date" value={poDate ? String(poDate).slice(0, 10) : ''} onChange={(e) => setPoDate(e.target.value)} />
+              <input type="date" value={poDate ? String(poDate).slice(0, 10) : ''} onChange={(e) => setPoDate(e.target.value)} disabled={isReadOnly} />
             </div>
           </div>
 
@@ -1160,6 +1254,7 @@ export default function CreatePurchaseOrderPage() {
                   onChange={(e) => setSelectedBudgetLineId(e.target.value)}
                   className="cpo-select"
                   style={{ flex: 1 }}
+                  disabled={isReadOnly}
                 >
                   <option value="">-- No Budget Line Assigned (Unallocated) --</option>
                   {budgetLines.map((line) => (
@@ -1169,7 +1264,7 @@ export default function CreatePurchaseOrderPage() {
                     </option>
                   ))}
                 </select>
-                {budgetLines.length === 0 && !budgetLoading && (
+                {!isReadOnly && budgetLines.length === 0 && !budgetLoading && (
                   <button
                     type="button"
                     onClick={() => navigate('/procurement/budgets/create')}
@@ -1205,22 +1300,22 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-field">
               <label>PURCHASE REQUISITION NO.</label>
               <span className="cpo-field__sub">Source PR</span>
-              <input type="text" value={prNo} onChange={(e) => setPrNo(e.target.value)} placeholder="PR-00000" />
+              <input type="text" value={prNo} onChange={(e) => setPrNo(e.target.value)} placeholder="PR-00000" disabled={isReadOnly} />
             </div>
             <div className="cpo-field">
               <label>CONTRACT NO.</label>
               <span className="cpo-field__sub">Linked contract</span>
-              <input type="text" value={contractNo} onChange={(e) => setContractNo(e.target.value)} placeholder="CT-00000" />
+              <input type="text" value={contractNo} onChange={(e) => setContractNo(e.target.value)} placeholder="CT-00000" disabled={isReadOnly} />
             </div>
             <div className="cpo-field">
               <label>RFQ NO.</label>
               <span className="cpo-field__sub">Reference RFQ</span>
-              <input type="text" value={rfqNo} onChange={(e) => setRfqNo(e.target.value)} placeholder="RFQ-00000" />
+              <input type="text" value={rfqNo} onChange={(e) => setRfqNo(e.target.value)} placeholder="RFQ-00000" disabled={isReadOnly} />
             </div>
             <div className="cpo-field">
               <label>TENDER NO.</label>
               <span className="cpo-field__sub">Tender reference</span>
-              <input type="text" value={tenderNo} onChange={(e) => setTenderNo(e.target.value)} placeholder="TND-00000" />
+              <input type="text" value={tenderNo} onChange={(e) => setTenderNo(e.target.value)} placeholder="TND-00000" disabled={isReadOnly} />
             </div>
           </div>
 
@@ -1228,22 +1323,22 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-field">
               <label>SUPPLIER QUOTATION NO.</label>
               <span className="cpo-field__sub">Vendor quotation ref</span>
-              <input type="text" value={supplierQuotationNo} onChange={(e) => setSupplierQuotationNo(e.target.value)} placeholder="SQ-00000" />
+              <input type="text" value={supplierQuotationNo} onChange={(e) => setSupplierQuotationNo(e.target.value)} placeholder="SQ-00000" disabled={isReadOnly} />
             </div>
             <div className="cpo-field">
               <label>QUOTATION DATE</label>
               <span className="cpo-field__sub">Date of quotation</span>
-              <input type="date" value={quotationDate ? String(quotationDate).slice(0, 10) : ''} onChange={(e) => setQuotationDate(e.target.value)} />
+              <input type="date" value={quotationDate ? String(quotationDate).slice(0, 10) : ''} onChange={(e) => setQuotationDate(e.target.value)} disabled={isReadOnly} />
             </div>
             <div className="cpo-field">
               <label>BLANKET ORDER NO.</label>
               <span className="cpo-field__sub">Blanket order ref</span>
-              <input type="text" value={blanketOrderNo} onChange={(e) => setBlanketOrderNo(e.target.value)} placeholder="BO-00000" />
+              <input type="text" value={blanketOrderNo} onChange={(e) => setBlanketOrderNo(e.target.value)} placeholder="BO-00000" disabled={isReadOnly} />
             </div>
             <div className="cpo-field">
               <label>FRAMEWORK AGREEMENT</label>
               <span className="cpo-field__sub">Agreement reference</span>
-              <input type="text" value={frameworkAgreement} onChange={(e) => setFrameworkAgreement(e.target.value)} placeholder="FA-00000" />
+              <input type="text" value={frameworkAgreement} onChange={(e) => setFrameworkAgreement(e.target.value)} placeholder="FA-00000" disabled={isReadOnly} />
             </div>
           </div>
         </div>
@@ -1324,7 +1419,8 @@ export default function CreatePurchaseOrderPage() {
             <span className="cpo-section__hint">Vendor Master Database</span>
           </div>
 
-          <div className="cpo-vendor-picker-banner" style={{
+          {!isReadOnly && (
+            <div className="cpo-vendor-picker-banner" style={{
             background: 'linear-gradient(135deg, rgba(var(--primary-rgb, 10, 110, 209), 0.12), rgba(16, 185, 129, 0.12))',
             border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.3)',
             borderRadius: '10px',
@@ -1488,19 +1584,20 @@ export default function CreatePurchaseOrderPage() {
               )}
             </div>
           </div>
+        )}
 
           <div className="cpo-grid cpo-grid--4">
             <div className="cpo-field">
               <label>SUPPLIER CODE</label>
-              <input type="text" value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="SUP-00000" />
+              <input type="text" value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="SUP-00000" disabled={isReadOnly} />
             </div>
             <div className="cpo-field cpo-field--span-2">
               <label>SUPPLIER NAME *</label>
-              <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Acme Industrial Supplies Ltd." />
+              <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Acme Industrial Supplies Ltd." disabled={isReadOnly} />
             </div>
             <div className="cpo-field">
               <label>SUPPLIER RATING</label>
-              <select value={supplierRating} onChange={(e) => setSupplierRating(e.target.value)}>
+              <select value={supplierRating} onChange={(e) => setSupplierRating(e.target.value)} disabled={isReadOnly}>
                 <option value="A - Preferred">A - Preferred</option>
                 <option value="B - Approved">B - Approved</option>
                 <option value="C - Conditional">C - Conditional</option>
@@ -1511,24 +1608,25 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-grid cpo-grid--4" style={{ marginTop: 12 }}>
             <div className="cpo-field cpo-field--span-2">
               <label>SUPPLIER ADDRESS</label>
-              <input type="text" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} placeholder="Street, City, Country" />
+              <input type="text" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} placeholder="Street, City, Country" disabled={isReadOnly} />
             </div>
             <div className="cpo-field cpo-field--span-2">
               <label>SUPPLIER TAX ID / VAT NO.</label>
-              <input type="text" value={supplierTaxId} onChange={(e) => setSupplierTaxId(e.target.value)} placeholder="e.g. GB123456789 / GSTIN" />
+              <input type="text" value={supplierTaxId} onChange={(e) => setSupplierTaxId(e.target.value)} placeholder="e.g. GB123456789 / GSTIN" disabled={isReadOnly} />
             </div>
           </div>
 
           <div className="cpo-grid cpo-grid--3" style={{ marginTop: 12 }}>
             <div className="cpo-field">
               <label>CONTACT PERSON</label>
-              <input type="text" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Full name" />
+              <input type="text" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Full name" disabled={isReadOnly} />
             </div>
             <div className={`cpo-field ${contactEmailError ? 'cpo-field--error' : ''}`}>
               <label>CONTACT EMAIL</label>
               <input
                 type="email"
                 value={contactEmail}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   const val = e.target.value;
                   setContactEmail(val);
@@ -1558,6 +1656,7 @@ export default function CreatePurchaseOrderPage() {
             <div className={`cpo-field ${contactPhoneError ? 'cpo-field--error' : ''}`}>
               <label>CONTACT PHONE</label>
               <PhoneInput
+                disabled={isReadOnly}
                 countryCode={contactCountryCode}
                 onCountryCodeChange={(code) => {
                   setContactCountryCode(code);
@@ -1605,6 +1704,7 @@ export default function CreatePurchaseOrderPage() {
                 value={selectedWarehouseId}
                 onChange={(e) => handleWarehouseSelect(e.target.value)}
                 style={{ fontWeight: 600 }}
+                disabled={isReadOnly}
               >
                 <option value="">-- Select Dynamic Warehouse --</option>
                 {warehouses.map((wh) => (
@@ -1621,6 +1721,7 @@ export default function CreatePurchaseOrderPage() {
                   value={shipToWarehouse}
                   onChange={(e) => setShipToWarehouse(e.target.value)}
                   placeholder="Enter custom warehouse / location name..."
+                  disabled={isReadOnly}
                 />
               )}
             </div>
@@ -1631,11 +1732,13 @@ export default function CreatePurchaseOrderPage() {
                 value={shipToContact}
                 onChange={(e) => setShipToContact(e.target.value)}
                 placeholder="Warehouse Manager / Store Incharge"
+                disabled={isReadOnly}
               />
             </div>
             <div className={`cpo-field ${shipToPhoneError ? 'cpo-field--error' : ''}`}>
               <label>RECEIVING CONTACT PHONE</label>
               <PhoneInput
+                disabled={isReadOnly}
                 countryCode={shipToCountryCode}
                 onCountryCodeChange={(code) => {
                   setShipToCountryCode(code);
@@ -1675,6 +1778,7 @@ export default function CreatePurchaseOrderPage() {
                 value={shipToAddress}
                 onChange={(e) => setShipToAddress(e.target.value)}
                 placeholder="Central Depot, Industrial Zone..."
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -1687,9 +1791,127 @@ export default function CreatePurchaseOrderPage() {
               <span className="cpo-section__num">04</span>
               <span className="cpo-section__title">Line Items & Pricing</span>
             </div>
-            <button className="cpo-btn cpo-btn--secondary cpo-btn--sm" onClick={handleAddItem}>
-              <Plus size={14} /> Add Line Item
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Tax Selection Dropdown */}
+              <div className="pr-tax-menu-container" ref={taxMenuRef}>
+                <button
+                  type="button"
+                  className={`pr-tax-trigger-btn ${taxMode !== 'NONE' ? 'pr-tax-trigger-btn--active' : ''}`}
+                  onClick={() => !isReadOnly && setTaxMenuOpen(prev => !prev)}
+                  title={isReadOnly ? "Tax configuration (Locked)" : "Configure Tax options for items"}
+                  disabled={isReadOnly}
+                  style={isReadOnly ? { cursor: 'default' } : undefined}
+                >
+                  <Receipt size={14} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                  <span className="pr-tax-trigger-label">
+                    Tax: {taxMode === 'LINE_ITEM' ? 'Line Item Tax' : taxMode === 'TOTAL_AMOUNT' ? `Tax on Total (${totalTaxRate}%)` : 'None'}
+                  </span>
+                  {!isReadOnly && <ChevronDown size={14} className={`pr-tax-chevron ${taxMenuOpen ? 'rotate-180' : ''}`} />}
+                </button>
+
+                {!isReadOnly && taxMenuOpen && (
+                  <div className="pr-tax-dropdown-menu">
+                    <div className="pr-tax-dropdown-header">
+                      <span>Select Tax Method</span>
+                    </div>
+
+                    {/* Option 1: Line Item Tax */}
+                    <button
+                      type="button"
+                      className={`pr-tax-dropdown-item ${taxMode === 'LINE_ITEM' ? 'pr-tax-dropdown-item--selected' : ''}`}
+                      onClick={() => handleSelectTaxMode('LINE_ITEM')}
+                    >
+                      <div className="pr-tax-item-icon">
+                        <Layers size={16} />
+                      </div>
+                      <div className="pr-tax-item-content">
+                        <div className="pr-tax-item-title">
+                          <span>Line Item Tax</span>
+                          {taxMode === 'LINE_ITEM' && <Check size={14} className="pr-tax-item-check" />}
+                        </div>
+                        <div className="pr-tax-item-desc">
+                          Adds individual tax % column for each item in the table
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Option 2: Tax on Total Amount */}
+                    <div className={`pr-tax-dropdown-item pr-tax-dropdown-item--total ${taxMode === 'TOTAL_AMOUNT' ? 'pr-tax-dropdown-item--selected' : ''}`}>
+                      <div
+                        className="pr-tax-item-clickable"
+                        onClick={() => handleSelectTaxMode('TOTAL_AMOUNT')}
+                      >
+                        <div className="pr-tax-item-icon">
+                          <Calculator size={16} />
+                        </div>
+                        <div className="pr-tax-item-content">
+                          <div className="pr-tax-item-title">
+                            <span>Tax on Total Amount</span>
+                            {taxMode === 'TOTAL_AMOUNT' && <Check size={14} className="pr-tax-item-check" />}
+                          </div>
+                          <div className="pr-tax-item-desc">
+                            Flat tax rate applied across order subtotal
+                          </div>
+                        </div>
+                      </div>
+                      {taxMode === 'TOTAL_AMOUNT' && (
+                        <div className="pr-tax-rate-presets">
+                          <span className="pr-tax-rate-label">Rate:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            value={totalTaxRate}
+                            onChange={(e) => setTotalTaxRate(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                            className="pr-tax-rate-quick-input"
+                          />
+                          <span className="pr-tax-rate-pct">%</span>
+                          <div className="pr-tax-preset-buttons">
+                            {[5, 10, 18].map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                className={`pr-tax-preset-chip ${totalTaxRate === p ? 'pr-tax-preset-chip--active' : ''}`}
+                                onClick={() => setTotalTaxRate(p)}
+                              >
+                                {p}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Option 3: No Tax */}
+                    <button
+                      type="button"
+                      className={`pr-tax-dropdown-item ${taxMode === 'NONE' ? 'pr-tax-dropdown-item--selected' : ''}`}
+                      onClick={() => handleSelectTaxMode('NONE')}
+                    >
+                      <div className="pr-tax-item-icon">
+                        <X size={16} />
+                      </div>
+                      <div className="pr-tax-item-content">
+                        <div className="pr-tax-item-title">
+                          <span>No Tax</span>
+                          {taxMode === 'NONE' && <Check size={14} className="pr-tax-item-check" />}
+                        </div>
+                        <div className="pr-tax-item-desc">
+                          No tax applied to this purchase order
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {!isReadOnly && (
+                <button className="cpo-btn cpo-btn--secondary cpo-btn--sm" onClick={handleAddItem}>
+                  <Plus size={14} /> Add Line Item
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="cpo-table-wrap">
@@ -1702,13 +1924,16 @@ export default function CreatePurchaseOrderPage() {
                   <th style={{ width: '90px' }}>Qty</th>
                   <th style={{ width: '80px' }}>Unit</th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
+                  {taxMode === 'LINE_ITEM' && <th style={{ width: '110px', textAlign: 'center' }}>Tax (%)</th>}
                   <th style={{ width: '180px', textAlign: 'right', paddingRight: '16px' }}>Total</th>
-                  <th style={{ width: '50px' }}></th>
+                  {!isReadOnly && <th style={{ width: '50px' }}></th>}
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, index) => {
-                  const lineTotal = item.quantity * item.unitPrice * (1 + (item.taxPercent || 0) / 100);
+                  const lineTotal = taxMode === 'LINE_ITEM' && (item.taxPercent || 0) > 0
+                    ? item.quantity * item.unitPrice * (1 + (item.taxPercent || 0) / 100)
+                    : item.quantity * item.unitPrice;
                   return (
                     <tr key={item.id}>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
@@ -1717,6 +1942,7 @@ export default function CreatePurchaseOrderPage() {
                           type="text"
                           className="cpo-table__input"
                           value={item.itemCode}
+                          disabled={isReadOnly}
                           onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
                         />
                       </td>
@@ -1727,6 +1953,7 @@ export default function CreatePurchaseOrderPage() {
                             className="cpo-table__input"
                             placeholder="Item Name *"
                             value={item.itemName}
+                            disabled={isReadOnly}
                             onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
                             style={{ fontWeight: 600 }}
                           />
@@ -1735,6 +1962,7 @@ export default function CreatePurchaseOrderPage() {
                             className="cpo-table__input cpo-table__input--sub"
                             placeholder="Description / Specs"
                             value={item.description}
+                            disabled={isReadOnly}
                             onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
                           />
                         </div>
@@ -1745,6 +1973,7 @@ export default function CreatePurchaseOrderPage() {
                           min="1"
                           className="cpo-table__input"
                           value={item.quantity}
+                          disabled={isReadOnly}
                           onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
                         />
                       </td>
@@ -1753,6 +1982,7 @@ export default function CreatePurchaseOrderPage() {
                           type="text"
                           className="cpo-table__input"
                           value={item.unit}
+                          disabled={isReadOnly}
                           onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
                         />
                       </td>
@@ -1764,24 +1994,50 @@ export default function CreatePurchaseOrderPage() {
                           placeholder="0"
                           className="cpo-table__input"
                           value={item.unitPrice === 0 ? '' : item.unitPrice}
+                          disabled={isReadOnly}
                           onChange={(e) => {
                             const val = e.target.value;
                             handleItemChange(item.id, 'unitPrice', val === '' ? 0 : Number(val));
                           }}
                         />
                       </td>
+                      {taxMode === 'LINE_ITEM' && (
+                        <td style={{ textAlign: 'center' }}>
+                          <div className="pr-tax-input-wrap">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              className="pr-tax-cell-input"
+                              value={item.taxPercent === undefined || item.taxPercent === null ? '' : item.taxPercent}
+                              placeholder="0"
+                              disabled={isReadOnly}
+                              onChange={(e) => handleItemChange(item.id, 'taxPercent', e.target.value === '' ? 0 : Number(e.target.value))}
+                            />
+                            <span className="pr-tax-input-suffix">%</span>
+                          </div>
+                          {Number(item.taxPercent) > 0 && (
+                            <span className="pr-tax-cell-hint">
+                              +{formatAmount(((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * Number(item.taxPercent)) / 100, currency)}
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>
                         {formatAmount(lineTotal, currency)}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          className="cpo-trash-btn"
-                          onClick={() => handleRemoveItem(item.id)}
-                          disabled={items.length <= 1}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
+                      {!isReadOnly && (
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            className="cpo-trash-btn"
+                            onClick={() => handleRemoveItem(item.id)}
+                            disabled={items.length <= 1}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -1801,7 +2057,7 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-grid cpo-grid--2">
               <div className="cpo-field">
                 <label>CURRENCY</label>
-                <CurrencySelector value={currency} onChange={handleCurrencyChange} />
+                <CurrencySelector value={currency} onChange={handleCurrencyChange} disabled={isReadOnly} />
               </div>
               <div className="cpo-field rfq-payment-field" style={{ gridColumn: 'span 2' }}>
                 <label>PAYMENT TERMS & SCHEDULE</label>
@@ -2063,11 +2319,11 @@ export default function CreatePurchaseOrderPage() {
               </div>
               <div className="cpo-field">
                 <label>EXPECTED DELIVERY DATE</label>
-                <input type="date" value={deliveryDate ? String(deliveryDate).slice(0, 10) : ''} onChange={(e) => setDeliveryDate(e.target.value)} />
+                <input type="date" value={deliveryDate ? String(deliveryDate).slice(0, 10) : ''} onChange={(e) => setDeliveryDate(e.target.value)} disabled={isReadOnly} />
               </div>
               <div className="cpo-field">
                 <label>SHIPPING TERMS</label>
-                <input type="text" value={shippingTerms} onChange={(e) => setShippingTerms(e.target.value)} placeholder="e.g. FOB Destination" />
+                <input type="text" value={shippingTerms} onChange={(e) => setShippingTerms(e.target.value)} placeholder="e.g. FOB Destination" disabled={isReadOnly} />
               </div>
               <div className="cpo-field">
                 <label>VENDOR FULFILLMENT PERMISSION</label>
@@ -2075,6 +2331,7 @@ export default function CreatePurchaseOrderPage() {
                   value={vendorFulfillmentAllowed}
                   onChange={(e) => setVendorFulfillmentAllowed(e.target.value as any)}
                   className="cpo-select"
+                  disabled={isReadOnly}
                 >
                   <option value="DISPATCH_AND_INVOICE">🚚 Dispatch Note + 🧾 Invoice (Standard)</option>
                   <option value="DISPATCH_ONLY">🚚 Dispatch Note Only (Invoice created internally after GRN)</option>
@@ -2090,6 +2347,7 @@ export default function CreatePurchaseOrderPage() {
                 value={specialInstructions}
                 onChange={(e) => setSpecialInstructions(e.target.value)}
                 placeholder="Specific delivery notes, packaging instructions, etc."
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -2107,6 +2365,7 @@ export default function CreatePurchaseOrderPage() {
               <CurrencySelector
                 value={currency}
                 onChange={handleCurrencyChange}
+                disabled={isReadOnly}
                 size="sm"
                 className="pr-totals__currency-selector"
               />
@@ -2136,6 +2395,37 @@ export default function CreatePurchaseOrderPage() {
                 <span>Subtotal</span>
                 <span>{formatAmount(subtotal, currency)}</span>
               </div>
+              {taxMode === 'LINE_ITEM' && taxTotal > 0 && (
+                <div className="cpo-totals__row" style={{ color: 'var(--text-primary)' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Layers size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                    <span>Line Item Taxes</span>
+                  </span>
+                  <span style={{ fontWeight: 600, color: '#059669' }}>+{formatAmount(taxTotal, currency)}</span>
+                </div>
+              )}
+              {taxMode === 'TOTAL_AMOUNT' && (
+                <div className="cpo-totals__row" style={{ color: 'var(--text-primary)' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Calculator size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                    <span>Tax on Total</span>
+                    <div className="pr-totals-tax-rate-wrap" title="Tax Rate (click to edit)">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={totalTaxRate}
+                        disabled={isReadOnly}
+                        onChange={(e) => setTotalTaxRate(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                        className="pr-totals-tax-input"
+                      />
+                      <span className="pr-totals-tax-pct">%</span>
+                    </div>
+                  </span>
+                  <span style={{ fontWeight: 600, color: '#059669' }}>+{formatAmount(taxTotal, currency)}</span>
+                </div>
+              )}
               <div className="cpo-totals__divider" />
               <div className="cpo-totals__grand">
                 <span>Grand Total</span>
@@ -2144,24 +2434,61 @@ export default function CreatePurchaseOrderPage() {
             </div>
 
             <div className="cpo-action-panel">
-              <button
-                className="cpo-btn cpo-btn--primary cpo-btn--full"
-                onClick={() => handleSubmit('Pending Approval')}
-                disabled={submittingAction !== null || !canCreatePO}
-                style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
-              >
-                <Send size={16} /> {submittingAction === 'submit' ? 'Submitting PO for Approval…' : (status === 'Returned' || status === 'RE_REVIEW') ? 'Resubmit for Re-Review' : 'Submit PO for Approval'}
-              </button>
-              <button
-                className="cpo-btn cpo-btn--outline cpo-btn--full"
-                onClick={() => handleSubmit('Draft')}
-                disabled={submittingAction !== null || !canCreatePO}
-                style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to save draft POs." : undefined}
-              >
-                <Save size={16} /> {submittingAction === 'draft' ? 'Saving as Draft…' : 'Save as Draft'}
-              </button>
+              {isReadOnly ? (
+                <>
+                  <div className="cpo-viewmode-banner" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '12px 14px',
+                    background: 'rgba(16, 126, 62, 0.1)',
+                    border: '1px solid rgba(16, 126, 62, 0.3)',
+                    borderRadius: 8,
+                    color: '#107e3e',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    marginBottom: 8
+                  }}>
+                    <CheckCircle2 size={18} />
+                    <span>Purchase Order is locked ({status || 'Approved'}). Viewing read-only details.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="cpo-btn cpo-btn--primary cpo-btn--full"
+                    onClick={handleDownloadPdf}
+                  >
+                    <Download size={16} /> Download PO (PDF)
+                  </button>
+                  <button
+                    type="button"
+                    className="cpo-btn cpo-btn--outline cpo-btn--full"
+                    onClick={() => navigate('/procurement/purchase-orders')}
+                  >
+                    <ArrowLeft size={16} /> Back to Purchase Orders
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="cpo-btn cpo-btn--primary cpo-btn--full"
+                    onClick={() => handleSubmit('Pending Approval')}
+                    disabled={submittingAction !== null || !canCreatePO}
+                    style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                    title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
+                  >
+                    <Send size={16} /> {submittingAction === 'submit' ? 'Submitting PO for Approval…' : (status === 'Returned' || status === 'RE_REVIEW') ? 'Resubmit for Re-Review' : 'Submit PO for Approval'}
+                  </button>
+                  <button
+                    className="cpo-btn cpo-btn--outline cpo-btn--full"
+                    onClick={() => handleSubmit('Draft')}
+                    disabled={submittingAction !== null || !canCreatePO}
+                    style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                    title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to save draft POs." : undefined}
+                  >
+                    <Save size={16} /> {submittingAction === 'draft' ? 'Saving as Draft…' : 'Save as Draft'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

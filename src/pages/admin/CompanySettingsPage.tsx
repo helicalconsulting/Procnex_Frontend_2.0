@@ -701,9 +701,7 @@ export default function CompanySettingsPage() {
 
   // Passcode & Access control check
   const [isPasscodeProtected, setIsPasscodeProtected] = useState<boolean>(false);
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
-    return sessionStorage.getItem('heliflow_cs_unlocked') === 'true';
-  });
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [checkingPasscodeStatus, setCheckingPasscodeStatus] = useState<boolean>(true);
 
   // Read-only users can always fetch and view data; edit users fetch when unlocked or open access
@@ -1077,24 +1075,33 @@ export default function CompanySettingsPage() {
   const [showCurrentPasscodeText, setShowCurrentPasscodeText] = useState<boolean>(false);
 
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       try {
         setCheckingPasscodeStatus(true);
         const res = await companySettingsService.getSettingsPasswordStatus();
+        if (!isMounted) return;
         setIsPasscodeProtected(res.isPasswordProtected);
         if (res.isPasswordProtected) {
-          const sessionUnlocked = sessionStorage.getItem('heliflow_cs_unlocked') === 'true';
-          setIsUnlocked(sessionUnlocked);
+          setIsUnlocked(false);
         } else {
           setIsUnlocked(true);
         }
       } catch {
+        if (!isMounted) return;
         setIsUnlocked(true);
         setIsPasscodeProtected(false);
       } finally {
-        setCheckingPasscodeStatus(false);
+        if (isMounted) {
+          setCheckingPasscodeStatus(false);
+        }
       }
     })();
+
+    return () => {
+      isMounted = false;
+      sessionStorage.removeItem('heliflow_cs_unlocked');
+    };
   }, []);
 
   const handleUnlock = useCallback(async (e: React.FormEvent) => {
@@ -1105,7 +1112,6 @@ export default function CompanySettingsPage() {
     try {
       const res = await companySettingsService.verifySettingsPassword(lockPasscode.trim());
       if (res.verified) {
-        sessionStorage.setItem('heliflow_cs_unlocked', 'true');
         setIsUnlocked(true);
         setViewOnlyBypass(false);
         setLockPasscode('');
@@ -1163,7 +1169,6 @@ export default function CompanySettingsPage() {
     setPasscodeError(null);
     try {
       await companySettingsService.updateSettingsPassword(passcodeNew.trim(), isPasscodeProtected ? passcodeCurrent.trim() : undefined);
-      sessionStorage.setItem('heliflow_cs_unlocked', 'true');
       setIsPasscodeProtected(true);
       setIsUnlocked(true);
       setShowPasscodeModal(false);
@@ -1238,6 +1243,7 @@ export default function CompanySettingsPage() {
 
       // Invalidate frontend API cache for company profile so GET endpoints return fresh data
       invalidateApiCache('/company-settings/profile');
+      invalidateApiCache('/company-settings/default-currency');
 
       // Refresh branding context so login pages reflect the change immediately
       if (hasPortalNameChange) {
@@ -3387,7 +3393,7 @@ export default function CompanySettingsPage() {
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                       {isPasscodeProtected
-                        ? 'Company Settings is secured. Unlocked for your current session.'
+                        ? 'Company Settings is secured. Passcode is required every time you visit this tab.'
                         : 'Set a security passcode to lock Company Settings tab from unauthorized access.'}
                     </div>
                   </div>
@@ -3396,6 +3402,17 @@ export default function CompanySettingsPage() {
                 <div style={{ display: 'flex', gap: 10 }}>
                   {isPasscodeProtected ? (
                     <>
+                      <Button className="settings-action" variant="outline" size="default"
+                        type="button"
+                        onClick={() => {
+                          setIsUnlocked(false);
+                          setViewOnlyBypass(false);
+                          setPageMsg('Company Settings locked.');
+                        }}
+                      >
+                        <Lock size={15} />
+                        Lock Now
+                      </Button>
                       <Button className="settings-action" variant="outline" size="default"
                         type="button"
                         disabled={!canCreateSettings}
