@@ -142,6 +142,62 @@ const FR_SECTION_MAP: Record<string, string> = {
   Admin: 'Administration',
 };
 
+const AR_NAV_MAP: Record<string, string> = {
+  Dashboard: 'لوحة التحكم',
+  'Budget Management': 'إدارة الميزانية',
+  'Vendor Dashboard': 'لوحة تحكم المورد',
+  'RFQ Management': 'إدارة طلبات الأسعار (RFQ)',
+  'My RFQs': 'طلبات الأسعار الخاصة بي',
+  Quotations: 'عروض الأسعار',
+  'Quotation Approval': 'الموافقة على عروض الأسعار',
+  'My Quotations': 'عروض الأسعار الخاصة بي',
+  'PO Creation': 'إنشاء أمر شراء',
+  'Purchase Orders': 'أوامر الشراء',
+  'PO Approval': 'الموافقة على أمر الشراء',
+  'My Orders': 'طلباتي',
+  'Accounts Payable': 'حسابات الموردين',
+  'Purchase Invoice Approval': 'الموافقة على فواتير الشراء',
+  'Create Purchase Invoice': 'إنشاء فاتورة شراء',
+  'My Invoices': 'فواتيري',
+  'My Invoices & Dispatches': 'فواتيري وشحناتي',
+  'My Payments': 'مدفوعاتي',
+  Payments: 'المدفوعات',
+  'Payment Voucher Approval': 'الموافقة على سندات الصرف',
+  'Create Payment Voucher': 'إنشاء سند صرف',
+  Vendors: 'الموردون',
+  Contracts: 'العقود',
+  'Create Contract': 'إنشاء عقد',
+  'My Contracts': 'عقودي',
+  Agreements: 'الاتفاقيات والعقود',
+  Documents: 'المستندات',
+  Notifications: 'الإشعارات',
+  'Audit Trail': 'سجل التدقيق',
+  Reports: 'التقارير',
+  'Company Settings': 'إعدادات الشركة',
+  'User Management': 'إدارة المستخدمين',
+  'Roles & Permissions': 'الأدوار والصلاحيات',
+  'Approval Levels': 'مستويات الموافقة',
+  'Purchase Requisitions': 'طلبات الشراء',
+  Signature: 'التوقيع الرقمي',
+  'My Signature': 'التوقيع الرقمي',
+  Forms: 'النماذج',
+  'Custom Form Builder': 'منشئ النماذج المخصصة',
+  'Form Responses': 'ردود النماذج',
+  'Goods Receipt Note (GRN)': 'إشعار استلام البضائع (GRN)',
+  'GRN Entry & Management': 'إدخال وإدارة إشعار استلام البضائع',
+  'My Profile': 'ملفي الشخصي',
+};
+
+const AR_SECTION_MAP: Record<string, string> = {
+  Main: 'الرئيسية',
+  Procurement: 'المشتريات والتوريد',
+  Approvals: 'الموافقات',
+  'Orders & Payments': 'الطلبات والمدفوعات',
+  Account: 'الحساب',
+  Governance: 'الحوكمة والموردون',
+  Admin: 'الإدارة',
+};
+
 interface SidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
@@ -160,7 +216,7 @@ export default function Sidebar({
   const { roles } = useAuth();
   const menuItems = useNavigationMenu();
   const { companyName, logoUrl } = useBranding();
-  const { isFrench } = useLanguage();
+  const { isFrench, isArabic } = useLanguage();
   const sidebarRef = useRef<HTMLElement>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
@@ -418,7 +474,7 @@ export default function Sidebar({
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--shell-section-label)] group-hover/sec:text-[var(--shell-text)] transition-colors">
-                      {isFrench ? (FR_SECTION_MAP[section.title] || section.title) : section.title}
+                      {isArabic ? (AR_SECTION_MAP[section.title] || section.title) : isFrench ? (FR_SECTION_MAP[section.title] || section.title) : section.title}
                     </span>
                     {isSectionCollapsed && hasActiveItem && (
                       <span
@@ -459,7 +515,11 @@ export default function Sidebar({
                           ? location.pathname === item.path
                           : location.pathname.startsWith(item.path);
 
-                      const displayLabel = isFrench ? (FR_NAV_MAP[item.label] || item.label) : item.label;
+                      const displayLabel = isArabic
+                        ? (AR_NAV_MAP[item.label] || item.label)
+                        : isFrench
+                        ? (FR_NAV_MAP[item.label] || item.label)
+                        : item.label;
 
                       return (
                         <NavLink

@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 
-export type Language = 'en' | 'fr';
+export type Language = 'en' | 'fr' | 'ar';
 
 interface LanguageContextType {
   language: Language;
@@ -15,6 +15,7 @@ interface LanguageContextType {
   toggleLanguage: () => void;
   t: (key: string, defaultText?: string) => string;
   isFrench: boolean;
+  isArabic: boolean;
 }
 
 const STORAGE_KEY = 'heliflow_language';
@@ -194,6 +195,209 @@ const EXACT_MAP_FR: Record<string, string> = {
   'SUPPLIER': 'FOURNISSEUR',
 };
 
+// ─── Exact String Map for Arabic Translation ───────────────────
+const EXACT_MAP_AR: Record<string, string> = {
+  // Navigation & Page Titles
+  'Dashboard': 'لوحة التحكم',
+  'Request for Quotations': 'طلبات عروض الأسعار (RFQ)',
+  'RFQ Management': 'إدارة طلبات الأسعار (RFQ)',
+  'Quotations': 'عروض الأسعار',
+  'Quotation Approval': 'الموافقة على عروض الأسعار',
+  'PO Creation & Orders': 'إنشاء أوامر الشراء والطلبات',
+  'PO Creation': 'إنشاء أمر شراء',
+  'Purchase Orders': 'أوامر الشراء',
+  'Purchase Order Approval': 'الموافقة على أمر الشراء',
+  'PO Approval': 'الموافقة على أمر الشراء',
+  'Accounts Payable': 'حسابات الموردين',
+  'Purchase Invoice Approval': 'الموافقة على فواتير الشراء',
+  'Create Purchase Invoice': 'إنشاء فاتورة شراء',
+  'Payments': 'المدفوعات',
+  'Payment Voucher Approval': 'الموافقة على سندات الصرف',
+  'Create Payment Voucher': 'إنشاء سند صرف',
+  'Vendors': 'الموردون',
+  'Contracts': 'العقود',
+  'Create Contract': 'إنشاء عقد',
+  'Documents': 'المستندات',
+  'Notifications': 'الإشعارات',
+  'Audit Trail': 'سجل التدقيق',
+  'User Management': 'إدارة المستخدمين',
+  'Roles & Permissions': 'الأدوار والصلاحيات',
+  'Approval Levels': 'مستويات الموافقة',
+  'Company Settings': 'إعدادات الشركة',
+  'Form Builder': 'منشئ النماذج',
+  'Custom Form Builder': 'منشئ النماذج المخصصة',
+  'Form Responses': 'ردود النماذج',
+  'Forms Settings': 'إعدادات النماذج',
+  'Purchase Requisitions': 'طلبات الشراء',
+  'Reports & Analytics': 'التقارير والتحليلات',
+  'Reports': 'التقارير',
+  'Governance': 'الحوكمة',
+  'Procurement': 'المشتريات والتوريد',
+  'Approvals': 'الموافقات',
+  'Orders & Payments': 'الطلبات والمدفوعات',
+  'Admin': 'الإدارة',
+  'Administration': 'الإدارة',
+  'Account': 'الحساب',
+  'Main': 'الرئيسية',
+  'Budget Management': 'إدارة الميزانية',
+  'Goods Receipt Note (GRN)': 'إشعار استلام البضائع (GRN)',
+  'GRN Entry & Management': 'إدخال وإدارة إشعار استلام البضائع',
+
+  // Vendor Portal Titles
+  'Vendor Dashboard': 'لوحة تحكم المورد',
+  'My RFQs': 'طلبات الأسعار الخاصة بي',
+  'My Quotations': 'عروض الأسعار الخاصة بي',
+  'My Orders': 'طلباتي',
+  'My Invoices': 'فواتيري',
+  'My Invoices & Dispatches': 'فواتيري وشحناتي',
+  'My Payments': 'مدفوعاتي',
+  'My Contracts': 'عقودي',
+  'Agreements': 'الاتفاقيات',
+  'My Profile': 'ملفي الشخصي',
+  'My Signature': 'توقيعي',
+  'Signature': 'التوقيع الرقمي',
+  'New Onboarding': 'تسجيل جديد',
+  'Vendor Onboarding': 'تأهيل الموردين',
+  'Onboarding Queue': 'قائمة الانتظار للتأهيل',
+
+  // Tabs & Sections
+  'Overview': 'نظرة عامة',
+  'Terms & Clauses': 'الشروط والأحكام',
+  'Document Preview': 'معاينة المستند',
+  'SLA Entries': 'بنود اتفاقية مستوى الخدمة',
+  'Milestones': 'المراحل والمعالم',
+  'Audit Log': 'سجل التدقيق',
+  'General': 'عام',
+  'Branding': 'الهوية البصرية',
+  'Departments': 'الأقسام',
+  'Warehouses': 'المستودعات',
+  'Required Documents': 'المستندات المطلوبة',
+  'Positions': 'المناصب والمسميات',
+  'Categories': 'الفئات',
+  'Units': 'وحدات القياس',
+  'Payment Terms': 'شروط الدفع',
+  'Email Templates': 'قوالب البريد الإلكتروني',
+  'Documents & Templates': 'المستندات والقوالب',
+  'Documents & Contracts': 'المستندات والعقود',
+  'Document Serialization': 'الترقيم التسلسلي للمستندات',
+
+  // Common Buttons & Actions
+  'Create New': 'إنشاء جديد',
+  'Create RFQ': 'إنشاء طلب سعر',
+  'Create Purchase Order': 'إنشاء أمر شراء',
+  'Sign Contract': 'توقيع العقد',
+  'Execute & Sign Contract': 'تنفيذ وتوقيع العقد',
+  'Sign Now': 'توقيع الآن',
+  'Download PDF': 'تحميل PDF',
+  'Print': 'طباعة',
+  'Save Changes': 'حفظ التغييرات',
+  'Save': 'حفظ',
+  'Cancel': 'إلغاء',
+  'Delete': 'حذف',
+  'Edit': 'تعديل',
+  'View': 'عرض',
+  'Filter': 'تصفية',
+  'Search': 'بحث',
+  'Back': 'رجوع',
+  'Close': 'إغلاق',
+  'Submit': 'إرسال',
+  'Submitting...': 'جاري الإرسال...',
+  'Approve': 'موافقة',
+  'Reject': 'رفض',
+  'Export': 'تصدير',
+  'Import': 'استيراد',
+  'Clear': 'مسح',
+  'Draw': 'رسم',
+  'Upload': 'رفع',
+  'Back to Contracts': 'الرجوع إلى العقود',
+  'Awaiting Your Signature': 'في انتظار توقيعك',
+  'Lock Now': 'قفل الآن',
+  'Change Passcode': 'تغيير رمز المرور',
+  'Disable Passcode': 'تعطيل رمز المرور',
+
+  // Table Columns & Card Labels
+  'Title': 'العنوان',
+  'Status': 'الحالة',
+  'Vendor': 'المورد',
+  'Contract Value': 'قيمة العقد',
+  'Award Value': 'القيمة الممنوحة',
+  'Total Value': 'القيمة الإجمالية',
+  'Effective Date': 'تاريخ السريان',
+  'Expiration Date': 'تاريخ الانتهاء',
+  'Expiry Date': 'تاريخ الانتهاء',
+  'Created Date': 'تاريخ الإنشاء',
+  'Actions': 'الإجراءات',
+  'Department': 'القسم',
+  'Category': 'الفئة',
+  'Priority': 'الأولوية',
+  'Currency': 'العملة',
+  'Amount': 'المبلغ',
+  'Delivery Terms': 'شروط التسليم',
+  'Default Currency': 'العملة الافتراضية',
+  'Language & Localization': 'اللغة والتعريب',
+  'Portal Name': 'اسم البوابة',
+  'Company Active Users Quota': 'حصة المستخدمين النشطين للشركة',
+  'Current User Seat Limit': 'حد مقاعد المستخدمين الحالي',
+
+  // Summary Card Titles & Admin Labels
+  'Total Roles': 'إجمالي الأدوار',
+  'System Roles': 'أدوار النظام',
+  'Custom Roles': 'أدوار مخصصة',
+  'Total Users': 'إجمالي المستخدمين',
+  'Active Users': 'المستخدمون النشطون',
+  'Inactive Users': 'المستخدمون غير النشطين',
+  'Pending Approvals': 'موافقات قيد الانتظار',
+  'Approved Requests': 'الطلبات المعتمدة',
+  'Rejected Requests': 'الطلبات المرفوضة',
+  'Returned Requests': 'الطلبات المعادة',
+  'Total RFQs': 'إجمالي طلبات الأسعار',
+  'Open RFQs': 'طلبات الأسعار المفتوحة',
+  'Closed RFQs': 'طلبات الأسعار المغلقة',
+  'Total Quotations': 'إجمالي عروض الأسعار',
+  'Under Review': 'قيد المراجعة',
+  'Shortlisted': 'القائمة المختصرة',
+  'Total Orders': 'إجمالي الطلبات',
+  'Pending Orders': 'طلبات قيد الانتظار',
+  'Approved Orders': 'طلبات معتمدة',
+  'Completed Orders': 'طلبات مكتملة',
+  'Total Contracts': 'إجمالي العقود',
+  'Active Contracts': 'عقود نشطة',
+  'Pending Signatures': 'توقيعات قيد الانتظار',
+  'Total Vendors': 'إجمالي الموردين',
+  'Active Vendors': 'موردون نشطون',
+  'Inactive Vendors': 'موردون غير نشطين',
+  'Top Rated': 'الأعلى تقييماً',
+  'Create Role': 'إنشاء دور',
+  'Add User': 'إضافة مستخدم',
+  'Edit Permissions': 'تعديل الصلاحيات',
+  'View Permissions': 'عرض الصلاحيات',
+  'Compare Quotations': 'مقارنة عروض الأسعار',
+
+  // Status Badges
+  'Active': 'نشط',
+  'Draft': 'مسودة',
+  'Pending': 'قيد الانتظار',
+  'Approved': 'معتمد',
+  'Rejected': 'مرفوض',
+  'Completed': 'مكتمل',
+  'Expired': 'منتهي',
+  'Terminated': 'ملغى',
+  'AWAITING_VENDOR_SIGNATURE': 'بانتظار توقيع المورد',
+  'PENDING_VENDOR_SIGNATURE': 'بانتظار توقيع المورد',
+  'VENDOR_SIGNED': 'تم توقيع المورد',
+
+  // Contract Content Labels
+  'CONTRACT VALUE AND PRICING': 'قيمة العقد والأسعار',
+  'GENERAL PROVISIONS': 'أحكام عامة',
+  'GOVERNING LAW': 'القانون المعمول به',
+  'FOR THE BUYER': 'عن المشتري',
+  'FOR THE SUPPLIER': 'عن المورد',
+  'Signed By': 'تم التوقيع بواسطة',
+  'Date': 'التاريخ',
+  'BUYER': 'المشتري',
+  'SUPPLIER': 'المورد',
+};
+
 // ─── Phrase Mappings for Substring Fallback ───────────────────
 const PHRASE_TRANSLATIONS_FR: [RegExp, string][] = [
   [/Request for Quotations/gi, 'Demandes de prix (RFQ)'],
@@ -354,6 +558,166 @@ const PHRASE_TRANSLATIONS_FR: [RegExp, string][] = [
   [/\bRed Ink\b/gi, 'Encre rouge'],
 ];
 
+// ─── Arabic Phrase Mappings for Substring Fallback ───────────
+const PHRASE_TRANSLATIONS_AR: [RegExp, string][] = [
+  [/Request for Quotations/gi, 'طلبات عروض الأسعار (RFQ)'],
+  [/Quotation Approval/gi, 'الموافقة على عروض الأسعار'],
+  [/PO Creation & Orders/gi, 'إنشاء أوامر الشراء والطلبات'],
+  [/Purchase Order Approval/gi, 'الموافقة على أمر الشراء'],
+  [/Purchase Invoice Approval/gi, 'الموافقة على فواتير الشراء'],
+  [/Payment Voucher Approval/gi, 'الموافقة على سندات الصرف'],
+  [/User Management/gi, 'إدارة المستخدمين'],
+  [/Roles & Permissions/gi, 'الأدوار والصلاحيات'],
+  [/Approval Levels/gi, 'مستويات الموافقة'],
+  [/Company Settings/gi, 'إعدادات الشركة'],
+  [/Form Builder/gi, 'منشئ النماذج'],
+  [/Form Responses/gi, 'ردود النماذج'],
+  [/Forms Settings/gi, 'إعدادات النماذج'],
+  [/Vendor Dashboard/gi, 'لوحة تحكم المورد'],
+  [/Purchase Requisitions/gi, 'طلبات الشراء'],
+  [/Accounts Payable/gi, 'حسابات الموردين'],
+  [/Reports & Analytics/gi, 'التقارير والتحليلات'],
+  [/Audit Trail/gi, 'سجل التدقيق'],
+  [/Back to Contracts/gi, 'الرجوع إلى العقود'],
+  [/Terms & Clauses/gi, 'الشروط والأحكام'],
+  [/Document Preview/gi, 'معاينة المستند'],
+
+  [/Create Contract/gi, 'إنشاء عقد'],
+  [/Create New Contract/gi, 'إنشاء عقد جديد'],
+  [/New Contract/gi, 'عقد جديد'],
+  [/Create RFQ/gi, 'إنشاء طلب سعر'],
+  [/New RFQ/gi, 'طلب سعر جديد'],
+  [/Create Purchase Order/gi, 'إنشاء أمر شراء'],
+  [/New Purchase Order/gi, 'أمر شراء جديد'],
+  [/Create Purchase Invoice/gi, 'إنشاء فاتورة شراء'],
+  [/Create Payment Voucher/gi, 'إنشاء سند صرف'],
+  [/Digital Signature Execution/gi, 'تنفيذ التوقيع الرقمي'],
+  [/Signer Authorization/gi, 'تفويض الموقع'],
+  [/Signature Studio/gi, 'أستوديو التوقيع'],
+  [/Sign Now/gi, 'توقيع الآن'],
+  [/Download PDF/gi, 'تحميل PDF'],
+  [/Awaiting Your Signature/gi, 'في انتظار توقيعك'],
+  [/Execute & Sign Contract/gi, 'تنفيذ وتوقيع العقد'],
+  [/Sign here using your mouse or touch screen/gi, 'وقع هنا باستخدام الفأرة أو شاشة اللمس'],
+  [/Save Changes/gi, 'حفظ التغييرات'],
+
+  [/CONTRACT VALUE AND PRICING/gi, 'قيمة العقد والأسعار'],
+  [/GENERAL PROVISIONS/gi, 'أحكام عامة'],
+  [/GOVERNING LAW/gi, 'القانون المعمول به'],
+  [/FOR THE BUYER/gi, 'عن المشتري'],
+  [/FOR THE SUPPLIER/gi, 'عن المورد'],
+  [/Payment Terms/gi, 'شروط الدفع'],
+  [/Delivery Terms/gi, 'شروط التسليم'],
+  [/Effective Date/gi, 'تاريخ السريان'],
+  [/Expiration Date/gi, 'تاريخ الانتهاء'],
+  [/Expiry Date/gi, 'تاريخ الانتهاء'],
+  [/Contract Value/gi, 'قيمة العقد'],
+  [/Award Value/gi, 'القيمة الممنوحة'],
+  [/Total Value/gi, 'القيمة الإجمالية'],
+  [/Source RFQ/gi, 'طلب السعر المصدر'],
+  [/Signed By/gi, 'تم التوقيع بواسطة'],
+
+  [/Total Roles/gi, 'إجمالي الأدوار'],
+  [/System Roles/gi, 'أدوار النظام'],
+  [/Custom Roles/gi, 'أدوار مخصصة'],
+  [/Total Users/gi, 'إجمالي المستخدمين'],
+  [/Active Users/gi, 'المستخدمون النشطون'],
+  [/Inactive Users/gi, 'المستخدمون غير النشطين'],
+  [/Pending Approvals/gi, 'موافقات قيد الانتظار'],
+  [/Approved Requests/gi, 'الطلبات المعتمدة'],
+  [/Rejected Requests/gi, 'الطلبات المرفوضة'],
+  [/Returned Requests/gi, 'الطلبات المعادة'],
+  [/Open RFQs/gi, 'طلبات الأسعار المفتوحة'],
+  [/Closed RFQs/gi, 'طلبات الأسعار المغلقة'],
+  [/Total Quotations/gi, 'إجمالي عروض الأسعار'],
+  [/Under Review/gi, 'قيد المراجعة'],
+  [/Shortlisted/gi, 'القائمة المختصرة'],
+  [/Total Vendors/gi, 'إجمالي الموردين'],
+  [/Active Vendors/gi, 'موردون نشطون'],
+  [/Inactive Vendors/gi, 'موردون غير نشطين'],
+  [/Top Rated/gi, 'الأعلى تقييماً'],
+  [/Create Role/gi, 'إنشاء دور'],
+  [/Add User/gi, 'إضافة مستخدم'],
+  [/Edit Permissions/gi, 'تعديل الصلاحيات'],
+  [/View Permissions/gi, 'عرض الصلاحيات'],
+  [/Compare Quotations/gi, 'مقارنة عروض الأسعار'],
+
+  [/Total Contracts/gi, 'إجمالي العقود'],
+  [/Active Contracts/gi, 'عقود نشطة'],
+  [/Pending Signatures/gi, 'توقيعات قيد الانتظار'],
+  [/Total RFQs/gi, 'إجمالي طلبات الأسعار'],
+  [/Total Orders/gi, 'إجمالي الطلبات'],
+  [/Total Invoices/gi, 'إجمالي الفواتير'],
+  [/Vendor Name/gi, 'اسم المورد'],
+  [/Contract Number/gi, 'رقم العقد'],
+  [/RFQ Number/gi, 'رقم طلب السعر'],
+  [/PO Number/gi, 'رقم أمر الشراء'],
+  [/Quotation Number/gi, 'رقم عرض السعر'],
+
+  [/\bContracts\b/gi, 'العقود'],
+  [/\bContract\b/gi, 'عقد'],
+  [/\bQuotations\b/gi, 'عروض الأسعار'],
+  [/\bQuotation\b/gi, 'عرض سعر'],
+  [/\bRequisitions\b/gi, 'طلبات الشراء'],
+  [/\bRequisition\b/gi, 'طلب شراء'],
+  [/\bOrders\b/gi, 'الطلبات'],
+  [/\bOrder\b/gi, 'طلب'],
+  [/\bInvoices\b/gi, 'الفواتير'],
+  [/\bInvoice\b/gi, 'فاتورة'],
+  [/\bVendors\b/gi, 'الموردون'],
+  [/\bVendor\b/gi, 'مورد'],
+  [/\bPayments\b/gi, 'المدفوعات'],
+  [/\bPayment\b/gi, 'دفعة'],
+  [/\bApprovals\b/gi, 'الموافقات'],
+  [/\bApproval\b/gi, 'موافقة'],
+  [/\bDocuments\b/gi, 'المستندات'],
+  [/\bDocument\b/gi, 'مستند'],
+  [/\bReports\b/gi, 'التقارير'],
+  [/\bReport\b/gi, 'تقرير'],
+  [/\bSettings\b/gi, 'الإعدادات'],
+  [/\bUsers\b/gi, 'المستخدمون'],
+  [/\bUser\b/gi, 'مستخدم'],
+  [/\bRoles\b/gi, 'الأدوار'],
+  [/\bPermissions\b/gi, 'الصلاحيات'],
+  [/\bNotifications\b/gi, 'الإشعارات'],
+  [/\bOverview\b/gi, 'نظرة عامة'],
+  [/\bClauses\b/gi, 'البنود'],
+  [/\bItems\b/gi, 'الأصناف'],
+  [/\bActions\b/gi, 'الإجراءات'],
+  [/\bStatus\b/gi, 'الحالة'],
+  [/\bTitle\b/gi, 'العنوان'],
+  [/\bAmount\b/gi, 'المبلغ'],
+  [/\bCurrency\b/gi, 'العملة'],
+  [/\bPriority\b/gi, 'الأولوية'],
+  [/\bDepartment\b/gi, 'القسم'],
+  [/\bCategory\b/gi, 'الفئة'],
+  [/\bFilter\b/gi, 'تصفية'],
+  [/\bSearch\b/gi, 'بحث'],
+  [/\bSave\b/gi, 'حفظ'],
+  [/\bCancel\b/gi, 'إلغاء'],
+  [/\bDelete\b/gi, 'حذف'],
+  [/\bEdit\b/gi, 'تعديل'],
+  [/\bView\b/gi, 'عرض'],
+  [/\bPrint\b/gi, 'طباعة'],
+  [/\bExport\b/gi, 'تصدير'],
+  [/\bImport\b/gi, 'استيراد'],
+  [/\bClear\b/gi, 'مسح'],
+  [/\bDraw\b/gi, 'رسم'],
+  [/\bUpload\b/gi, 'رفع'],
+  [/\bActive\b/gi, 'نشط'],
+  [/\bDraft\b/gi, 'مسودة'],
+  [/\bPending\b/gi, 'قيد الانتظار'],
+  [/\bApproved\b/gi, 'معتمد'],
+  [/\bRejected\b/gi, 'مرفوض'],
+  [/\bCompleted\b/gi, 'مكتمل'],
+  [/\bExpired\b/gi, 'منتهي'],
+  [/\bTerminated\b/gi, 'ملغى'],
+  [/\bBlack Ink\b/gi, 'حبر أسود'],
+  [/\bNavy Blue\b/gi, 'أزرق داكن'],
+  [/\bRoyal Blue\b/gi, 'أزرق ملكي'],
+  [/\bRed Ink\b/gi, 'حبر أحمر'],
+];
+
 // ─── Dictionary ─────────────────────────────────────────────
 const TRANSLATIONS: Record<Language, Record<string, string>> = {
   en: {
@@ -458,12 +822,64 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'status.expired': 'Expiré',
     'status.awaiting_signature': 'En attente de signature',
   },
+  ar: {
+    'nav.dashboard': 'لوحة التحكم',
+    'nav.requisitions': 'طلبات الشراء',
+    'nav.rfqs': 'طلبات عروض الأسعار (RFQ)',
+    'nav.quotations': 'عروض الأسعار',
+    'nav.contracts': 'العقود',
+    'nav.orders': 'أوامر الشراء',
+    'nav.ap': 'حسابات الموردين',
+    'nav.payments': 'المدفوعات',
+    'nav.vendors': 'الموردون',
+    'nav.reports': 'التقارير والتحليلات',
+    'nav.settings': 'إعدادات الشركة',
+    'nav.users': 'المستخدمون والوصول',
+    'nav.roles': 'الأدوار والصلاحيات',
+    'nav.approvals': 'الموافقات',
+    'nav.documents': 'المستندات',
+    'nav.audit': 'سجل التدقيق',
+    'nav.notifications': 'الإشعارات',
+
+    'settings.title': 'إعدادات الشركة',
+    'settings.language_title': 'اللغة والتعريب',
+    'settings.system_language': 'لغة النظام',
+    'settings.language_desc': 'حدد لغة الواجهة المفضلة لديك عبر كامل بوابة Procnex.',
+    'settings.english': 'English 🇺🇸',
+    'settings.french': 'Français 🇫🇷',
+    'settings.arabic': 'العربية 🇦🇪',
+    'settings.saved_msg': 'تم حفظ تفضيلات لغة النظام بنجاح.',
+
+    'action.save': 'حفظ التغييرات',
+    'action.cancel': 'إلغاء',
+    'action.delete': 'حذف',
+    'action.edit': 'تعديل',
+    'action.view': 'عرض',
+    'action.sign_now': 'توقيع الآن',
+    'action.download_pdf': 'تحميل PDF',
+    'action.print': 'طباعة',
+    'action.search': 'بحث',
+    'action.filter': 'تصفية',
+    'action.create': 'إنشاء جديد',
+    'action.back': 'رجوع',
+    'action.close': 'إغلاق',
+    'action.loading': 'جاري التحميل...',
+    'action.submitting': 'جاري الإرسال...',
+
+    'status.active': 'نشط',
+    'status.draft': 'مسودة',
+    'status.pending': 'قيد الانتظار',
+    'status.approved': 'معتمد',
+    'status.completed': 'مكتمل',
+    'status.expired': 'منتهي',
+    'status.awaiting_signature': 'في انتظار التوقيع',
+  },
 };
 
 function getStoredLanguage(): Language {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'en' || stored === 'fr') return stored;
+    if (stored === 'en' || stored === 'fr' || stored === 'ar') return stored;
   } catch {
     // localStorage unavailable
   }
@@ -475,19 +891,29 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => getStoredLanguage());
 
-  // Global DOM Auto-Translator Effect for French
+  // Global DOM Auto-Translator Effect for French & Arabic
   useEffect(() => {
     document.documentElement.setAttribute('lang', language);
 
-    if (language !== 'fr') {
-      if (document.documentElement.getAttribute('data-lang-applied') === 'fr') {
+    if (language === 'en') {
+      if (document.documentElement.getAttribute('data-lang-applied')) {
         document.documentElement.removeAttribute('data-lang-applied');
         window.location.reload();
       }
       return;
     }
 
-    document.documentElement.setAttribute('data-lang-applied', 'fr');
+    const currentApplied = document.documentElement.getAttribute('data-lang-applied');
+    if (currentApplied && currentApplied !== language) {
+      document.documentElement.removeAttribute('data-lang-applied');
+      window.location.reload();
+      return;
+    }
+
+    document.documentElement.setAttribute('data-lang-applied', language);
+
+    const exactMap = language === 'fr' ? EXACT_MAP_FR : EXACT_MAP_AR;
+    const phraseMap = language === 'fr' ? PHRASE_TRANSLATIONS_FR : PHRASE_TRANSLATIONS_AR;
 
     const translateElement = (node: Node) => {
       if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
@@ -495,17 +921,17 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         const trimmed = raw.trim();
 
         // 1. Exact string match
-        if (trimmed && EXACT_MAP_FR[trimmed]) {
+        if (trimmed && exactMap[trimmed]) {
           const leading = raw.match(/^\s*/)?.[0] || '';
           const trailing = raw.match(/\s*$/)?.[0] || '';
-          node.nodeValue = leading + EXACT_MAP_FR[trimmed] + trailing;
+          node.nodeValue = leading + exactMap[trimmed] + trailing;
           return;
         }
 
         // 2. Regex phrase replacements (with lastIndex reset on each iteration)
         let text = raw;
         let modified = false;
-        for (const [regex, replacement] of PHRASE_TRANSLATIONS_FR) {
+        for (const [regex, replacement] of phraseMap) {
           regex.lastIndex = 0;
           if (regex.test(text)) {
             regex.lastIndex = 0;
@@ -522,11 +948,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
           if (elem instanceof HTMLInputElement || elem instanceof HTMLTextAreaElement) {
             if (elem.placeholder) {
               const pTrim = elem.placeholder.trim();
-              if (EXACT_MAP_FR[pTrim]) {
-                elem.placeholder = EXACT_MAP_FR[pTrim];
+              if (exactMap[pTrim]) {
+                elem.placeholder = exactMap[pTrim];
               } else {
                 let pText = elem.placeholder;
-                for (const [regex, replacement] of PHRASE_TRANSLATIONS_FR) {
+                for (const [regex, replacement] of phraseMap) {
                   regex.lastIndex = 0;
                   if (regex.test(pText)) {
                     regex.lastIndex = 0;
@@ -544,10 +970,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         if (elem.hasAttribute('title')) {
           let tVal = elem.getAttribute('title') || '';
           const tTrim = tVal.trim();
-          if (EXACT_MAP_FR[tTrim]) {
-            elem.setAttribute('title', EXACT_MAP_FR[tTrim]);
+          if (exactMap[tTrim]) {
+            elem.setAttribute('title', exactMap[tTrim]);
           } else {
-            for (const [regex, replacement] of PHRASE_TRANSLATIONS_FR) {
+            for (const [regex, replacement] of phraseMap) {
               regex.lastIndex = 0;
               if (regex.test(tVal)) {
                 regex.lastIndex = 0;
@@ -602,7 +1028,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleLanguage = useCallback(() => {
-    setLanguage(language === 'fr' ? 'en' : 'fr');
+    setLanguage(language === 'en' ? 'fr' : language === 'fr' ? 'ar' : 'en');
   }, [language, setLanguage]);
 
   const t = useCallback(
@@ -622,6 +1048,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         toggleLanguage,
         t,
         isFrench: language === 'fr',
+        isArabic: language === 'ar',
       }}
     >
       {children}

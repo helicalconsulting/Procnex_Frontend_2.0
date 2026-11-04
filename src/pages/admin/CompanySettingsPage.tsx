@@ -3498,8 +3498,8 @@ export default function CompanySettingsPage() {
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
-                <h2><Globe size={17} /> {t('settings.language_title', 'Language & Localization / Langue du Système')}</h2>
-                <p>{t('settings.language_desc', 'Select your preferred interface language across the entire Heliflow portal (English / Français 🇫🇷).')}</p>
+                <h2><Globe size={17} /> {t('settings.language_title', 'Language & Localization')}</h2>
+                <p>{t('settings.language_desc', 'Select your preferred interface language across the entire Procnex portal.')}</p>
               </div>
             </div>
             <div className="cs-section-body">
@@ -3535,6 +3535,23 @@ export default function CompanySettingsPage() {
                   <div className="cs-lang-card__content">
                     <div className="cs-lang-card__name">Français</div>
                     <div className="cs-lang-card__desc">Langue Française</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`cs-lang-card ${language === 'ar' ? 'cs-lang-card--active' : ''}`}
+                  onClick={() => {
+                    setLanguage('ar');
+                    setLangMsg('تم تغيير لغة النظام إلى العربية 🇦🇪');
+                  }}
+                  aria-pressed={language === 'ar'}
+                  aria-label="العربية (اللغة العربية)"
+                >
+                  <span className="cs-lang-card__flag">🇦🇪</span>
+                  <div className="cs-lang-card__content">
+                    <div className="cs-lang-card__name">العربية</div>
+                    <div className="cs-lang-card__desc">اللغة العربية</div>
                   </div>
                 </button>
               </div>

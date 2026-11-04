@@ -306,12 +306,18 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
           type="button"
           className={iconButtonClass}
           onClick={toggleLanguage}
-          title={language === 'fr' ? 'Switch to English 🇺🇸' : 'Changer en Français 🇫🇷'}
+          title={
+            language === 'ar'
+              ? 'Switch to English 🇺🇸'
+              : language === 'fr'
+              ? 'التبديل إلى العربية 🇦🇪'
+              : 'Changer en Français 🇫🇷'
+          }
           aria-label="Toggle language"
         >
           <span className="flex items-center gap-1 text-[12px] font-bold">
             <Globe size={15} />
-            <span>{language === 'fr' ? 'FR' : 'EN'}</span>
+            <span>{language === 'ar' ? 'AR' : language === 'fr' ? 'FR' : 'EN'}</span>
           </span>
         </button>
 
