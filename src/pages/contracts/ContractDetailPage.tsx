@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import { cleanDuplicateSignatures, type ContractPlaceholderContext } from '../../utils/cleanSignatures';
-import DOMPurify from 'dompurify';
+import { DocumentPreview } from '../../components/shared/DocumentPreview';
 import { sseClient } from '../../services/sseClient';
 import { DetailSkeleton } from '../../components/shared/Skeleton';
 import { signatureService, type SavedSignature } from '../../services/signatureService';
@@ -467,8 +467,6 @@ export default function ContractDetailPage() {
   const [terminating, setTerminating] = useState(false);
   const [showTerminateConfirm, setShowTerminateConfirm] = useState(false);
   const [terminateReason, setTerminateReason] = useState('');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [creatingPO, setCreatingPO] = useState(false);
   const [sendingToVendor, setSendingToVendor] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -478,7 +476,7 @@ export default function ContractDetailPage() {
   const poTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const lastFocusRef = useRef<number>(0);
 
-  useBodyScrollLock(showSignModal || showTerminateConfirm || showDeleteConfirm);
+  useBodyScrollLock(showSignModal || showTerminateConfirm);
 
   // Fetch contract
   const { data, loading, error, reload, forceRefresh } = useServiceData(
@@ -693,18 +691,6 @@ export default function ContractDetailPage() {
     }
   }, [id, terminateReason, data?.contract?.contractNumber, reload]);
 
-  const handleDeleteContract = useCallback(async () => {
-    if (!id) return;
-    setDeleting(true);
-    try {
-      await contractService.deleteContract(id);
-      navigate('/contracts');
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to delete contract');
-      setDeleting(false);
-    }
-  }, [id, navigate]);
-
   // SSE real-time refresh — when a PO is created from this contract, update balance & data
   useEffect(() => {
     if (!id) return;
@@ -889,13 +875,6 @@ export default function ContractDetailPage() {
               <Plus size={14} /> {isLimitReached ? 'Limit Reached' : creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
             </button>
           )}
-          <button
-            className="ctr-detail__action-btn ctr-detail__action-btn--danger"
-            onClick={() => setShowDeleteConfirm(true)}
-            title="Delete Contract"
-          >
-            <Trash2 size={14} /> Delete
-          </button>
         </div>
       </div>
 
@@ -1272,9 +1251,13 @@ export default function ContractDetailPage() {
         {/* ── DOCUMENTS ── */}
         {activeTab === 'documents' && (
           <div>
-            <div className="ctr-detail__doc-preview">
+            <div className="ctr-detail__doc-wrapper">
               {contract.contentSnapshot ? (
-                <div className="ctr-doc-preview-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(cleanDuplicateSignatures(contract.contentSnapshot, undefined, contractContext)) }} />
+                <DocumentPreview
+                  html={cleanDuplicateSignatures(contract.contentSnapshot, undefined, contractContext)}
+                  title={`Contract Document — ${contract.contractNumber || contract.title}`}
+                  className="ctr-detail__doc-iframe"
+                />
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 48 }}>
                   No generated document content available. The contract document will appear here after generation.
@@ -1434,30 +1417,6 @@ export default function ContractDetailPage() {
               <button className="ctr-modal__btn ctr-modal__btn--secondary" onClick={() => setShowTerminateConfirm(false)} disabled={terminating}>Cancel</button>
               <button className="ctr-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleTerminate} disabled={terminating}>
                 {terminating ? 'Terminating…' : 'Terminate Contract'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirm Modal */}
-      {showDeleteConfirm && (
-        <div className="ctr-modal-backdrop" onClick={() => !deleting && setShowDeleteConfirm(false)}>
-          <div className="ctr-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="ctr-modal__header">
-              <span className="ctr-modal__title"><Trash2 size={20} /> Delete Contract</span>
-              <button className="ctr-modal__close" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}><X size={18} /></button>
-            </div>
-            <div className="ctr-modal__body">
-              <p style={{ margin: 0, fontSize: 15 }}>
-                Are you sure you want to delete <strong>{contract.contractNumber}</strong> — {contract.title}?
-                This action cannot be undone and will permanently remove this contract.
-              </p>
-            </div>
-            <div className="ctr-modal__footer">
-              <button className="ctr-modal__btn ctr-modal__btn--secondary" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>Cancel</button>
-              <button className="ctr-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleDeleteContract} disabled={deleting}>
-                {deleting ? 'Deleting…' : 'Delete Contract'}
               </button>
             </div>
           </div>

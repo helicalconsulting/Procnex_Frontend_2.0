@@ -203,7 +203,7 @@ export default function BudgetListPage() {
             value={fiscalYear}
             onChange={(e) => setFiscalYear(e.target.value)}
             aria-label="Filter by Fiscal Year"
-            className="h-10 px-3 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 pl-3.5 pr-10 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer min-w-[155px]"
           >
             <option value="">All Fiscal Years</option>
             <option value="FY2026">FY2026</option>
@@ -215,7 +215,7 @@ export default function BudgetListPage() {
             value={budgetType}
             onChange={(e) => setBudgetType(e.target.value)}
             aria-label="Filter by Budget Type"
-            className="h-10 px-3 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 pl-3.5 pr-10 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer min-w-[130px]"
           >
             <option value="">All Types</option>
             <option value="OPEX">OPEX (Operational)</option>
@@ -228,7 +228,7 @@ export default function BudgetListPage() {
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             aria-label="Filter by Status"
-            className="h-10 px-3 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 pl-3.5 pr-10 text-sm rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer min-w-[145px]"
           >
             <option value="">All Statuses</option>
             <option value="ACTIVE">Active</option>

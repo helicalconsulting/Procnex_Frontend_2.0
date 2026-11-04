@@ -775,24 +775,37 @@
 }
 
 /* ── Documents Tab ─────────────────────────────────────── */
+.ctr-detail__doc-wrapper {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  width: 100%;
+}
+
+.ctr-detail__doc-iframe {
+  width: 100%;
+  height: 80vh;
+  min-height: 800px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .ctr-detail__doc-preview,
 [data-theme="dark"] .ctr-detail__doc-preview {
   border: 1px solid #cbd5e1 !important;
   border-radius: 12px;
   padding: 32px 40px;
   background: #ffffff !important;
-  max-width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   margin: 0;
-  font-size: 15px;
+  font-size: 14.5px;
   line-height: 1.75;
-  color: #000000 !important;
+  color: #111827 !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-}
-
-.ctr-detail__doc-preview *,
-[data-theme="dark"] .ctr-detail__doc-preview * {
-  color: #000000 !important;
-  background-color: transparent !important;
 }
 
 .ctr-detail__doc-actions {

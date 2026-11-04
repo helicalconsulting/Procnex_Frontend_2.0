@@ -26,6 +26,8 @@ import {
   FormInput,
   Truck,
   PackageCheck,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import heliflowLogo from '../../assets/heliflow.png';
@@ -167,6 +169,28 @@ export default function Sidebar({
   const dashboardPath = isVendor(roles)
     ? (companyCode ? `/v/${companyCode.toLowerCase()}/dashboard` : '/vendor/dashboard')
     : '/dashboard';
+
+  // Persistent user preference for collapsible sidebar sections
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem('heliflow_collapsed_sections');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleSection = (title: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [title]: !prev[title] };
+      try {
+        localStorage.setItem('heliflow_collapsed_sections', JSON.stringify(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -372,67 +396,117 @@ export default function Sidebar({
         </div>
 
         <nav className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 [scrollbar-color:var(--shell-scrollbar)_transparent] [scrollbar-width:thin]">
-          {NAV_SECTIONS.map((section) => (
-            <div key={section.title} className="mb-2">
-              <span
-                className={cn(
-                  'block px-3 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--shell-section-label)] transition-opacity',
-                  collapsed && 'h-2 overflow-hidden px-0 py-0 opacity-0',
-                )}
-              >
-                {isFrench ? (FR_SECTION_MAP[section.title] || section.title) : section.title}
-              </span>
-              {section.items.map((item) => {
-                const isActive =
-                  item.path.endsWith('/dashboard')
-                    ? location.pathname === item.path
-                    : location.pathname.startsWith(item.path);
+          {NAV_SECTIONS.map((section) => {
+            const isSectionCollapsed = Boolean(collapsedSections[section.title]);
+            const hasActiveItem = section.items.some((item) =>
+              item.path.endsWith('/dashboard')
+                ? location.pathname === item.path
+                : location.pathname.startsWith(item.path),
+            );
 
-                const displayLabel = isFrench ? (FR_NAV_MAP[item.label] || item.label) : item.label;
+            return (
+              <div key={section.title} className="mb-2">
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.title)}
+                  aria-expanded={!isSectionCollapsed}
+                  title={isSectionCollapsed ? `Expand ${section.title} (${section.items.length} items)` : `Collapse ${section.title}`}
+                  className={cn(
+                    'group/sec flex w-full items-center justify-between px-3 pb-1.5 pt-4 text-left transition-colors select-none cursor-pointer rounded-lg hover:bg-[var(--shell-item-hover-bg)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)]',
+                    collapsed && 'h-2 overflow-hidden px-0 py-0 opacity-0 pointer-events-none',
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--shell-section-label)] group-hover/sec:text-[var(--shell-text)] transition-colors">
+                      {isFrench ? (FR_SECTION_MAP[section.title] || section.title) : section.title}
+                    </span>
+                    {isSectionCollapsed && hasActiveItem && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-[var(--shell-accent,#0a6ed1)] ring-2 ring-[var(--shell-accent,#0a6ed1)]/30 animate-pulse shrink-0"
+                        title="Active page inside this section"
+                      />
+                    )}
+                  </div>
 
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    aria-current={isActive ? 'page' : undefined}
-                    title={collapsed ? displayLabel : undefined}
+                  <span
                     className={cn(
-                      'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[14px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--shell-bg)]',
-                      collapsed && 'justify-center px-0',
-                      isActive
-                        ? 'bg-[var(--shell-item-active-bg)] font-semibold text-[var(--shell-item-active-text)] shadow-xs'
-                        : 'text-[var(--shell-item-text)] hover:bg-[var(--shell-item-hover-bg)] hover:text-[var(--shell-item-hover-text)]',
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] transition-all duration-150',
+                      isSectionCollapsed
+                        ? 'border-[var(--shell-accent,#0a6ed1)]/40 bg-[var(--shell-accent,#0a6ed1)]/15 text-[var(--shell-accent,#0a6ed1)] group-hover/sec:bg-[var(--shell-accent,#0a6ed1)] group-hover/sec:text-white'
+                        : 'border-[var(--shell-border)]/60 bg-[var(--shell-border)]/20 text-[var(--shell-section-label)] group-hover/sec:border-[var(--shell-border)] group-hover/sec:text-[var(--shell-text)] group-hover/sec:bg-[var(--shell-border)]/40',
                     )}
-                    onClick={() => {
-                      onMobileClose();
-                    }}
                   >
-                    {isActive && (
-                      <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-[var(--shell-accent)]" />
+                    {isSectionCollapsed ? (
+                      <Plus size={12} strokeWidth={2.5} className="transition-transform duration-150 group-hover/sec:scale-110" />
+                    ) : (
+                      <Minus size={12} strokeWidth={2.5} className="transition-transform duration-150 group-hover/sec:scale-110" />
                     )}
-                    <span
-                      className={cn(
-                        'flex h-5 w-5 shrink-0 items-center justify-center transition-colors',
-                        isActive
-                          ? 'text-[var(--shell-item-active-text)]'
-                          : 'text-[var(--shell-item-icon)] group-hover:text-[var(--shell-item-hover-text)]',
-                      )}
-                    >
-                      {item.icon}
-                    </span>
-                    <span
-                      className={cn(
-                        'min-w-0 truncate transition-opacity',
-                        collapsed && 'hidden pointer-events-none opacity-0',
-                      )}
-                    >
-                      {displayLabel}
-                    </span>
-                  </NavLink>
-                );
-              })}
-            </div>
-          ))}
+                  </span>
+                </button>
+
+                <div
+                  className={cn(
+                    'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+                    isSectionCollapsed
+                      ? 'grid-rows-[0fr] opacity-0 pointer-events-none'
+                      : 'grid-rows-[1fr] opacity-100',
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    {section.items.map((item) => {
+                      const isActive =
+                        item.path.endsWith('/dashboard')
+                          ? location.pathname === item.path
+                          : location.pathname.startsWith(item.path);
+
+                      const displayLabel = isFrench ? (FR_NAV_MAP[item.label] || item.label) : item.label;
+
+                      return (
+                        <NavLink
+                          key={item.path}
+                          to={item.path}
+                          aria-current={isActive ? 'page' : undefined}
+                          title={collapsed ? displayLabel : undefined}
+                          className={cn(
+                            'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[14px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--shell-bg)]',
+                            collapsed && 'justify-center px-0',
+                            isActive
+                              ? 'bg-[var(--shell-item-active-bg)] font-semibold text-[var(--shell-item-active-text)] shadow-xs'
+                              : 'text-[var(--shell-item-text)] hover:bg-[var(--shell-item-hover-bg)] hover:text-[var(--shell-item-hover-text)]',
+                          )}
+                          onClick={() => {
+                            onMobileClose();
+                          }}
+                        >
+                          {isActive && (
+                            <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-[var(--shell-accent)]" />
+                          )}
+                          <span
+                            className={cn(
+                              'flex h-5 w-5 shrink-0 items-center justify-center transition-colors',
+                              isActive
+                                ? 'text-[var(--shell-item-active-text)]'
+                                : 'text-[var(--shell-item-icon)] group-hover:text-[var(--shell-item-hover-text)]',
+                            )}
+                          >
+                            {item.icon}
+                          </span>
+                          <span
+                            className={cn(
+                              'min-w-0 truncate transition-opacity',
+                              collapsed && 'hidden pointer-events-none opacity-0',
+                            )}
+                          >
+                            {displayLabel}
+                          </span>
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </nav>
       </aside>
     </>

@@ -174,7 +174,7 @@ export const BudgetLedgerTable: React.FC<BudgetLedgerTableProps> = ({
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="h-9 px-3 text-xs rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-9 pl-3 pr-9 text-xs rounded-xl border border-input bg-card text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer min-w-[130px]"
           >
             <option value="ALL">All Documents</option>
             <option value="PR">Requisitions (PR)</option>
