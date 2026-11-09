@@ -20,6 +20,7 @@ export interface CreateRfqPayload {
   departmentId?: string;
   closingDate?: string;
   currency?: string;
+  requisitionIds?: string[];
   items: Array<{
     itemCode?: string;
     itemName: string;

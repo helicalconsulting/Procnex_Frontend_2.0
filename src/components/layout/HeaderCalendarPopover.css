@@ -459,3 +459,265 @@
   opacity: 0.4;
   color: var(--primary-500, #0a6ed1);
 }
+
+/* ─── Task Assignment Form & Header Actions ────────────────── */
+
+.calendar-agenda__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-agenda__add-btn--active {
+  background: var(--primary-500, #0a6ed1) !important;
+  color: #ffffff !important;
+  border-color: var(--primary-500, #0a6ed1) !important;
+}
+
+.calendar-agenda__assign-btn {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.calendar-agenda__assign-btn:hover,
+.calendar-agenda__assign-btn--active {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+.calendar-task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  animation: formSlideIn 0.2s ease-out;
+}
+
+[data-theme="dark"] .calendar-task-form {
+  background: rgba(15, 23, 42, 0.95);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+
+.calendar-task-form__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+[data-theme="dark"] .calendar-task-form__header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.calendar-task-form__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.calendar-task-form__close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.calendar-task-form__close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .calendar-task-form__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.calendar-task-form__error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.calendar-task-form__success {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.calendar-task-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calendar-task-form__field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.calendar-task-req {
+  color: #ef4444;
+}
+
+.calendar-task-form__field input,
+.calendar-task-form__field select,
+.calendar-task-form__field textarea {
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--surface-bg, #ffffff);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+[data-theme="dark"] .calendar-task-form__field input,
+[data-theme="dark"] .calendar-task-form__field select,
+[data-theme="dark"] .calendar-task-form__field textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+}
+
+.calendar-task-form__field input:focus,
+.calendar-task-form__field select:focus,
+.calendar-task-form__field textarea:focus {
+  border-color: var(--primary-500, #0a6ed1);
+}
+
+.calendar-task-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.calendar-task-upload-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px dashed var(--border, #cbd5e1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .calendar-task-upload-box {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.calendar-task-upload-box:hover {
+  border-color: var(--primary-500, #0a6ed1);
+  color: var(--primary-500, #0a6ed1);
+}
+
+.calendar-task-files-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.calendar-task-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.18);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-primary);
+}
+
+.calendar-task-file-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-task-file-remove {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.calendar-task-file-remove:hover {
+  color: #ef4444;
+}
+
+.calendar-task-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.calendar-task-btn-secondary {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.calendar-task-btn-primary {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: var(--primary-500, #0a6ed1);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(var(--primary-rgb, 10, 110, 209), 0.3);
+  transition: opacity 0.15s;
+}
+
+.calendar-task-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

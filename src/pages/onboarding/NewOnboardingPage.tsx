@@ -269,6 +269,40 @@ export default function NewOnboardingPage() {
   // ── Template Preview ──
   const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
+  const templatePreviewBodyRef = useRef<HTMLDivElement>(null);
+  const templatePreviewContainerRef = useRef<HTMLDivElement>(null);
+
+  // Automatically focus template preview body and enable zero-lag capture-phase wheel scroll
+  useEffect(() => {
+    if (!showTemplatePreview) return;
+
+    const raf = requestAnimationFrame(() => {
+      templatePreviewBodyRef.current?.focus();
+    });
+
+    const handleWheelCapture = (e: WheelEvent) => {
+      const bodyEl = templatePreviewBodyRef.current;
+      const container = templatePreviewContainerRef.current;
+      if (!bodyEl) return;
+
+      const target = e.target as Node | null;
+      if (
+        (container && target && container.contains(target)) ||
+        (target && (target as Element).classList?.contains('onb-template-preview-overlay'))
+      ) {
+        bodyEl.scrollTop += e.deltaY;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    window.addEventListener('wheel', handleWheelCapture, { capture: true, passive: false });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('wheel', handleWheelCapture, { capture: true });
+    };
+  }, [showTemplatePreview]);
 
   // ── Required Document Preview ──
   const [previewDoc, setPreviewDoc] = useState<RequiredDocument | null>(null);
@@ -2285,8 +2319,18 @@ export default function NewOnboardingPage() {
             <div
               className="onb-template-preview-overlay"
               onClick={() => setShowTemplatePreview(false)}
+              onWheel={(e) => {
+                if (
+                  templatePreviewBodyRef.current &&
+                  e.target !== templatePreviewBodyRef.current &&
+                  !templatePreviewBodyRef.current.contains(e.target as Node)
+                ) {
+                  templatePreviewBodyRef.current.scrollTop += e.deltaY;
+                }
+              }}
             >
               <div
+                ref={templatePreviewContainerRef}
                 className="onb-template-preview-card"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -2310,12 +2354,22 @@ export default function NewOnboardingPage() {
                     <X size={20} />
                   </button>
                 </div>
-                <div className="onb-template-preview-body">
+                <div
+                  ref={templatePreviewBodyRef}
+                  tabIndex={-1}
+                  className="onb-template-preview-body"
+                >
                   {previewTemplate.content ? (
-                    <div
-                      className="onb-template-preview-content"
-                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewTemplate.content) }}
-                    />
+                    <div className="onb-template-preview-canvas">
+                      <div
+                        className="onb-template-preview-content"
+                        dangerouslySetInnerHTML={{
+                          __html: DOMPurify.sanitize(previewTemplate.content, {
+                            ADD_ATTR: ['style', 'target', 'data-sig-container'],
+                          }),
+                        }}
+                      />
+                    </div>
                   ) : (
                     <div className="onb-popup-empty">
                       <FileText size={28} />

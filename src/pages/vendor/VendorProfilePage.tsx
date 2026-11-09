@@ -43,6 +43,15 @@ const EMPTY_PROFILE: VendorProfileData = {
   performance: { avgQuality: 0, avgDelivery: 0, avgPriceScore: 0, overallScore: 0, quotationWinRate: 0, totalQuotations: 0, totalOrders: 0, deliveredOrders: 0 },
 };
 
+function addDaysToDateString(dateStr: string, days: number): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export default function VendorProfilePage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -132,7 +141,7 @@ export default function VendorProfilePage() {
   const showIssueDate = currentRule?.trackIssueDate !== false;
   const showExpDate = currentRule?.trackExpirationDate !== false;
   const showAuthority = currentRule?.trackIssuingAuthority !== false;
-  const invalidDocumentDates = showIssueDate && showExpDate && Boolean(issueDate && expirationDate && expirationDate < issueDate);
+  const invalidDocumentDates = showIssueDate && showExpDate && Boolean(issueDate && expirationDate && expirationDate <= issueDate);
 
   const handleChangePassword = async (e: FormEvent) => {
     e.preventDefault();
@@ -168,6 +177,10 @@ export default function VendorProfilePage() {
 
   const handleUploadDoc = async () => {
     if (uploading || invalidDocumentDates) return;
+    if (showIssueDate && showExpDate && issueDate && expirationDate && expirationDate <= issueDate) {
+      setUploadMsg('Expiration date must be after the issue date.');
+      return;
+    }
     const file = fileRef.current?.files?.[0] || selectedFile;
     if (!file) { setUploadMsg('Select a file first'); return; }
     setUploading(true); setUploadMsg('');
@@ -739,7 +752,7 @@ export default function VendorProfilePage() {
                           className="h-8 text-xs rounded-lg"
                           id="profile-expiration-date"
                           disabled={uploading}
-                          min={showIssueDate && issueDate ? String(issueDate).slice(0, 10) : undefined}
+                          min={showIssueDate && issueDate ? addDaysToDateString(String(issueDate).slice(0, 10), 1) : undefined}
                           aria-invalid={invalidDocumentDates}
                           aria-describedby={invalidDocumentDates ? "profile-date-error" : undefined}
                           value={expirationDate ? String(expirationDate).slice(0, 10) : ''}
@@ -764,7 +777,7 @@ export default function VendorProfilePage() {
                   </div>
                 )}
 
-                {invalidDocumentDates && <p id="profile-date-error" role="status" className="text-xs profile-error">Expiration date must be on or after the issue date.</p>}
+                {invalidDocumentDates && <p id="profile-date-error" role="status" className="text-xs profile-error">Expiration date must be after the issue date.</p>}
 
                 {/* File preview chip */}
                 {selectedFile && !uploading && (
@@ -1139,7 +1152,7 @@ export default function VendorProfilePage() {
                               className="h-8 text-xs rounded-lg"
                               id="profile-expiration-date-all"
                               disabled={uploading}
-                              min={showIssueDate && issueDate ? String(issueDate).slice(0, 10) : undefined}
+                              min={showIssueDate && issueDate ? addDaysToDateString(String(issueDate).slice(0, 10), 1) : undefined}
                               aria-invalid={invalidDocumentDates}
                               aria-describedby={invalidDocumentDates ? "profile-date-error-all" : undefined}
                               value={expirationDate ? String(expirationDate).slice(0, 10) : ''}
@@ -1164,7 +1177,7 @@ export default function VendorProfilePage() {
                       </div>
                     )}
 
-                    {invalidDocumentDates && <p id="profile-date-error-all" role="status" className="text-xs profile-error">Expiration date must be on or after the issue date.</p>}
+                    {invalidDocumentDates && <p id="profile-date-error-all" role="status" className="text-xs profile-error">Expiration date must be after the issue date.</p>}
 
                     {/* File preview chip */}
                     {selectedFile && !uploading && (

@@ -1,0 +1,839 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  FileText,
+  Pencil,
+  Plus,
+  Search,
+  ShoppingCart,
+  Trash2,
+  X,
+  CheckSquare,
+  SlidersHorizontal,
+  Filter,
+} from 'lucide-react';
+import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
+import { sseClient } from '../../services/sseClient';
+import { useAuth } from '../../context/AuthContext';
+import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { MessageStrip } from '../../components/shared/MessageStrip';
+import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import type { ColumnDef } from '../../hooks/columnPreferences';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import TablePagination from '../../components/shared/TablePagination';
+import { cn } from '../../lib/utils';
+import '../../components/shared/ColumnCustomizer.css';
+
+type ListPurchaseRequisition = PurchaseRequisition & { isStandalone?: boolean };
+type StatusFilter = string | null;
+
+const releasedStatuses = ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'];
+
+function getStatusLabel(status: string): string {
+  const s = String(status || '').toUpperCase();
+  const labels: Record<string, string> = {
+    DRAFT: 'Draft',
+    PENDING_APPROVAL: 'Pending Approval',
+    APPROVED: 'Approved & Released',
+    COMPLETED: 'Approved & Released',
+    REJECTED: 'Rejected',
+    CANCELLED: 'Rejected',
+    RETURNED: 'Returned for Re-Review',
+    RE_REVIEW: 'Returned for Re-Review',
+    RETURN_FOR_RE_REVIEW: 'Returned for Re-Review',
+    REVISION_REQUESTED: 'Returned for Re-Review',
+    SENT_TO_VENDOR: 'Sent to Vendor',
+    PO_CREATED: 'PO Created',
+  };
+  return labels[s] || status.replace(/_/g, ' ');
+}
+
+function getStatusTone(status: string): 'neutral' | 'warning' | 'success' | 'danger' | 'info' {
+  const s = String(status || '').toUpperCase();
+  if (s === 'DRAFT') return 'neutral';
+  if (s === 'PENDING_APPROVAL') return 'warning';
+  if (['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s)) return 'warning';
+  if (['REJECTED', 'CANCELLED'].includes(s)) return 'danger';
+  if (s === 'SENT_TO_VENDOR') return 'info';
+  return 'success';
+}
+
+function formatDate(value?: string): string {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function isPOEditable(status?: string): boolean {
+  const s = String(status || '').toUpperCase();
+  return ['DRAFT', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s);
+}
+
+function isStandaloneDocument(requisition: ListPurchaseRequisition): boolean {
+  const rfqId = (requisition.rfqId || '').toLowerCase();
+  return Boolean(
+    requisition.isStandalone ||
+    !requisition.rfqId ||
+    rfqId.startsWith('direct-po') ||
+    rfqId.startsWith('rfq-direct') ||
+    rfqId === 'direct-po-master-id' ||
+    rfqId.includes('direct')
+  );
+}
+
+const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'poNumber', label: 'PO / PR Number', defaultVisible: true, required: true },
+  { key: 'vendorName', label: 'Vendor', defaultVisible: true },
+  { key: 'poDate', label: 'PO Date', defaultVisible: true },
+  { key: 'currency', label: 'Currency', defaultVisible: true },
+  { key: 'grandTotal', label: 'Grand Total', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+];
+
+export default function POCreationListPage() {
+  const navigate = useNavigate();
+  const { hasPermission, roles: authRoles } = useAuth();
+  const isAdmin = useMemo(() => {
+    if (!authRoles || authRoles.length === 0) return false;
+    return authRoles.some((r) => r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin'));
+  }, [authRoles]);
+
+  const canCreatePO =
+    isAdmin ||
+    hasPermission('PO Creation', 'canCreate') ||
+    hasPermission('PO Creation', 'canEdit') ||
+    hasPermission('Purchase Orders', 'canCreate') ||
+    hasPermission('Purchase Orders', 'canEdit') ||
+    hasPermission('PO', 'canCreate');
+
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
+
+  const [requisitions, setRequisitions] = useState<ListPurchaseRequisition[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ListPurchaseRequisition | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedPrIds, setSelectedPrIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const [searchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || searchParams.get('q') || '');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    const s = searchParams.get('status')?.toUpperCase();
+    if (s === 'DRAFT' || s === 'PENDING' || s === 'DRAFT_PENDING') return 'DRAFT_PENDING';
+    if (s === 'APPROVED' || s === 'RELEASED') return 'APPROVED';
+    if (s === 'REJECTED' || s === 'CANCELLED') return 'REJECTED';
+    return null;
+  });
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('q');
+    if (q !== null && q !== undefined) {
+      setSearchTerm(q);
+    }
+    const s = searchParams.get('status')?.toUpperCase();
+    if (s === 'DRAFT' || s === 'PENDING' || s === 'DRAFT_PENDING') setStatusFilter('DRAFT_PENDING');
+    else if (s === 'APPROVED' || s === 'RELEASED') setStatusFilter('APPROVED');
+    else if (s === 'REJECTED' || s === 'CANCELLED') setStatusFilter('REJECTED');
+    else if (s === 'ALL') setStatusFilter(null);
+  }, [searchParams]);
+
+  // Column Customizer State
+  const defaultOrder = useMemo(() => ALL_COLUMNS.map((c) => c.key), []);
+  const defaultVisible = useMemo(() => new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)), []);
+  const [columnOrder, setColumnOrder] = useState<string[]>(defaultOrder);
+  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(defaultVisible);
+  const [showColPanel, setShowColPanel] = useState(false);
+  const colBtnRef = useRef<HTMLButtonElement>(null);
+
+  const fetchRequisitions = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
+    setError(null);
+    try {
+      const list = await purchaseRequisitionService.list({ scope: 'orders' });
+      setRequisitions(list);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load purchase requisitions');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRequisitions(true);
+
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        fetchRequisitions(false);
+      }, 300);
+    };
+
+    const unsubStatus = sseClient.on('po_status_changed', handleRefresh);
+    const unsubCreated = sseClient.on('po_created', handleRefresh);
+    const unsubUpdated = sseClient.on('po_updated', handleRefresh);
+    const unsubApprovalUpdated = sseClient.on('approval_updated', handleRefresh);
+    const unsubApprovalChain = sseClient.on('approval_chain_complete', handleRefresh);
+
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+    window.addEventListener('heliflow:po-updated', handleRefresh);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = () => { handleRefresh(); };
+    } catch {}
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      unsubStatus();
+      unsubCreated();
+      unsubUpdated();
+      unsubApprovalUpdated();
+      unsubApprovalChain();
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      window.removeEventListener('heliflow:po-updated', handleRefresh);
+      if (bc) bc.close();
+    };
+  }, [fetchRequisitions]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    const targetId = deleteTarget.id || deleteTarget.rfqId;
+    const deletedPoNumber = deleteTarget.poNumber;
+    setDeleting(true);
+    try {
+      await purchaseRequisitionService.delete(targetId);
+      setRequisitions((prev) => prev.filter((r) => r.id !== deleteTarget.id && r.rfqId !== deleteTarget.rfqId));
+      setToast({ message: `Document ${deleteTarget.poNumber || ''} was deleted successfully.`, type: 'success' });
+      setDeleteTarget(null);
+
+      window.dispatchEvent(new CustomEvent('heliflow:po-deleted', {
+        detail: { poId: targetId, poNumber: deletedPoNumber },
+      }));
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to delete document', type: 'error' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const filteredRequisitions = useMemo(() => {
+    return requisitions.filter((r) => {
+      if (statusFilter && statusFilter !== 'ALL') {
+        const s = String(r.status || '').toUpperCase();
+        if (statusFilter === 'DRAFT_PENDING') {
+          if (!['DRAFT', 'PENDING_APPROVAL', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s)) return false;
+        } else if (statusFilter === 'APPROVED') {
+          if (!releasedStatuses.includes(r.status) && !['APPROVED', 'RELEASED', 'SENT_TO_VENDOR'].includes(s)) return false;
+        } else if (statusFilter === 'RETURNED') {
+          if (!['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s)) return false;
+        } else if (statusFilter === 'PENDING_APPROVAL') {
+          if (!['PENDING_APPROVAL', 'PENDING'].includes(s)) return false;
+        } else if (statusFilter === 'DRAFT') {
+          if (s !== 'DRAFT') return false;
+        } else if (statusFilter === 'REJECTED') {
+          if (!['REJECTED', 'CANCELLED'].includes(s)) return false;
+        } else {
+          if (s !== statusFilter) return false;
+        }
+      }
+
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase();
+      return (
+        (r.poNumber || '').toLowerCase().includes(term) ||
+        (r.vendorName || '').toLowerCase().includes(term) ||
+        (r.status || '').toLowerCase().includes(term) ||
+        (r.currency || '').toLowerCase().includes(term)
+      );
+    });
+  }, [requisitions, searchTerm, statusFilter]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequisitions.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filteredRequisitions.slice((safePage - 1) * perPage, safePage * perPage);
+
+  // Batch Selection
+  const isAllSelected = useMemo(() => {
+    if (paginated.length === 0) return false;
+    return paginated.every((p) => selectedPrIds.includes(String(p.id || p.rfqId)));
+  }, [paginated, selectedPrIds]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      const pageIds = new Set(paginated.map((p) => String(p.id || p.rfqId)));
+      setSelectedPrIds((prev) => prev.filter((id) => !pageIds.has(id)));
+    } else {
+      const newIds = paginated.map((p) => String(p.id || p.rfqId));
+      setSelectedPrIds((prev) => Array.from(new Set([...prev, ...newIds])));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedPrIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchDeleteConfirm = async () => {
+    if (selectedPrIds.length === 0) return;
+    setBatchDeleting(true);
+    try {
+      for (const id of selectedPrIds) {
+        await purchaseRequisitionService.delete(id).catch(() => {});
+      }
+      setToast({ message: `Successfully deleted ${selectedPrIds.length} purchase document(s).`, type: 'success' });
+      setSelectedPrIds([]);
+      setShowBatchDeleteModal(false);
+      await fetchRequisitions();
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to delete selected items.', type: 'error' });
+    } finally {
+      setBatchDeleting(false);
+    }
+  };
+
+  // Metrics
+  const draftAndPendingCount = useMemo(
+    () =>
+      requisitions.filter((r) =>
+        ['DRAFT', 'PENDING_APPROVAL', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(
+          String(r.status || '').toUpperCase()
+        )
+      ).length,
+    [requisitions]
+  );
+  const activeCount = useMemo(
+    () => requisitions.filter((r) => releasedStatuses.includes(r.status)).length,
+    [requisitions]
+  );
+  const totalValue = useMemo(
+    () => requisitions.reduce((acc, r) => {
+      const amt = Number(r.grandTotal || r.totalAmount || 0);
+      const fromCurr = r.currency || companyDefaultCurrency;
+      return acc + (convert ? convert(amt, fromCurr, companyDefaultCurrency) : amt);
+    }, 0),
+    [requisitions, convert, companyDefaultCurrency]
+  );
+
+  const visibleColumns = useMemo(
+    () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
+    [columnOrder, visibleKeys]
+  );
+
+  const openDocument = (requisition: ListPurchaseRequisition, mode: 'view' | 'edit') => {
+    const isEditable = isPOEditable(requisition.status);
+    const effectiveMode = isEditable ? mode : 'view';
+
+    if (isStandaloneDocument(requisition)) {
+      const documentId = requisition.id || requisition.rfqId || requisition.poNumber;
+      navigate(`/procurement/create-purchase-order?id=${encodeURIComponent(documentId)}${effectiveMode === 'view' ? '&mode=view' : ''}`);
+      return;
+    }
+    navigate(`/procurement/purchase-requisition/${encodeURIComponent(requisition.rfqId || requisition.id || requisition.poNumber)}?mode=${effectiveMode}`, {
+      state: { readOnly: effectiveMode === 'view' },
+    });
+  };
+
+  if (loading) {
+    return (
+      <PageFrame>
+        <div className="flex min-h-[52vh] items-center justify-center gap-3 text-sm text-muted-foreground">
+          <div className="size-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+          Loading purchase orders…
+        </div>
+      </PageFrame>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageFrame>
+        <EmptyState
+          icon={AlertTriangle}
+          title="Purchase orders could not be loaded"
+          description={error}
+          action={<Button variant="outline" onClick={() => navigate(-1)}>Go back</Button>}
+        />
+      </PageFrame>
+    );
+  }
+
+  const metricClass = 'cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/55';
+
+  return (
+    <PageFrame>
+      {toast && (
+        <div className="mb-5">
+          <MessageStrip type={toast.type} compact autoHideMs={5000} onClose={() => setToast(null)}>
+            {toast.message}
+          </MessageStrip>
+        </div>
+      )}
+
+      <PageLead
+        title="PO Creation"
+        description="Create, review and release purchase orders from one clear workspace."
+        actions={
+          <Button
+            onClick={canCreatePO ? () => navigate('/procurement/create-purchase-order') : undefined}
+            disabled={!canCreatePO}
+            title={!canCreatePO ? 'You do not have permission to create Purchase Orders.' : 'Create new Purchase Order'}
+          >
+            <Plus /> New purchase order
+          </Button>
+        }
+      />
+
+      {requisitions.length > 0 && (
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            role="button"
+            tabIndex={0}
+            aria-pressed={statusFilter === null}
+            className={cn(metricClass, statusFilter === null && 'border-primary/40 bg-primary/[0.035]')}
+            onClick={() => setStatusFilter(null)}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setStatusFilter(null); }}
+            icon={FileText}
+            label="Total documents"
+            value={requisitions.length}
+            detail="Across every approval state"
+          />
+          <MetricCard
+            role="button"
+            tabIndex={0}
+            aria-pressed={statusFilter === 'DRAFT_PENDING'}
+            className={cn(metricClass, statusFilter === 'DRAFT_PENDING' && 'border-amber-500/40 bg-amber-500/[0.035]')}
+            onClick={() => setStatusFilter((current) => current === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') setStatusFilter((current) => current === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING');
+            }}
+            icon={Clock3}
+            label="Needs attention"
+            value={draftAndPendingCount}
+            detail="Draft, pending, & returned"
+            tone="warning"
+          />
+          <MetricCard
+            role="button"
+            tabIndex={0}
+            aria-pressed={statusFilter === 'APPROVED'}
+            className={cn(metricClass, statusFilter === 'APPROVED' && 'border-emerald-500/40 bg-emerald-500/[0.035]')}
+            onClick={() => setStatusFilter((current) => current === 'APPROVED' ? null : 'APPROVED')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') setStatusFilter((current) => current === 'APPROVED' ? null : 'APPROVED');
+            }}
+            icon={CheckCircle2}
+            label="Approved & released"
+            value={activeCount}
+            detail="Ready or sent to a vendor"
+            tone="success"
+          />
+          <MetricCard
+            icon={ShoppingCart}
+            label="Total volume"
+            value={formatAmount(totalValue, companyDefaultCurrency)}
+            detail="Value across listed documents"
+            tone="violet"
+          />
+        </div>
+      )}
+
+      {selectedPrIds.length > 0 && (
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary/[0.04] p-3.5 shadow-sm">
+          <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+            <CheckSquare className="size-4 text-primary" />
+            <span><strong>{selectedPrIds.length}</strong> document(s) selected</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedPrIds([])}>
+              Cancel Selection
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={!canCreatePO}
+              onClick={() => canCreatePO && setShowBatchDeleteModal(true)}
+              title={!canCreatePO ? 'You do not have permission to delete Purchase Orders.' : undefined}
+            >
+              <Trash2 className="size-4" /> Delete Selected ({selectedPrIds.length})
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Search & Filter Toolbar matching RFQ */}
+      {requisitions.length > 0 && (
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 rounded-xl pl-10 pr-10"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search number, vendor, status or currency"
+              aria-label="Search purchase orders"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+            {/* Status Filter Dropdown matching RFQ Page */}
+            <div className="relative min-w-[190px]">
+              <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <select
+                className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                value={statusFilter || 'ALL'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setStatusFilter(val === 'ALL' ? null : (val as StatusFilter));
+                  setCurrentPage(1);
+                }}
+                aria-label="Filter by status"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="DRAFT">Draft</option>
+                <option value="PENDING_APPROVAL">Pending Approval</option>
+                <option value="APPROVED">Approved & Released</option>
+                <option value="RETURNED">Returned for Re-Review</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+
+            {(statusFilter || searchTerm) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter(null);
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className="h-11 rounded-xl px-3.5"
+              >
+                Reset filters
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {requisitions.length === 0 ? (
+        <EmptyState
+          className="mt-5"
+          icon={FileText}
+          title="No purchase orders yet"
+          description="Create a direct purchase order or award an approved quotation to start your order history."
+          action={<Button onClick={() => navigate('/procurement/create-purchase-order')}><Plus /> Create purchase order</Button>}
+        />
+      ) : (
+        <Card className="overflow-hidden">
+
+          {filteredRequisitions.length === 0 ? (
+            <EmptyState
+              className="m-4 min-h-64 border-0 shadow-none"
+              icon={Search}
+              title="No matching documents"
+              description="Try a different search or clear the active status filter."
+              action={
+                <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter(null); }}>
+                  <X /> Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[860px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border/70 bg-muted/35 text-left text-[12px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+                      <th className="w-11 px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isAllSelected}
+                          disabled={!canCreatePO}
+                          onChange={canCreatePO ? handleToggleSelectAll : undefined}
+                          className="size-4 rounded border-border text-primary focus:ring-primary/40"
+                        />
+                      </th>
+                      {visibleColumns.map((col) => (
+                        <th
+                          key={col.key}
+                          className={cn('px-4 py-3', col.key === 'grandTotal' && 'text-right')}
+                        >
+                          {col.label}
+                        </th>
+                      ))}
+                      <th className="px-5 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span>Actions</span>
+                          <div className="relative">
+                            <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
+
+                            {showColPanel && (
+                              <ColumnCustomizer
+                                columnOrder={columnOrder}
+                                visibleKeys={visibleKeys}
+                                allColumns={ALL_COLUMNS}
+                                onToggle={(key) => {
+                                  setVisibleKeys((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                  });
+                                }}
+                                onReorder={setColumnOrder}
+                                onReset={() => {
+                                  setColumnOrder(defaultOrder);
+                                  setVisibleKeys(new Set(defaultVisible));
+                                }}
+                                onClose={() => setShowColPanel(false)}
+                                anchorRef={colBtnRef}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((requisition) => {
+                      const idStr = String(requisition.id || requisition.rfqId);
+                      const isSelected = selectedPrIds.includes(idStr);
+
+                      return (
+                        <tr
+                          key={idStr}
+                          className={cn(
+                            'group cursor-pointer border-b border-border/55 transition-colors last:border-0 hover:bg-accent/35',
+                            isSelected && 'bg-primary/[0.035]'
+                          )}
+                          onClick={() => openDocument(requisition, 'view')}
+                        >
+                          <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              disabled={!canCreatePO}
+                              onChange={() => canCreatePO && handleToggleSelect(idStr)}
+                              className="size-4 rounded border-border text-primary focus:ring-primary/40"
+                            />
+                          </td>
+
+                          {visibleColumns.map((col) => {
+                            if (col.key === 'poNumber') {
+                              return (
+                                <td key="poNumber" className="px-4 py-4 font-semibold text-primary">
+                                  {requisition.poNumber || 'Number pending'}
+                                </td>
+                              );
+                            }
+                            if (col.key === 'vendorName') {
+                              return (
+                                <td key="vendorName" className="max-w-[240px] truncate px-4 py-4 font-medium">
+                                  {requisition.vendorName || 'Vendor not assigned'}
+                                </td>
+                              );
+                            }
+                            if (col.key === 'poDate') {
+                              return <td key="poDate" className="px-4 py-4 text-muted-foreground">{formatDate(requisition.poDate)}</td>;
+                            }
+                            if (col.key === 'currency') {
+                              return <td key="currency" className="px-4 py-4 text-muted-foreground">{requisition.currency || companyDefaultCurrency}</td>;
+                            }
+                            if (col.key === 'grandTotal') {
+                              const resolvedAmount = Number(requisition.grandTotal || requisition.totalAmount || 0) ||
+                                (Array.isArray(requisition.items) && requisition.items.length > 0
+                                  ? requisition.items.reduce((s: number, it: any) => s + (Number(it.total || it.totalPrice || (Number(it.quantity || 1) * Number(it.unitPrice || 0))) || 0), 0)
+                                  : 0);
+                              return (
+                                <td key="grandTotal" className="px-4 py-4 text-right font-semibold tabular-nums">
+                                  {formatAmount(resolvedAmount, requisition.currency || companyDefaultCurrency)}
+                                </td>
+                              );
+                            }
+                            if (col.key === 'status') {
+                              return (
+                                <td key="status" className="px-4 py-4">
+                                  <Badge tone={getStatusTone(requisition.status)}>
+                                    {getStatusLabel(requisition.status)}
+                                  </Badge>
+                                </td>
+                              );
+                            }
+                            return <td key={col.key} className="px-4 py-4">-</td>;
+                          })}
+
+                          <td className="px-5 py-4 text-center" onClick={(event) => event.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => openDocument(requisition, 'view')}
+                                title="View purchase order"
+                              >
+                                <Eye className="size-4" />
+                              </Button>
+                              {isPOEditable(requisition.status) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  disabled={!canCreatePO}
+                                  onClick={() => canCreatePO && openDocument(requisition, 'edit')}
+                                  title={
+                                    canCreatePO
+                                      ? ['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(String(requisition.status).toUpperCase())
+                                        ? 'Edit & resubmit for re-review'
+                                        : 'Edit purchase order'
+                                      : 'Permission denied'
+                                  }
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                              )}
+
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled={!canCreatePO}
+                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => canCreatePO && setDeleteTarget(requisition)}
+                                title={canCreatePO ? 'Delete purchase order' : 'Permission denied'}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="divide-y divide-border/65 lg:hidden">
+                {paginated.map((requisition) => (
+                  <article key={requisition.id || requisition.rfqId} className="p-4 sm:p-5">
+                    <button type="button" className="w-full text-left" onClick={() => openDocument(requisition, 'view')}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                           <p className="truncate text-sm font-semibold text-primary">{requisition.poNumber || 'Number pending'}</p>
+                          <p className="mt-1 truncate text-sm font-medium">{requisition.vendorName || 'Vendor not assigned'}</p>
+                        </div>
+                        <Badge tone={getStatusTone(requisition.status)} className="shrink-0">{getStatusLabel(requisition.status)}</Badge>
+                      </div>
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                        <div><dt className="text-muted-foreground">PO date</dt><dd className="mt-1 font-medium">{formatDate(requisition.poDate)}</dd></div>
+                        <div><dt className="text-muted-foreground">Grand total</dt><dd className="mt-1 font-semibold tabular-nums">{formatAmount(requisition.grandTotal || 0, requisition.currency || companyDefaultCurrency)}</dd></div>
+                      </dl>
+                    </button>
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-3">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openDocument(requisition, 'view')}><Eye /> View</Button>
+                      {isPOEditable(requisition.status) && (
+                        <Button variant="outline" size="sm" className="flex-1" disabled={!canCreatePO} onClick={() => canCreatePO && openDocument(requisition, 'edit')}><Pencil /> Edit</Button>
+                      )}
+
+                      <Button variant="ghost" size="icon-sm" disabled={!canCreatePO} className="text-destructive hover:bg-destructive/10" onClick={() => canCreatePO && setDeleteTarget(requisition)}><Trash2 /></Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+          <TablePagination
+            currentPage={safePage}
+            totalItems={filteredRequisitions.length}
+            perPage={perPage}
+            onPageChange={setCurrentPage}
+          />
+        </Card>
+      )}
+
+      {/* Delete Single Modal */}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="mb-2 grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" />
+            </div>
+            <DialogTitle>Delete purchase order?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.poNumber || deleteTarget?.vendorName || 'This document'} will be permanently removed. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/[0.055] p-3.5 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            Any workflow history linked only to this purchase order may no longer be available.
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
+            <Button variant="destructive" loading={deleting} onClick={handleDeleteConfirm}>Delete document</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Delete Modal */}
+      <Dialog open={showBatchDeleteModal} onOpenChange={(open) => { if (!open && !batchDeleting) setShowBatchDeleteModal(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="mb-2 grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" />
+            </div>
+            <DialogTitle>Delete {selectedPrIds.length} selected document(s)?</DialogTitle>
+            <DialogDescription>
+              The selected {selectedPrIds.length} purchase document(s) will be permanently deleted from the database.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/[0.055] p-3.5 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            This batch operation is permanent and cannot be reversed.
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</Button>
+            <Button variant="destructive" loading={batchDeleting} onClick={handleBatchDeleteConfirm}>Delete {selectedPrIds.length} document(s)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageFrame>
+  );
+}

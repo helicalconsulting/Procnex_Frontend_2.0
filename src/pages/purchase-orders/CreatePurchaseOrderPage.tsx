@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   ShoppingCart, ArrowLeft, Plus, Trash2, Download, Save, Send,
   Building2, FileText, Calendar, IndianRupee, Tag, UserCheck, ShieldCheck,
@@ -77,6 +77,8 @@ export default function CreatePurchaseOrderPage() {
   const { hasPermission } = useAuth();
   const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const [sourceRequisitionIds, setSourceRequisitionIds] = useState<string[]>([]);
   const editId = searchParams.get('id');
   const queryContractId = searchParams.get('contractId') || searchParams.get('contractNo');
   const queryRfqId = searchParams.get('rfqId') || searchParams.get('rfqNo');
@@ -284,6 +286,45 @@ export default function CreatePurchaseOrderPage() {
   const [items, setItems] = useState<POItem[]>([
     { id: '1', itemCode: 'ITEM-001', itemName: '', description: '', quantity: 1, unit: 'pcs', unitPrice: 0, taxPercent: 0 },
   ]);
+
+  // ── Prefill from Requisition Consolidation Workbench ──
+  useEffect(() => {
+    if (editId) return;
+
+    let prefill = (location.state as any) || null;
+    if (!prefill?.fromConsolidation) {
+      try {
+        const stored = sessionStorage.getItem('heliflow_consolidation_po');
+        if (stored) prefill = JSON.parse(stored);
+      } catch {}
+    }
+
+    if (prefill?.fromConsolidation) {
+      if (prefill.prNumbers) setPrNo(prefill.prNumbers);
+      if (prefill.supplierType) setSupplierType(prefill.supplierType);
+      if (Array.isArray(prefill.requisitionIds)) {
+        setSourceRequisitionIds(prefill.requisitionIds);
+      }
+      if (Array.isArray(prefill.items) && prefill.items.length > 0) {
+        setItems(
+          prefill.items.map((it: any, idx: number) => ({
+            id: String(idx + 1),
+            itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: it.itemName || '',
+            description: it.description || '',
+            showDescription: Boolean(it.description && it.description.trim()),
+            quantity: Number(it.quantity) || 1,
+            unit: it.unit || 'pcs',
+            unitPrice: Number(it.unitPrice) || 0,
+            taxPercent: Number(it.taxPercent) || 0,
+          }))
+        );
+      }
+      try {
+        sessionStorage.removeItem('heliflow_consolidation_po');
+      } catch {}
+    }
+  }, [editId, location.state]);
 
   // Tax Mode state: 'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT'
   const [taxMode, setTaxMode] = useState<'NONE' | 'LINE_ITEM' | 'TOTAL_AMOUNT'>('NONE');
@@ -1011,6 +1052,7 @@ export default function CreatePurchaseOrderPage() {
         deliveryDate,
         currency,
         status: statusPayload,
+        requisitionIds: sourceRequisitionIds.length > 0 ? sourceRequisitionIds : undefined,
         supplierType,
         supplierCode,
         supplierAddress,

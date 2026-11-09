@@ -104,6 +104,8 @@ const ContractDetailPage = lazy(() => import("./pages/contracts/ContractDetailPa
 const CreateContractPage = lazy(() => import("./pages/contracts/CreateContractPage"));
 const PurchaseRequisitionPage = lazy(() => import("./pages/purchase-requisitions/PurchaseRequisitionPage"));
 const PurchaseRequisitionsListPage = lazy(() => import("./pages/purchase-requisitions/PurchaseRequisitionsListPage"));
+const MergePurchaseRequisitionsPage = lazy(() => import("./pages/purchase-requisitions/MergePurchaseRequisitionsPage"));
+const POCreationListPage = lazy(() => import("./pages/purchase-orders/POCreationListPage"));
 const PurchaseOrdersPage = lazy(() => import("./pages/purchase-orders/PurchaseOrdersPage"));
 const CreatePurchaseOrderPage = lazy(() => import("./pages/purchase-orders/CreatePurchaseOrderPage"));
 const BudgetListPage = lazy(() => import("./pages/budget/BudgetListPage"));
@@ -323,8 +325,9 @@ export default function App() {
                           <Route path="/purchase-orders" element={page(PurchaseOrdersPage)} />
                           <Route path="/purchase-orders/new" element={page(CreatePurchaseOrderPage)} />
                           <Route path="/procurement/create-purchase-order" element={page(CreatePurchaseOrderPage)} />
-                          <Route path="/procurement/purchase-orders" element={page(PurchaseRequisitionsListPage)} />
+                          <Route path="/procurement/purchase-orders" element={page(POCreationListPage)} />
                           <Route path="/procurement/purchase-requisitions" element={page(PurchaseRequisitionsListPage)} />
+                          <Route path="/procurement/purchase-requisitions/merge" element={page(MergePurchaseRequisitionsPage)} />
                           <Route path="/procurement/purchase-requisition/:rfqId" element={page(PurchaseRequisitionPage)} />
                           <Route path="/audit" element={page(AuditTrailPage)} />
                         </Route>

@@ -20,9 +20,23 @@ export interface PurchaseRequisitionItem {
 
 export interface PurchaseRequisition {
   id?: string;
-  rfqId: string;
+  prNumber?: string;
+  rfqId?: string;
   poNumber?: string;
-  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT_TO_VENDOR';
+  requisitionType?: 'SINGLE' | 'MULTI';
+  department?: string;
+  departmentId?: string;
+  requesterId?: string;
+  requesterName?: string;
+  requesterEmail?: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  submittedToUserId?: string;
+  submittedToName?: string;
+  submittedToEmail?: string;
+  conversionStatus?: 'PENDING' | 'CONVERTED_TO_PO' | 'CONVERTED_TO_RFQ' | 'REJECTED';
+  convertedToPoId?: string;
+  convertedToRfqId?: string;
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT_TO_VENDOR' | 'PO_CREATED' | 'IN_RFQ' | string;
 
   // Company Details
   companyName: string;
@@ -190,9 +204,42 @@ async function apiSave(data: PurchaseRequisition): Promise<PurchaseRequisition> 
   });
 }
 
-async function apiList(): Promise<PurchaseRequisition[]> {
-  const data = await apiRequest<{ purchaseRequisitions: PurchaseRequisition[] }>('/purchase-requisitions');
+async function apiList(params?: Record<string, string>): Promise<PurchaseRequisition[]> {
+  const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+  const data = await apiRequest<{ purchaseRequisitions: PurchaseRequisition[] }>(`/purchase-requisitions${query}`);
   return data.purchaseRequisitions || [];
+}
+
+async function apiCreateRequisition(data: any): Promise<{ purchaseRequisition: PurchaseRequisition }> {
+  return apiRequest<{ purchaseRequisition: PurchaseRequisition }>('/purchase-requisitions/new', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async function apiConvertToDirectPO(payload: {
+  requisitionIds: string[];
+  vendorId?: string;
+  vendorName?: string;
+  notes?: string;
+}): Promise<any> {
+  return apiRequest<any>('/purchase-requisitions/convert-to-po', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function apiConvertToRFQ(payload: {
+  requisitionIds: string[];
+  title?: string;
+  closingDate?: string;
+  currency?: string;
+  department?: string;
+}): Promise<any> {
+  return apiRequest<any>('/purchase-requisitions/convert-to-rfq', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 async function apiGetById(id: string): Promise<PurchaseRequisition> {
@@ -217,6 +264,9 @@ async function apiDelete(id: string): Promise<{ success: boolean }> {
 export const purchaseRequisitionService = {
   getByRfqId: USE_MOCK ? mockGetByRfqId : apiGetByRfqId,
   save: USE_MOCK ? mockSave : apiSave,
+  createRequisition: apiCreateRequisition,
+  convertToDirectPO: apiConvertToDirectPO,
+  convertToRFQ: apiConvertToRFQ,
   list: USE_MOCK ? mockList : apiList,
   getById: USE_MOCK ? mockGetById : apiGetById,
   sendToVendor: USE_MOCK ? mockSendToVendor : apiSendToVendor,

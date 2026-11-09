@@ -44,6 +44,8 @@ export function hasModulePermission(
 
   const aliases: Record<string, string[]> = {
     'Dashboard': ['Dashboard'],
+    'Purchase Requisitions': ['Purchase Requisitions', 'PurchaseRequisition', 'Purchase Requisition', 'PurchaseRequisitions', 'PR', 'PRs'],
+    PurchaseRequisition: ['Purchase Requisitions', 'PurchaseRequisition', 'Purchase Requisition', 'PurchaseRequisitions', 'PR', 'PRs'],
     'RFQ Management': ['RFQ Management', 'RFQ', 'RFQs', 'rfq'],
     RFQ: ['RFQ Management', 'RFQ', 'RFQs', 'rfq'],
     'PO Creation': ['PO Creation', 'Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO', 'GRN', 'Goods Received Note'],

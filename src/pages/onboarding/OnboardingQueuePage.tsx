@@ -1,5 +1,6 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import DOMPurify from 'dompurify';
 import { createPortal } from 'react-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -142,7 +143,91 @@ function documentUrl(url: string): string {
   return `${API_BASE.replace(/\/api$/, '')}${url}`;
 }
 
-const SIGNED_DOC_CSS = `body{font-family:Inter,'Segoe UI',Arial,sans-serif;padding:40px;line-height:1.7;color:#1a2332;max-width:800px;margin:0 auto}img{max-width:100%}h1,h2,h3{color:#0a1e3a}.signature-block{margin-top:32px;padding-top:20px;border-top:2px solid #e1e5eb}.parties{background:#f8fafc;padding:16px 20px;border-radius:8px;border:1px solid #e1e5eb;margin:16px 0}`;
+const SIGNED_DOC_CSS = `
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    padding: 48px 40px;
+    line-height: 1.75;
+    color: #334155;
+    max-width: 820px;
+    margin: 0 auto;
+    background: #ffffff;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #0f172a;
+    margin: 0 0 8px 0;
+  }
+  h2 {
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #0f172a;
+    border-bottom: 1.5px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 26px;
+    margin-bottom: 10px;
+  }
+  p {
+    margin: 0 0 10px;
+    font-size: 14.5px;
+  }
+  strong {
+    color: #0f172a;
+    font-weight: 600;
+  }
+  .parties {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 18px 0;
+  }
+  .parties p {
+    margin: 6px 0;
+  }
+  .signature-block {
+    display: flex;
+    justify-content: space-between;
+    gap: 32px;
+    margin-top: 36px;
+    padding-top: 24px;
+    border-top: 1.5px solid #e2e8f0;
+    clear: both;
+  }
+  .signature-side {
+    width: 45%;
+    float: left;
+  }
+  .signature-side:last-child {
+    float: right;
+  }
+  .signature-line {
+    border-top: 1px solid #cbd5e1;
+    margin-top: 14px;
+    padding-top: 6px;
+    font-size: 12.5px;
+    color: #475569;
+  }
+  .footer {
+    margin-top: 36px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 14px;
+    font-size: 12px;
+    color: #94a3b8;
+    text-align: center;
+    font-style: italic;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+`;
 
 function buildSignedDocHtml(docType: string, content: string): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${docType} — Signed Agreement</title><style>${SIGNED_DOC_CSS}</style></head><body>${content}</body></html>`;
@@ -189,8 +274,55 @@ export default function OnboardingQueuePage() {
   const [snapshotTarget, setSnapshotTarget] = useState<QueueRow | null>(null);
   const [snapshotData, setSnapshotData] = useState<Record<string, unknown> | null>(null);
   const [signedPreviewDoc, setSignedPreviewDoc] = useState<VendorDocument | null>(null);
+  const signedModalBodyRef = useRef<HTMLDivElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
   useBodyScrollLock(!!(approveTarget || rejectTarget || documentTarget || snapshotTarget || signedPreviewDoc));
   const [snapshotLoading, setSnapshotLoading] = useState(false);
+
+  // Immediately focus the preview modal body and handle immediate capture-phase wheel scrolling
+  useEffect(() => {
+    if (!signedPreviewDoc) return;
+
+    const raf = requestAnimationFrame(() => {
+      signedModalBodyRef.current?.focus();
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSignedPreviewDoc(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Capture-phase wheel listener on window:
+    // When parent Radix Dialogs are open, react-remove-scroll intercepts wheel events on document
+    // and calls preventDefault(). Intercepting at window level (capture phase) allows us to scroll
+    // signedModalBodyRef with 0ms delay and prevent cancellation.
+    const handleWheelCapture = (e: WheelEvent) => {
+      const bodyEl = signedModalBodyRef.current;
+      const container = modalContainerRef.current;
+      if (!bodyEl) return;
+
+      const target = e.target as Node | null;
+      if (
+        (container && target && container.contains(target)) ||
+        (target && (target as Element).classList?.contains('oq-signed-modal-backdrop')) ||
+        (target && (target as Element).classList?.contains('oq-signed-modal-wrapper'))
+      ) {
+        bodyEl.scrollTop += e.deltaY;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    window.addEventListener('wheel', handleWheelCapture, { capture: true, passive: false });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('wheel', handleWheelCapture, { capture: true });
+    };
+  }, [signedPreviewDoc]);
 
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
@@ -1020,61 +1152,110 @@ export default function OnboardingQueuePage() {
                     </div>
                   )}
 
-                  {/* NDA/MNDA Agreement */}
-                  {snapshotData.ndaMndaDocument ? (() => {
-                    const nda = snapshotData.ndaMndaDocument as Record<string, unknown>;
-                    const docType = String(nda.documentType || '');
-                    const signedBy = nda.signedBy ? String(nda.signedBy) : null;
-                    const signedAt = nda.signedAt ? new Date(String(nda.signedAt)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
-                    const viewUrl = nda.viewUrl ? String(nda.viewUrl) : null;
-                    return (
-                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
-                        <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-emerald-500/20 pb-2">
-                          <ShieldCheck className="size-4" /> NDA/MNDA Agreement
+                  {/* NDA/MNDA Agreement(s) */}
+                  {(() => {
+                    const signedDocsList: Array<Record<string, unknown>> =
+                      Array.isArray(snapshotData.ndaMndaDocuments) && snapshotData.ndaMndaDocuments.length > 0
+                        ? (snapshotData.ndaMndaDocuments as Array<Record<string, unknown>>)
+                        : snapshotData.ndaMndaDocument
+                        ? [snapshotData.ndaMndaDocument as Record<string, unknown>]
+                        : [];
+
+                    if (signedDocsList.length === 0) return null;
+
+                    return signedDocsList.map((nda, index) => {
+                      const rawDocType = String(nda.documentType || nda.selectedDocType || '');
+                      const isMnda = rawDocType === 'MNDA' || rawDocType.toUpperCase().includes('MUTUAL');
+                      const isNda = rawDocType === 'NDA' || rawDocType.toUpperCase().includes('NON-DISCLOSURE');
+                      const docTitle = isMnda ? 'MNDA Agreement' : isNda ? 'NDA Agreement' : `${rawDocType} Agreement`;
+                      const cardHeader = signedDocsList.length > 1 ? docTitle.toUpperCase() : 'NDA/MNDA AGREEMENT';
+                      const signedBy = nda.signedBy ? String(nda.signedBy) : null;
+                      const signedAt = nda.signedAt
+                        ? new Date(String(nda.signedAt)).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : null;
+                      const viewUrl = nda.viewUrl ? String(nda.viewUrl) : null;
+                      const contentSnap = String(nda.contentSnapshot || '');
+
+                      return (
+                        <div
+                          key={String(nda.id || index)}
+                          className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                            <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                              <ShieldCheck className="size-4" /> {cardHeader}
+                            </div>
+                            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                              ✓ Signed
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <div className="text-muted-foreground font-medium">Document Type</div>
+                              <div className="font-semibold text-foreground mt-0.5">{docTitle}</div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground font-medium">Status</div>
+                              <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">✓ Signed</div>
+                            </div>
+                            {signedBy && (
+                              <div>
+                                <div className="text-muted-foreground font-medium">Signed By</div>
+                                <div className="font-semibold text-foreground mt-0.5">{signedBy}</div>
+                              </div>
+                            )}
+                            {signedAt && (
+                              <div>
+                                <div className="text-muted-foreground font-medium">Signed On</div>
+                                <div className="font-semibold text-foreground mt-0.5">{signedAt}</div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="pt-2">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                              onClick={() => {
+                                if (contentSnap) {
+                                  setSignedPreviewDoc({
+                                    id: String(nda.id || ''),
+                                    vendorId: snapshotTarget?.id || '',
+                                    documentType: (isMnda ? 'MNDA' : isNda ? 'NDA' : rawDocType) as any,
+                                    originalName: `${docTitle} (Signed)`,
+                                    fileName: '',
+                                    publicUrl: viewUrl || '',
+                                    mimeType: 'text/html',
+                                    fileSize: 0,
+                                    status: 'VERIFIED',
+                                    uploadedAt: String(nda.signedAt || ''),
+                                    verifiedById: null,
+                                    verifiedAt: null,
+                                    rejectionReason: null,
+                                    contentSnapshot: contentSnap,
+                                    signedBy: signedBy || 'Vendor Representative',
+                                    signedAt: String(nda.signedAt || ''),
+                                    companySignatoryName: (nda.companySignatoryName as string) || null,
+                                    companySignedAt: (nda.companySignedAt as string) || null,
+                                    vendorSignatoryName: (nda.vendorSignatoryName as string) || signedBy || null,
+                                    vendorSignedAt: (nda.vendorSignedAt as string) || (nda.signedAt as string) || null,
+                                  });
+                                } else if (viewUrl) {
+                                  window.open(documentUrl(viewUrl), '_blank', 'noopener,noreferrer');
+                                }
+                              }}
+                            >
+                              <Eye className="size-4" /> View Signed Agreement
+                            </Button>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                          <div><div className="text-muted-foreground font-medium">Document Type</div><div className="font-semibold text-foreground mt-0.5">{docType === 'MNDA' ? 'MNDA Agreement' : 'NDA Agreement'}</div></div>
-                          <div><div className="text-muted-foreground font-medium">Status</div><div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">✓ Signed</div></div>
-                          {signedBy && <div><div className="text-muted-foreground font-medium">Signed By</div><div className="font-semibold text-foreground mt-0.5">{signedBy}</div></div>}
-                          {signedAt && <div><div className="text-muted-foreground font-medium">Signed On</div><div className="font-semibold text-foreground mt-0.5">{signedAt}</div></div>}
-                        </div>
-                        <div className="pt-2">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                            onClick={() => {
-                              const contentSnap = String(nda.contentSnapshot || '');
-                              if (contentSnap) {
-                                setSignedPreviewDoc({
-                                  id: String(nda.id || ''),
-                                  vendorId: snapshotTarget?.id || '',
-                                  documentType: docType === 'MNDA' ? 'MNDA' : 'NDA',
-                                  originalName: `${docType === 'MNDA' ? 'MNDA' : 'NDA'} Signed Agreement`,
-                                  fileName: '',
-                                  publicUrl: viewUrl || '',
-                                  mimeType: 'text/html',
-                                  fileSize: 0,
-                                  status: 'VERIFIED',
-                                  uploadedAt: String(nda.signedAt || ''),
-                                  verifiedById: null,
-                                  verifiedAt: null,
-                                  rejectionReason: null,
-                                  contentSnapshot: contentSnap,
-                                  signedBy: signedBy || 'Vendor Representative',
-                                  signedAt: String(nda.signedAt || ''),
-                                });
-                              } else if (viewUrl) {
-                                window.open(documentUrl(viewUrl), '_blank', 'noopener,noreferrer');
-                              }
-                            }}
-                          >
-                            <Eye className="size-4" /> View Signed Agreement
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })() : null}
+                      );
+                    });
+                  })()}
 
                   {/* Notes */}
                   {snapshotData.onboardingNotes && String(snapshotData.onboardingNotes).trim() ? (
@@ -1100,98 +1281,126 @@ export default function OnboardingQueuePage() {
       </Dialog>
 
       {/* Signed Agreement Preview Modal */}
-      {signedPreviewDoc && createPortal(
-        <div className="oq-signed-modal-backdrop" onClick={() => setSignedPreviewDoc(null)}>
-          <div className="oq-signed-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="oq-signed-modal__header">
-              <div className="oq-signed-modal__header-left">
-                <div className="oq-signed-modal__header-icon">
-                  <ShieldCheck size={22} />
-                </div>
-                <div className="oq-signed-modal__header-info">
-                  <div className="oq-signed-modal__header-top">
-                    <h3 className="oq-signed-modal__title">
-                      {signedPreviewDoc.documentType === 'MNDA' ? 'Mutual Non-Disclosure Agreement' : 'Non-Disclosure Agreement'}
-                    </h3>
-                    <span className="oq-signed-modal__status-badge">
-                      <Check size={12} />
-                      Signed
-                    </span>
-                  </div>
-                  <div className="oq-signed-modal__meta">
-                    <Calendar size={12} />
-                    <div className="oq-signed-modal__meta-signers">
-                      <span className="oq-signed-modal__meta-signer">
-                        <span className="oq-signed-modal__meta-signer-party">Company</span>
-                        <span>{signedPreviewDoc.companySignatoryName || 'Company Representative'}</span>
-                        {signedPreviewDoc.companySignedAt && (
-                          <span className="oq-signed-modal__meta-signer-date">
-                            {new Date(signedPreviewDoc.companySignedAt).toLocaleDateString('en-IN', {
-                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
+      {signedPreviewDoc && (
+        <DialogPrimitive.Root open={Boolean(signedPreviewDoc)} onOpenChange={(open) => !open && setSignedPreviewDoc(null)}>
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="oq-signed-modal-backdrop" />
+            <div className="oq-signed-modal-wrapper">
+              <DialogPrimitive.Content
+                ref={modalContainerRef}
+                className="oq-signed-modal"
+                aria-describedby={undefined}
+                onOpenAutoFocus={(e) => {
+                  e.preventDefault();
+                  signedModalBodyRef.current?.focus();
+                }}
+              >
+                <DialogPrimitive.Title className="sr-only">
+                  {signedPreviewDoc.documentType} Signed Agreement
+                </DialogPrimitive.Title>
+
+                <div className="oq-signed-modal__header">
+                  <div className="oq-signed-modal__header-left">
+                    <div className="oq-signed-modal__header-icon">
+                      <ShieldCheck size={22} />
+                    </div>
+                    <div className="oq-signed-modal__header-info">
+                      <div className="oq-signed-modal__header-top">
+                        <h3 className="oq-signed-modal__title">
+                          {signedPreviewDoc.documentType === 'MNDA' || signedPreviewDoc.documentType?.toUpperCase().includes('MUTUAL')
+                            ? 'Mutual Non-Disclosure Agreement'
+                            : signedPreviewDoc.documentType === 'NDA' || signedPreviewDoc.documentType?.toUpperCase().includes('NON-DISCLOSURE')
+                            ? 'Non-Disclosure Agreement'
+                            : `${signedPreviewDoc.documentType} Agreement`}
+                        </h3>
+                        <span className="oq-signed-modal__status-badge">
+                          <Check size={12} />
+                          Signed
+                        </span>
+                      </div>
+                      <div className="oq-signed-modal__meta">
+                        <Calendar size={12} />
+                        <div className="oq-signed-modal__meta-signers">
+                          <span className="oq-signed-modal__meta-signer">
+                            <span className="oq-signed-modal__meta-signer-party">Company</span>
+                            <span>{signedPreviewDoc.companySignatoryName || 'Company Representative'}</span>
+                            {signedPreviewDoc.companySignedAt && (
+                              <span className="oq-signed-modal__meta-signer-date">
+                                {new Date(signedPreviewDoc.companySignedAt).toLocaleDateString('en-IN', {
+                                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
-                      <span className="oq-signed-modal__meta-sep">|</span>
-                      <span className="oq-signed-modal__meta-signer">
-                        <span className="oq-signed-modal__meta-signer-party">Vendor</span>
-                        <span>{signedPreviewDoc.vendorSignatoryName || signedPreviewDoc.signedBy || 'Vendor Representative'}</span>
-                        {(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt) && (
-                          <span className="oq-signed-modal__meta-signer-date">
-                            {new Date(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt!).toLocaleDateString('en-IN', {
-                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
+                          <span className="oq-signed-modal__meta-sep">|</span>
+                          <span className="oq-signed-modal__meta-signer">
+                            <span className="oq-signed-modal__meta-signer-party">Vendor</span>
+                            <span>{signedPreviewDoc.vendorSignatoryName || signedPreviewDoc.signedBy || 'Vendor Representative'}</span>
+                            {(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt) && (
+                              <span className="oq-signed-modal__meta-signer-date">
+                                {new Date(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt!).toLocaleDateString('en-IN', {
+                                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                  <div className="oq-signed-modal__header-actions">
+                    <button
+                      type="button"
+                      className="oq-signed-modal__btn-download"
+                      onClick={() => {
+                        if (signedPreviewDoc.contentSnapshot) {
+                          const fullHtml = buildSignedDocHtml(signedPreviewDoc.documentType, signedPreviewDoc.contentSnapshot);
+                          const blob = new Blob([fullHtml], { type: 'text/html' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${signedPreviewDoc.documentType.replace(/\s+/g, '_')}_Signed_Agreement.html`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }
+                      }}
+                    >
+                      <Download size={14} />
+                      Download
+                    </button>
+                    <button
+                      type="button"
+                      className="oq-signed-modal__btn-close"
+                      onClick={() => setSignedPreviewDoc(null)}
+                      aria-label="Close"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="oq-signed-modal__header-actions">
-                <button
-                  type="button"
-                  className="oq-signed-modal__btn-download"
-                  onClick={() => {
-                    if (signedPreviewDoc.contentSnapshot) {
-                      const fullHtml = buildSignedDocHtml(signedPreviewDoc.documentType, signedPreviewDoc.contentSnapshot);
-                      const blob = new Blob([fullHtml], { type: 'text/html' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${signedPreviewDoc.documentType.replace(/\s+/g, '_')}_Signed_Agreement.html`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                    }
-                  }}
-                >
-                  <Download size={14} />
-                  Download
-                </button>
-                <button
-                  type="button"
-                  className="oq-signed-modal__btn-close"
-                  onClick={() => setSignedPreviewDoc(null)}
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
 
-            <div className="oq-signed-modal__body">
-              <div className="oq-signed-modal__canvas">
                 <div
-                  className="oq-signed-modal__content"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(signedPreviewDoc.contentSnapshot || '') }}
-                />
-              </div>
+                  ref={signedModalBodyRef}
+                  tabIndex={-1}
+                  className="oq-signed-modal__body"
+                >
+                  <div className="oq-signed-modal__canvas">
+                    <div
+                      className="oq-signed-modal__content"
+                      dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(signedPreviewDoc.contentSnapshot || '', {
+                          ADD_ATTR: ['style', 'target', 'data-sig-container'],
+                        }),
+                      }}
+                    />
+                  </div>
+                </div>
+              </DialogPrimitive.Content>
             </div>
-          </div>
-        </div>,
-        document.body
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
       )}
     </PageFrame>
   );

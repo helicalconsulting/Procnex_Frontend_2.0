@@ -11,8 +11,9 @@ export interface ModuleCapability {
 
 export const MODULE_CAPABILITIES: ModuleCapability[] = [
   { module: 'Dashboard', hint: 'Read-only dashboard overview', supports: ['canView'] },
+  { module: 'Purchase Requisitions', hint: 'Raise requisitions (Create) & convert/approve into PO or RFQ (Approve)', supports: ['canView', 'canCreate', 'canApprove'] },
   { module: 'RFQ Management', hint: 'Create & send RFQs', supports: ['canView', 'canCreate', 'canApprove'] },
-  { module: 'PO Creation', hint: 'Purchase Requisition & PO creation', supports: ['canView', 'canCreate'] },
+  { module: 'PO Creation', hint: 'Purchase Order creation', supports: ['canView', 'canCreate'] },
   { module: 'Budget Management', hint: 'Budget allocation & spend control', supports: ['canView', 'canCreate', 'canApprove'] },
   { module: 'Contracts', hint: 'Contract lifecycle management', supports: ['canView', 'canCreate', 'canApprove'] },
   { module: 'Create Purchase Invoice', hint: 'Create purchase invoices', supports: ['canView', 'canCreate'] },

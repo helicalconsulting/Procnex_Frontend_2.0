@@ -57,6 +57,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'RFQ Management': <FileText size={19} />,
   Quotations: <ClipboardList size={19} />,
   'Quotation Approval': <ClipboardList size={19} />,
+  'Purchase Requisitions': <FileText size={19} />,
   'PO Creation': <ShoppingCart size={19} />,
   'GRN Entry & Management': <PackageCheck size={19} />,
   'Goods Receipt Note (GRN)': <PackageCheck size={19} />,
@@ -288,7 +289,7 @@ export default function Sidebar({
       title: 'Procurement',
       items: [
         ...menuItems
-          .filter((item) => ['rfq', 'purchase-requisitions', 'budget-management', 'company-grn', 'contracts', 'create-purchase-invoice', 'create-payment-voucher', 'vendor-rfqs', 'vendor-quotations', 'forms'].includes(item.id))
+          .filter((item) => ['rfq', 'purchase-requisitions', 'po-creation', 'budget-management', 'company-grn', 'contracts', 'create-purchase-invoice', 'create-payment-voucher', 'vendor-rfqs', 'vendor-quotations', 'forms'].includes(item.id))
           .map((item) => ({
             label: item.label,
             icon: ICON_MAP[item.label] || <FileText size={19} />,

@@ -175,9 +175,15 @@ export const NAVIGATION_MENU: MenuItem[] = [
   },
   {
     id: 'purchase-requisitions',
-    label: 'PO Creation',
+    label: 'Purchase Requisitions',
     path: '/procurement/purchase-requisitions',
-    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager', 'Employee', 'Requester', 'Staff', 'Operations', 'Developer', 'Sales'],
+  },
+  {
+    id: 'po-creation',
+    label: 'PO Creation',
+    path: '/procurement/purchase-orders',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
   },
   {
     id: 'budget-management',

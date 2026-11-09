@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { rfqService, type CreateRfqPayload, type EvalCategoryDTO } from '../../services/rfqService';
 import { erpService, type ERPStockItem } from '../../services/erpService';
@@ -110,6 +110,8 @@ function toEvalCategoryDTO(cats: EvalCategory[]): EvalCategoryDTO[] {
 export default function CreateRFQPage() {
   const navigate = useNavigate();
   const { id: editId } = useParams<{ id: string }>();
+  const location = useLocation();
+  const [sourceRequisitionIds, setSourceRequisitionIds] = useState<string[]>([]);
   const isEditing = !!editId;
   const { user, roles = [], hasPermission } = useAuth();
   const isUserAdmin = Boolean(
@@ -592,6 +594,44 @@ export default function CreateRFQPage() {
   const [items, setItems] = useState<LineItem[]>([
     { id: 1, itemCode: '', itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
   ]);
+
+  // ── Prefill from Requisition Consolidation Workbench ──
+  useEffect(() => {
+    if (editId) return;
+
+    let prefill = (location.state as any) || null;
+    if (!prefill?.fromConsolidation) {
+      try {
+        const stored = sessionStorage.getItem('heliflow_consolidation_rfq');
+        if (stored) prefill = JSON.parse(stored);
+      } catch {}
+    }
+
+    if (prefill?.fromConsolidation) {
+      if (prefill.title) setTitle(prefill.title);
+      if (prefill.department) setDepartment(prefill.department);
+      if (prefill.description) setDescription(prefill.description);
+      if (Array.isArray(prefill.requisitionIds)) {
+        setSourceRequisitionIds(prefill.requisitionIds);
+      }
+      if (Array.isArray(prefill.items) && prefill.items.length > 0) {
+        setItems(
+          prefill.items.map((it: any, idx: number) => ({
+            id: `item-${Date.now()}-${idx + 1}`,
+            itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: it.itemName || '',
+            description: it.description || '',
+            quantity: String(it.quantity || 1),
+            unit: it.unit || 'pcs',
+            expectedDate: it.expectedDate || '',
+          }))
+        );
+      }
+      try {
+        sessionStorage.removeItem('heliflow_consolidation_rfq');
+      } catch {}
+    }
+  }, [editId, location.state]);
   const [erpStockItems, setErpStockItems] = useState<ERPStockItem[]>([]);
 
   useEffect(() => {
@@ -718,6 +758,7 @@ export default function CreateRFQPage() {
       title: title.trim(),
       description: description.trim() || undefined,
       priority,
+      requisitionIds: sourceRequisitionIds.length > 0 ? sourceRequisitionIds : undefined,
       department: department || undefined,
       departmentId: selectedDepartment?.id,
       closingDate: closingDate || undefined,

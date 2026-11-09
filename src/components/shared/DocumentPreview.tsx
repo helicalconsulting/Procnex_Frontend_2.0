@@ -8,7 +8,8 @@ export function DocumentPreview({ html, title, className }: { html: string; titl
     const sanitized = DOMPurify.sanitize(html, {
       WHOLE_DOCUMENT: true,
       ADD_TAGS: ['style'],
-      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'base', 'link', 'meta'],
+      ADD_ATTR: ['style', 'target', 'data-sig-container'],
+      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'base', 'link'],
     });
     const doc = new DOMParser().parseFromString(sanitized, 'text/html');
     // Retain the existing document cleaner's scoped body rules inside the frame.
@@ -18,29 +19,29 @@ export function DocumentPreview({ html, title, className }: { html: string; titl
       html { color-scheme: light; background: #ffffff; width: 100%; }
       body {
         margin: 0 !important;
-        padding: 36px 48px !important;
+        padding: 40px 52px !important;
         width: 100% !important;
         max-width: 100% !important;
         color: #111827;
-        font-family: "Times New Roman", Georgia, serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Times New Roman", Georgia, serif;
         font-size: 14.5px;
         line-height: 1.75;
         overflow-wrap: anywhere;
         box-sizing: border-box;
       }
-      h1 { text-align: center; font-size: 18pt; font-weight: 700; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1.5px; }
-      h2 { font-size: 14pt; font-weight: 700; margin-top: 24px; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 4px; width: 100%; }
-      p { margin-bottom: 10px; text-align: justify; }
-      .parties { margin: 20px 0; padding: 16px; border: 1px solid #ccc; background: #f9f9f9; border-radius: 4px; width: 100%; }
+      h1 { text-align: center; font-size: 18pt; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1.2px; color: #111827; }
+      h2 { font-size: 13.5pt; font-weight: 700; margin-top: 24px; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px; width: 100%; color: #111827; }
+      p { margin-bottom: 10px; text-align: justify; color: #1f2937; }
+      .parties { margin: 20px 0; padding: 18px 22px; border: 1.5px solid #e2e8f0; background: #f8fafc; border-radius: 8px; width: 100%; }
       .parties p { margin: 4px 0; }
-      .signature-block { margin-top: 40px; display: flex; justify-content: space-between; width: 100%; }
-      .signature-side { width: 45%; }
-      .signature-line { margin-top: 50px; border-top: 1px solid #333; padding-top: 6px; font-size: 11pt; }
+      .signature-block { margin-top: 40px; display: flex; justify-content: space-between; width: 100%; gap: 32px; }
+      .signature-side { width: 45%; flex: 1; }
+      .signature-line { margin-top: 50px; border-top: 1.5px solid #334155; padding-top: 6px; font-size: 11pt; }
       .signature-img { max-height: 60px; margin-top: 8px; }
-      .footer { margin-top: 40px; font-size: 10pt; color: #666; text-align: center; border-top: 1px solid #ccc; padding-top: 12px; width: 100%; }
-      table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-      table th, table td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; font-size: 11pt; }
-      table th { background: #f5f5f5; font-weight: 700; }
+      .footer { margin-top: 40px; font-size: 10pt; color: #64748b; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 12px; width: 100%; }
+      table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+      table th, table td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 11pt; }
+      table th { background: #f1f5f9; font-weight: 700; color: #0f172a; }
       img { max-width: 100%; height: auto; }
       * { box-sizing: border-box; }
     `;

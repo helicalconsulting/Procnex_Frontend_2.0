@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Trash2,
+  Calendar as CalendarIcon,
+  UserCheck,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { calendarService, type CalendarEventItem } from '../../services/calendarService';
+import AssignTaskModal from './AssignTaskModal';
 import './HeaderCalendarPopover.css';
 
 interface AgendaItem {
@@ -34,6 +42,7 @@ export default function HeaderCalendarPopover({ onClose, triggerRef }: HeaderCal
 
   const [newReminderTitle, setNewReminderTitle] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [isAssignTaskModalOpen, setIsAssignTaskModalOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Fetch calendar events for current user from database / service
@@ -62,18 +71,29 @@ export default function HeaderCalendarPopover({ onClose, triggerRef }: HeaderCal
   // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      if (isAssignTaskModalOpen) return;
+
       const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.closest('[role="dialog"]') ||
+          target.closest('[data-radix-portal]') ||
+          target.closest('.motion-dialog-content') ||
+          target.closest('.motion-dialog-overlay') ||
+          target.closest('[data-calendar-trigger="true"]'))
+      ) {
+        return;
+      }
+
       if (popoverRef.current && !popoverRef.current.contains(target)) {
         if (triggerRef?.current && triggerRef.current.contains(target)) {
-          return;
-        }
-        if (target && target.closest('[data-calendar-trigger="true"]')) {
           return;
         }
         onClose();
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isAssignTaskModalOpen) return;
       if (e.key === 'Escape') {
         onClose();
       }
@@ -84,7 +104,7 @@ export default function HeaderCalendarPopover({ onClose, triggerRef }: HeaderCal
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose, triggerRef]);
+  }, [onClose, triggerRef, isAssignTaskModalOpen]);
 
   // Save custom events to localStorage
   const saveCustomEvents = (updated: Record<string, AgendaItem[]>) => {
@@ -330,14 +350,26 @@ export default function HeaderCalendarPopover({ onClose, triggerRef }: HeaderCal
           <span className="calendar-agenda__title">
             Events · {selectedDateFormatted}
           </span>
-          <button
-            type="button"
-            className="calendar-agenda__add-btn"
-            onClick={() => setShowAddForm(!showAddForm)}
-          >
-            <Plus size={12} />
-            {showAddForm ? 'Cancel' : 'Add Note'}
-          </button>
+          <div className="calendar-agenda__actions">
+            <button
+              type="button"
+              className={`calendar-agenda__add-btn ${showAddForm ? 'calendar-agenda__add-btn--active' : ''}`}
+              onClick={() => setShowAddForm(!showAddForm)}
+              title="Add quick note"
+            >
+              <Plus size={12} />
+              {showAddForm ? 'Cancel' : 'Add Note'}
+            </button>
+            <button
+              type="button"
+              className="calendar-agenda__add-btn calendar-agenda__assign-btn"
+              onClick={() => setIsAssignTaskModalOpen(true)}
+              title="Assign task to company employee"
+            >
+              <UserCheck size={12} />
+              Assign Task
+            </button>
+          </div>
         </div>
 
         {showAddForm && (
@@ -380,6 +412,33 @@ export default function HeaderCalendarPopover({ onClose, triggerRef }: HeaderCal
           )}
         </div>
       </div>
+
+      <AssignTaskModal
+        isOpen={isAssignTaskModalOpen}
+        onClose={() => setIsAssignTaskModalOpen(false)}
+        defaultDeadline={selectedDateKey}
+        onTaskCreated={(task) => {
+          const assigneeLabel =
+            task.currentAssignee?.fullName || task.assignedTo?.fullName || 'Colleague';
+          const dateKey = task.deadline.slice(0, 10);
+          setCustomEvents((prev) => {
+            const existing = prev[dateKey] || [];
+            return {
+              ...prev,
+              [dateKey]: [
+                ...existing,
+                {
+                  id: `task-${task.id}`,
+                  dateKey,
+                  title: `Task: ${task.title} (Assigned to ${assigneeLabel})`,
+                  category: 'custom',
+                  subText: 'Assigned Task',
+                },
+              ],
+            };
+          });
+        }}
+      />
     </div>
   );
 }

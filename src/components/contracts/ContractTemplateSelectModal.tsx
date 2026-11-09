@@ -6,6 +6,7 @@ import { companySettingsService, type ContractTemplate } from '../../services/co
 import { contractService } from '../../services/contractService';
 import { MessageStrip } from '../shared/MessageStrip';
 import { CurrencySelector } from '../shared/CurrencyMaster';
+import { DocumentPreview } from '../shared/DocumentPreview';
 import { FileText, Clock, Check, AlertTriangle, Eye, Maximize2, Minimize2, X, FileCheck2, Sparkles } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import '../../pages/contracts/ContractDetailPage.css';
@@ -110,6 +111,20 @@ export default function ContractTemplateSelectModal({
 
   const formatType = (type: string) => CONTRACT_TYPE_LABELS[type] || type.replace(/_/g, ' ');
   const getTypeStyle = (type: string) => CONTRACT_TYPE_COLORS[type] || CONTRACT_TYPE_COLORS['CUSTOM'];
+
+  const getFormattedPreviewContent = (template: ContractTemplate) => {
+    if (!template.content) return '';
+    let content = template.content;
+    content = content.replace(/\{\{contractType\}\}/gi, template.name.toUpperCase());
+    if (vendorName) {
+      content = content.replace(/\{\{vendor_?name\}\}/gi, vendorName);
+    }
+    if (rfqNumber) {
+      content = content.replace(/\{\{rfq_?number\}\}/gi, rfqNumber);
+    }
+    content = content.replace(/\{\{currentDate\}\}/gi, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+    return content;
+  };
 
   return createPortal(
     <>
@@ -328,19 +343,22 @@ export default function ContractTemplateSelectModal({
               </div>
             </div>
             <div
-              className="ctsm-body"
+              className="ctsm-body ctsm-body--preview"
               style={{
-                maxHeight: previewFullscreen ? 'calc(95vh - 130px)' : '65vh',
-                height: previewFullscreen ? 'calc(95vh - 130px)' : undefined,
-                overflowY: 'auto',
-                flex: previewFullscreen ? 1 : undefined,
+                height: previewFullscreen ? 'calc(96vh - 130px)' : '72vh',
+                maxHeight: previewFullscreen ? 'calc(96vh - 130px)' : '72vh',
+                overflow: 'hidden',
+                flex: 1,
               }}
             >
               {previewTemplate.content ? (
-                <div
-                  className="ctr-template-preview-content"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewTemplate.content) }}
-                />
+                <div className="ctsm-preview-wrapper">
+                  <DocumentPreview
+                    html={getFormattedPreviewContent(previewTemplate)}
+                    title={`Template Preview — ${previewTemplate.name}`}
+                    className={`ctsm-preview-iframe${previewFullscreen ? ' ctsm-preview-iframe--fullscreen' : ''}`}
+                  />
+                </div>
               ) : (
                 <div className="ctsm-empty">
                   <FileText size={28} className="ctsm-empty__icon" />

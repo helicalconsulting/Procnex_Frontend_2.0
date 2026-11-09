@@ -16,11 +16,14 @@ import {
   ChevronRight,
   CalendarDays,
   Globe,
+  ListTodo,
 } from 'lucide-react';
 import { isVendor } from '../../utils/rbac';
 import VendorNotificationBell from './VendorNotificationBell';
 import AdminNotificationBell from './AdminNotificationBell';
 import HeaderCalendarPopover from './HeaderCalendarPopover';
+import TaskInboxPopover from './TaskInboxPopover';
+import { taskService } from '../../services/taskService';
 import { cn } from '../../lib/utils';
 import { motionTransition } from '../../lib/motion';
 
@@ -30,8 +33,10 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/rfq': 'Request for Quotations',
   '/quotations': 'Quotation Approval',
-  '/procurement/purchase-requisitions': 'PO Creation & Orders',
-  '/procurement/purchase-requisition': 'PO Creation & Orders',
+  '/procurement/purchase-requisitions': 'Purchase Requisitions',
+  '/procurement/purchase-requisition': 'Purchase Requisition',
+  '/procurement/purchase-orders': 'PO Creation',
+  '/procurement/create-purchase-order': 'Create Purchase Order',
   '/procurement/grns': 'My Invoices & Dispatches',
   '/procurement/goods-receipt': 'Goods Receipt Note (GRN)',
   '/procurement/create-company-grn': 'Create Goods Receipt Note (GRN)',
@@ -166,10 +171,38 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isMailOpen, setIsMailOpen] = useState(false);
+  const [pendingTaskCount, setPendingTaskCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownPopupRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
+  const mailRef = useRef<HTMLDivElement>(null);
+
+  const fetchPendingTaskCount = () => {
+    if (user?.id) {
+      taskService
+        .getTasks({ type: 'assigned_to_me' })
+        .then((res) => {
+          const uncompleted = (res.tasks || []).filter((t) => t.status !== 'completed').length;
+          setPendingTaskCount(res.pendingCount ?? uncompleted);
+        })
+        .catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingTaskCount();
+    const handleUpdate = () => fetchPendingTaskCount();
+    window.addEventListener('heliflow_tasks_updated', handleUpdate);
+    window.addEventListener('focus', handleUpdate);
+    const interval = setInterval(fetchPendingTaskCount, 10000);
+    return () => {
+      window.removeEventListener('heliflow_tasks_updated', handleUpdate);
+      window.removeEventListener('focus', handleUpdate);
+      clearInterval(interval);
+    };
+  }, [user?.id]);
 
   const handleMyProfile = () => {
     setDropdownOpen(false);
@@ -198,6 +231,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
       if (event.key === 'Escape') {
         setDropdownOpen(false);
         setIsCalendarOpen(false);
+        setIsMailOpen(false);
         if (dropdownOpen) requestAnimationFrame(() => accountButtonRef.current?.focus());
       }
     };
@@ -245,7 +279,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
     <header
       className={cn(
         'fixed inset-x-0 top-0 flex h-16 items-center justify-between border-b border-border/80 bg-card/95 px-2 transition-[left] duration-200 ease-out supports-[backdrop-filter:blur(1px)]:bg-card/85 supports-[backdrop-filter:blur(1px)]:backdrop-blur-xl sm:px-4 lg:right-0 lg:px-5',
-        mobileOpen ? 'z-30' : (dropdownOpen || isCalendarOpen ? 'z-[60]' : 'z-30 lg:z-40'),
+        mobileOpen ? 'z-30' : (dropdownOpen || isCalendarOpen || isMailOpen ? 'z-[60]' : 'z-30 lg:z-40'),
         isSidebarExpanded ? 'lg:left-[280px]' : 'lg:left-20'
       )}
     >
@@ -284,6 +318,34 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        {/* Task List / To-Do Inbox */}
+        <div className="relative" ref={mailRef}>
+          <button
+            type="button"
+            data-mail-trigger="true"
+            className={iconButtonClass}
+            onClick={() => setIsMailOpen(!isMailOpen)}
+            title="Assigned Tasks"
+            aria-label="Assigned Tasks"
+            aria-expanded={isMailOpen}
+          >
+            <ListTodo size={19} />
+            {pendingTaskCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex min-w-4 h-4 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-card">
+                {pendingTaskCount > 99 ? '99+' : pendingTaskCount}
+              </span>
+            )}
+          </button>
+          {isMailOpen && (
+            <TaskInboxPopover
+              isOpen={isMailOpen}
+              onClose={() => setIsMailOpen(false)}
+              triggerRef={mailRef}
+              onTasksUpdated={fetchPendingTaskCount}
+            />
+          )}
+        </div>
+
         <div className="relative" ref={calendarRef}>
           <button
             type="button"

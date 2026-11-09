@@ -158,6 +158,7 @@ export interface StandalonePOPayload {
     totalPrice: number;
   }>;
   sourceReferences?: Record<string, string>;
+  requisitionIds?: string[];
 }
 
 async function createStandalonePO(payload: StandalonePOPayload): Promise<{ poNumber: string; id: string }> {

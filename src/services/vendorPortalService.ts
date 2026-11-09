@@ -36,6 +36,10 @@ export interface SubmitQuotationPayload {
   bidSecurityCurrency?: string;
   bidSecurityValidityValue?: number;
   bidSecurityValidityUnit?: string;
+  bidSecurityIssueDate?: string;
+  bidSecurityExpiryDate?: string;
+  bidSecurityBondNumber?: string;
+  bidSecurityIssuer?: string;
   // Bid Bond fields (vendor fills)
   bidBondNumber?: string;
   bidBondIssuer?: string;
@@ -43,6 +47,8 @@ export interface SubmitQuotationPayload {
   bidBondCurrency?: string;
   bidBondIssueDate?: string;
   bidBondExpiryDate?: string;
+  bidBondValidityValue?: number;
+  bidBondValidityUnit?: string;
 }
 
 export interface PaymentPlanMilestone {
@@ -228,12 +234,17 @@ async function apiDeleteAllNotifications(): Promise<void> {
     if (payload.customFieldValues) {
       formData.append('customFieldValues', JSON.stringify(payload.customFieldValues));
     }
+    if (payload.vendorQuotationNumber) formData.append('vendorQuotationNumber', payload.vendorQuotationNumber);
     // Bid Security fields
     if (payload.bidSecurityValueType) formData.append('bidSecurityValueType', payload.bidSecurityValueType);
     if (payload.bidSecurityValue) formData.append('bidSecurityValue', String(payload.bidSecurityValue));
     if (payload.bidSecurityCurrency) formData.append('bidSecurityCurrency', payload.bidSecurityCurrency);
     if (payload.bidSecurityValidityValue) formData.append('bidSecurityValidityValue', String(payload.bidSecurityValidityValue));
     if (payload.bidSecurityValidityUnit) formData.append('bidSecurityValidityUnit', payload.bidSecurityValidityUnit);
+    if (payload.bidSecurityIssueDate) formData.append('bidSecurityIssueDate', payload.bidSecurityIssueDate);
+    if (payload.bidSecurityExpiryDate) formData.append('bidSecurityExpiryDate', payload.bidSecurityExpiryDate);
+    if (payload.bidSecurityBondNumber) formData.append('bidSecurityBondNumber', payload.bidSecurityBondNumber);
+    if (payload.bidSecurityIssuer) formData.append('bidSecurityIssuer', payload.bidSecurityIssuer);
     // Bid Bond fields
     if (payload.bidBondNumber) formData.append('bidBondNumber', payload.bidBondNumber);
     if (payload.bidBondIssuer) formData.append('bidBondIssuer', payload.bidBondIssuer);
@@ -241,6 +252,8 @@ async function apiDeleteAllNotifications(): Promise<void> {
     if (payload.bidBondCurrency) formData.append('bidBondCurrency', payload.bidBondCurrency);
     if (payload.bidBondIssueDate) formData.append('bidBondIssueDate', payload.bidBondIssueDate);
     if (payload.bidBondExpiryDate) formData.append('bidBondExpiryDate', payload.bidBondExpiryDate);
+    if (payload.bidBondValidityValue) formData.append('bidBondValidityValue', String(payload.bidBondValidityValue));
+    if (payload.bidBondValidityUnit) formData.append('bidBondValidityUnit', payload.bidBondValidityUnit);
     if (attachments) {
       attachments.forEach(file => formData.append('attachments', file));
     }
@@ -405,12 +418,17 @@ async function apiResubmitQuotation(rfqId: string, payload: SubmitQuotationPaylo
     if (payload.customFieldValues) {
       formData.append('customFieldValues', JSON.stringify(payload.customFieldValues));
     }
+    if (payload.vendorQuotationNumber) formData.append('vendorQuotationNumber', payload.vendorQuotationNumber);
     // Bid Security fields
     if (payload.bidSecurityValueType) formData.append('bidSecurityValueType', payload.bidSecurityValueType);
     if (payload.bidSecurityValue) formData.append('bidSecurityValue', String(payload.bidSecurityValue));
     if (payload.bidSecurityCurrency) formData.append('bidSecurityCurrency', payload.bidSecurityCurrency);
     if (payload.bidSecurityValidityValue) formData.append('bidSecurityValidityValue', String(payload.bidSecurityValidityValue));
     if (payload.bidSecurityValidityUnit) formData.append('bidSecurityValidityUnit', payload.bidSecurityValidityUnit);
+    if (payload.bidSecurityIssueDate) formData.append('bidSecurityIssueDate', payload.bidSecurityIssueDate);
+    if (payload.bidSecurityExpiryDate) formData.append('bidSecurityExpiryDate', payload.bidSecurityExpiryDate);
+    if (payload.bidSecurityBondNumber) formData.append('bidSecurityBondNumber', payload.bidSecurityBondNumber);
+    if (payload.bidSecurityIssuer) formData.append('bidSecurityIssuer', payload.bidSecurityIssuer);
     // Bid Bond fields
     if (payload.bidBondNumber) formData.append('bidBondNumber', payload.bidBondNumber);
     if (payload.bidBondIssuer) formData.append('bidBondIssuer', payload.bidBondIssuer);
@@ -418,6 +436,8 @@ async function apiResubmitQuotation(rfqId: string, payload: SubmitQuotationPaylo
     if (payload.bidBondCurrency) formData.append('bidBondCurrency', payload.bidBondCurrency);
     if (payload.bidBondIssueDate) formData.append('bidBondIssueDate', payload.bidBondIssueDate);
     if (payload.bidBondExpiryDate) formData.append('bidBondExpiryDate', payload.bidBondExpiryDate);
+    if (payload.bidBondValidityValue) formData.append('bidBondValidityValue', String(payload.bidBondValidityValue));
+    if (payload.bidBondValidityUnit) formData.append('bidBondValidityUnit', payload.bidBondValidityUnit);
     formData.append('bidBondDocument', bidBondDocument);
 
     const controller = new AbortController();
