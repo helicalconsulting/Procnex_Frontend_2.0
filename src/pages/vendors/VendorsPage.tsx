@@ -292,6 +292,14 @@ export default function VendorsPage() {
       setFilterMode(s === 'pending' ? 'inactive' : (s as any));
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const onVendorsUpdated = () => {
+      reload();
+    };
+    window.addEventListener('vendors_updated', onVendorsUpdated);
+    return () => window.removeEventListener('vendors_updated', onVendorsUpdated);
+  }, [reload]);
   const { data: categories } = useServiceData(
     () => companySettingsService.listCategories(),
     [] as Category[],

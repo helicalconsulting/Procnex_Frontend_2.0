@@ -142,6 +142,11 @@ function bustRelatedCache(mutatedPath: string): void {
     ancestors.push('/admin/users', '/admin/roles');
   }
 
+  // Cross-invalidation for vendor approvals/rejections so Vendors list updates instantly
+  if (basePath.startsWith('/procurement/approve-vendor') || basePath.startsWith('/procurement/reject-vendor')) {
+    ancestors.push('/vendors', '/procurement/vendor-approval-queue');
+  }
+
   for (const key of apiCache.keys()) {
     const parts = key.split('|');
     if (parts[0] !== 'GET') continue;

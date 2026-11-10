@@ -8,8 +8,9 @@ import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, Search,
   Save, Settings, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, ArrowLeft, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
-  Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw,
+  Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw, Wallet,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -27,6 +28,7 @@ import { SettingsField } from '../../components/admin/company-settings/SettingsF
 import { SettingsModal } from '../../components/admin/company-settings/SettingsModal';
 import { sequenceErrors, sequencePreview, SEQUENCE_TYPES } from '../../components/admin/company-settings/serializationModel';
 import { SerializationWorkspace } from '../../components/admin/company-settings/SerializationWorkspace';
+import { BudgetLogicWorkspace } from '../../components/admin/company-settings/BudgetLogicWorkspace';
 import './company-settings-workspace.css';
 import { DocumentPreview } from '../../components/shared/DocumentPreview';
 import SignatureSection from '../../components/shared/SignatureSection';
@@ -572,7 +574,7 @@ function textToHtml(text: string): string {
 // ─── Resolve dynamic placeholders ({YYYY} {YY} {MM} {DD}) ──────────────
 // ─── Tab Definitions ────────────────────────────────────────
 
-type TabKey = 'general' | 'branding' | 'departments' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
+type TabKey = 'general' | 'branding' | 'departments' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization' | 'budget-logic';
 
 interface TabDef {
   key: TabKey;
@@ -590,6 +592,7 @@ const TABS: TabDef[] = [
   { key: 'email-templates',     label: 'Email Templates',        icon: Mail },
   { key: 'documents-contracts', label: 'Documents & Contracts',  icon: FileSignature },
   { key: 'doc-serialization',   label: 'Document Serialization', icon: Hash },
+  { key: 'budget-logic',        label: 'Budget Settings',        icon: Wallet },
 ];
 
 // ─── Email Template Labels & Placeholders ───────────────────
@@ -888,7 +891,30 @@ export default function CompanySettingsPage() {
   }, [canCreateSettings, reloadWarehouses]);
 
   // UI state
-  const [activeTab, setActiveTab] = useState<TabKey>('general');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab') as TabKey | null;
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (urlTab && (['general', 'branding', 'departments', 'warehouses', 'forms', 'form-documents', 'email-templates', 'documents-contracts', 'doc-serialization', 'budget-logic'] as string[]).includes(urlTab)) {
+      return urlTab;
+    }
+    return 'general';
+  });
+
+  useEffect(() => {
+    if (urlTab && urlTab !== activeTab && (['general', 'branding', 'departments', 'warehouses', 'forms', 'form-documents', 'email-templates', 'documents-contracts', 'doc-serialization', 'budget-logic'] as string[]).includes(urlTab)) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab, activeTab]);
+
+  const handleTabChange = useCallback((key: string) => {
+    const nextTab = key as TabKey;
+    setActiveTab(nextTab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', nextTab);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
   const [docContractSubTab, setDocContractSubTab] = useState<'contracts' | 'doc-templates'>('contracts');
 
   // ── Document Serialization Sequences ──
@@ -3354,7 +3380,7 @@ export default function CompanySettingsPage() {
           label="Company Settings categories"
           tabs={TABS.map(({ key, label, icon }) => ({ id: key, label, icon }))}
           activeTab={activeTab}
-          onChange={key => setActiveTab(key as TabKey)}
+          onChange={handleTabChange}
         />
       </div>
       <DetailTabPanel id="settings" tabId={activeTab} className="settings-category-content">    {/* -------------------------------------------------------
@@ -6417,6 +6443,12 @@ export default function CompanySettingsPage() {
         onSave={handleSeqSave} onAssignSuppliers={handleBackfillSuppliers} onRetry={fetchSequences}
         onDiscard={entityType=>setSeqEdits(previous=>({...previous,[entityType]:{...sequences.find(row=>row.entityType===entityType)}}))}
       />}
+      {activeTab === 'budget-logic' && (
+        <BudgetLogicWorkspace
+          canManage={canCreateSettings}
+          defaultCurrency={profile?.defaultCurrency || 'KES'}
+        />
+      )}
       </DetailTabPanel>
       {/* ---- MODALS ------ */}
 

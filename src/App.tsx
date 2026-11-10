@@ -68,6 +68,7 @@ const VendorSignaturePage = lazy(
 const VendorContractsPage = lazy(() => import("./pages/vendor/VendorContractsPage"));
 const VendorContractDetailPage = lazy(() => import("./pages/vendor/VendorContractDetailPage"));
 const VendorAgreementsPage = lazy(() => import("./pages/vendor/VendorAgreementsPage"));
+const VendorSelfRegistrationPage = lazy(() => import("./pages/vendor/VendorSelfRegistrationPage"));
 const AccountsPayablePage = lazy(
   () => import("./pages/accounts-payable/AccountsPayablePage"),
 );
@@ -181,6 +182,8 @@ export default function App() {
                     <Route path="/e/:companyCode/login" element={page(BrandedEmployeeLoginPage)} />
                     <Route path="/vendor/login" element={<VendorLoginRedirect />} />
                     <Route path="/v/:companyCode/login" element={page(BrandedVendorLoginPage)} />
+                    <Route path="/vendor/register" element={page(VendorSelfRegistrationPage)} />
+                    <Route path="/v/:companyCode/register" element={page(VendorSelfRegistrationPage)} />
                     <Route path="/set-password" element={page(SetPasswordPage)} />
                     <Route path="/v/:companyCode/set-password" element={page(SetPasswordPage)} />
                     <Route path="/e/:companyCode/set-password" element={page(SetPasswordPage)} />

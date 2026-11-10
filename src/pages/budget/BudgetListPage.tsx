@@ -18,6 +18,7 @@ import {
   TrendingUp,
   ChevronRight,
   FileText,
+  Sliders,
 } from 'lucide-react';
 import { budgetApi, type BudgetListResponse } from '../../api/budgetApi';
 import { BudgetConsumptionBar } from '../../components/budget/BudgetConsumptionBar';
@@ -108,13 +109,25 @@ export default function BudgetListPage() {
         title="Budget Management"
         description="Encumbrance tracking, real-time control checkpoints & SRM spend governance"
         actions={
-          <Button
-            onClick={() => navigate('/budget/create')}
-            className="gap-2 shadow-sm font-semibold"
-          >
-            <Plus className="size-4" />
-            <span>New Budget</span>
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate('/admin/company-settings?tab=budget-logic')}
+              className="gap-2 shadow-xs text-xs font-semibold"
+            >
+              <Sliders className="size-4 text-primary" />
+              <span>Budget Settings</span>
+            </Button>
+            <Button
+              type="button"
+              onClick={() => navigate('/budget/create')}
+              className="gap-2 shadow-sm font-semibold text-xs"
+            >
+              <Plus className="size-4" />
+              <span>New Budget</span>
+            </Button>
+          </div>
         }
       />
 

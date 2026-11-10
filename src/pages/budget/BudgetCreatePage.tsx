@@ -1,8 +1,10 @@
 // ============================================================
 // pages/budget/BudgetCreatePage.tsx
-// Screen 1: Master Setup (A) | Screen 2: Rules & Approvals (D, E, H)
+// Screen 1: Master Setup (A) | Screen 2: Dynamic Lines & Dimensions (B, C) | Screen 3: Rules & Approvals (D, E, H)
+// Supports Item, Supplier, Department, and Mix Bag dimensions with 12-Month (Jan - Dec) phasing
+// and Original / Revision workflow protected with ADMIN password.
 // ============================================================
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Wallet,
@@ -15,25 +17,218 @@ import {
   Sliders,
   DollarSign,
   Layers,
+  Building2,
+  Package,
+  Users,
+  Shuffle,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  X,
+  Search,
+  Filter,
+  Check,
+  Calendar,
+  Sparkles,
 } from 'lucide-react';
-import { budgetApi, type CreateBudgetLineInput } from '../../api/budgetApi';
+import { budgetApi } from '../../api/budgetApi';
+import { loadBudgetLogicSettings } from '../../components/admin/company-settings/budgetLogicModel';
 import { PageFrame, PageLead } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input, Select } from '../../components/ui/input';
+
+export type BudgetLogicType = 'ITEM' | 'SUPPLIER' | 'DEPARTMENT' | 'MIX_BAG';
+export type BudgetMode = 'ORIGINAL' | 'REVISION';
+
+export interface DynamicBudgetLine {
+  lineCode: string;
+  lineName: string;
+  costCenterCode: string;
+  glAccountCode: string;
+  spendCategory: string;
+  dimensionType?: 'ITEM' | 'SUPPLIER' | 'DEPARTMENT';
+  monthlyPhasing: number[]; // 12 numbers representing Jan through Dec
+  annualAmount: number;
+  q1Amount: number;
+  q2Amount: number;
+  q3Amount: number;
+  q4Amount: number;
+  controlLevelOverride?: string;
+}
+
+const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+interface MockExistingBudget {
+  budgetCode: string;
+  budgetName: string;
+  budgetLogic: BudgetLogicType;
+  fiscalYear: string;
+  currency: string;
+  totalAllocated: number;
+  status: string;
+  lines: DynamicBudgetLine[];
+}
+
+const MOCK_EXISTING_BUDGETS: MockExistingBudget[] = [
+  {
+    budgetCode: 'BDG-2026-ITM-01',
+    budgetName: 'FY2026 IT Hardware & Systems Procurement',
+    budgetLogic: 'ITEM',
+    fiscalYear: '2026',
+    currency: 'KES',
+    totalAllocated: 4800000,
+    status: 'ACTIVE',
+    lines: [
+      {
+        lineCode: 'ITM-001',
+        lineName: 'High-Performance Developer Laptops',
+        costCenterCode: 'CC-IT-101',
+        glAccountCode: 'GL-52010',
+        spendCategory: 'Hardware & Devices',
+        monthlyPhasing: [200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000],
+        annualAmount: 2400000,
+        q1Amount: 600000, q2Amount: 600000, q3Amount: 600000, q4Amount: 600000,
+      },
+      {
+        lineCode: 'ITM-002',
+        lineName: 'Cloud Server Infrastructure & Workstations',
+        costCenterCode: 'CC-IT-102',
+        glAccountCode: 'GL-52020',
+        spendCategory: 'Server Infrastructure',
+        monthlyPhasing: [200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000],
+        annualAmount: 2400000,
+        q1Amount: 600000, q2Amount: 600000, q3Amount: 600000, q4Amount: 600000,
+      },
+    ],
+  },
+  {
+    budgetCode: 'BDG-2026-SUP-02',
+    budgetName: 'FY2026 Key Vendor Annual Allocation',
+    budgetLogic: 'SUPPLIER',
+    fiscalYear: '2026',
+    currency: 'KES',
+    totalAllocated: 7200000,
+    status: 'ACTIVE',
+    lines: [
+      {
+        lineCode: 'SUP-101',
+        lineName: 'Dell Global Commercial Partners',
+        costCenterCode: 'CC-PROC-01',
+        glAccountCode: 'GL-61010',
+        spendCategory: 'IT Systems Vendor',
+        monthlyPhasing: [350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000],
+        annualAmount: 4200000,
+        q1Amount: 1050000, q2Amount: 1050000, q3Amount: 1050000, q4Amount: 1050000,
+      },
+      {
+        lineCode: 'SUP-102',
+        lineName: 'Safari Office Stationers & Facilities',
+        costCenterCode: 'CC-ADMIN-02',
+        glAccountCode: 'GL-61020',
+        spendCategory: 'Office & Facilities',
+        monthlyPhasing: [250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000],
+        annualAmount: 3000000,
+        q1Amount: 750000, q2Amount: 750000, q3Amount: 750000, q4Amount: 750000,
+      },
+    ],
+  },
+  {
+    budgetCode: 'BDG-2026-DEP-03',
+    budgetName: 'FY2026 Central Operations & Tech Departments',
+    budgetLogic: 'DEPARTMENT',
+    fiscalYear: '2026',
+    currency: 'KES',
+    totalAllocated: 6000000,
+    status: 'ACTIVE',
+    lines: [
+      {
+        lineCode: 'DEP-01',
+        lineName: 'Information Technology & Engineering',
+        costCenterCode: 'CC-ENG-101',
+        glAccountCode: 'GL-71001',
+        spendCategory: 'Engineering OPEX',
+        monthlyPhasing: [300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000],
+        annualAmount: 3600000,
+        q1Amount: 900000, q2Amount: 900000, q3Amount: 900000, q4Amount: 900000,
+      },
+      {
+        lineCode: 'DEP-02',
+        lineName: 'Logistics & Global Operations',
+        costCenterCode: 'CC-OPS-202',
+        glAccountCode: 'GL-71002',
+        spendCategory: 'Operations Supply Chain',
+        monthlyPhasing: [200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000],
+        annualAmount: 2400000,
+        q1Amount: 600000, q2Amount: 600000, q3Amount: 600000, q4Amount: 600000,
+      },
+    ],
+  },
+  {
+    budgetCode: 'BDG-2026-MIX-04',
+    budgetName: 'FY2026 Enterprise Composite Infrastructure',
+    budgetLogic: 'MIX_BAG',
+    fiscalYear: '2026',
+    currency: 'KES',
+    totalAllocated: 9600000,
+    status: 'ACTIVE',
+    lines: [
+      {
+        lineCode: 'LN-MIX-01',
+        lineName: 'Core Fiber Connectivity Upgrade',
+        costCenterCode: 'CC-TELECOM',
+        glAccountCode: 'GL-81010',
+        spendCategory: 'Item: Infrastructure',
+        dimensionType: 'ITEM',
+        monthlyPhasing: [400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000],
+        annualAmount: 4800000,
+        q1Amount: 1200000, q2Amount: 1200000, q3Amount: 1200000, q4Amount: 1200000,
+      },
+      {
+        lineCode: 'LN-MIX-02',
+        lineName: 'Enterprise Cloud Retainer Vendor',
+        costCenterCode: 'CC-VENDOR',
+        glAccountCode: 'GL-81020',
+        spendCategory: 'Supplier: Cloud Retainer',
+        dimensionType: 'SUPPLIER',
+        monthlyPhasing: [400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000],
+        annualAmount: 4800000,
+        q1Amount: 1200000, q2Amount: 1200000, q3Amount: 1200000, q4Amount: 1200000,
+      },
+    ],
+  },
+];
 
 export default function BudgetCreatePage() {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Section A: Header State
-  const [budgetName, setBudgetName] = useState('');
+  // ── Primary 4 Wireframe Controls ──
+  const [budgetLogic, setBudgetLogic] = useState<BudgetLogicType>('ITEM');
+  const [budgetMode, setBudgetMode] = useState<BudgetMode>('ORIGINAL');
   const [budgetCode, setBudgetCode] = useState(`BDG-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
-  const [budgetType, setBudgetType] = useState('OPEX');
   const [fiscalYear, setFiscalYear] = useState(`FY${new Date().getFullYear()}`);
-  const [periodGranularity, setPeriodGranularity] = useState('QUARTERLY');
+
+  // Modals for Revision Flow
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionFilterLogic, setRevisionFilterLogic] = useState<string>('ALL');
+  const [selectedBudgetForRev, setSelectedBudgetForRev] = useState<MockExistingBudget | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [showPasswordText, setShowPasswordText] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Section A: Other Header Fields
+  const [budgetName, setBudgetName] = useState('');
+  const [budgetType, setBudgetType] = useState('OPEX');
+  const [periodGranularity, setPeriodGranularity] = useState('MONTHLY');
   const [startDate, setStartDate] = useState(`${new Date().getFullYear()}-01-01`);
   const [endDate, setEndDate] = useState(`${new Date().getFullYear()}-12-31`);
   const [currency, setCurrency] = useState('KES');
@@ -41,6 +236,9 @@ export default function BudgetCreatePage() {
   const [vatTreatment, setVatTreatment] = useState('EXCLUSIVE');
   const [fundingSource, setFundingSource] = useState('INTERNAL_REVENUE');
   const [erpReference, setErpReference] = useState('');
+
+  // Step 2 View Mode Toggle (Monthly 12-Month vs Condensed Quarter)
+  const [phasingDisplayMode, setPhasingDisplayMode] = useState<'MONTHLY' | 'QUARTERLY'>('MONTHLY');
 
   // Section D & E: Controls & Check Points
   const [controlLevel, setControlLevel] = useState('HARD_STOP');
@@ -55,46 +253,202 @@ export default function BudgetCreatePage() {
     purchaseInvoice: true,
   });
 
-  // Section B & C: Lines State
-  const [lines, setLines] = useState<CreateBudgetLineInput[]>([
-    {
-      lineCode: 'LN-001',
-      lineName: 'IT Infrastructure & Software Licenses',
-      costCenterCode: 'CC-101',
-      glAccountCode: 'GL-52010',
-      spendCategory: 'IT & Telecoms',
-      annualAmount: 1200000,
-      q1Amount: 300000,
-      q2Amount: 300000,
-      q3Amount: 300000,
-      q4Amount: 300000,
-      controlLevelOverride: undefined,
-    },
-    {
-      lineCode: 'LN-002',
-      lineName: 'Office Supplies & Stationeries',
-      costCenterCode: 'CC-102',
-      glAccountCode: 'GL-52020',
-      spendCategory: 'Admin & Office',
-      annualAmount: 400000,
-      q1Amount: 100000,
-      q2Amount: 100000,
-      q3Amount: 100000,
-      q4Amount: 100000,
-      controlLevelOverride: undefined,
-    },
-  ]);
+  // Seed default dimension from Settings on mount
+  useEffect(() => {
+    const settings = loadBudgetLogicSettings();
+    if (settings?.defaultBudgetDimension) {
+      setBudgetLogic(settings.defaultBudgetDimension);
+    }
+  }, []);
 
+  // Helper to generate default sample lines based on selected Budget Logic
+  const generateInitialLinesForLogic = (logic: BudgetLogicType): DynamicBudgetLine[] => {
+    const monthlyEven = [100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000];
+    const total = 1200000;
+    const quarter = 300000;
+
+    switch (logic) {
+      case 'ITEM':
+        return [
+          {
+            lineCode: 'ITM-001',
+            lineName: 'High-End Developer Laptops & Workstations',
+            costCenterCode: 'CC-IT-101',
+            glAccountCode: 'GL-52010',
+            spendCategory: 'Computer Hardware',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+          {
+            lineCode: 'ITM-002',
+            lineName: 'Ergonomic Office Desks & Chairs',
+            costCenterCode: 'CC-ADMIN-02',
+            glAccountCode: 'GL-52020',
+            spendCategory: 'Office Furniture',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+        ];
+
+      case 'SUPPLIER':
+        return [
+          {
+            lineCode: 'SUP-101',
+            lineName: 'Dell Global Commercial Kenya',
+            costCenterCode: 'CC-PROC-01',
+            glAccountCode: 'GL-61010',
+            spendCategory: 'IT Systems & Hardware',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+          {
+            lineCode: 'SUP-102',
+            lineName: 'Safaricom Enterprise Telecom Services',
+            costCenterCode: 'CC-COMM-02',
+            glAccountCode: 'GL-61020',
+            spendCategory: 'Telecom & ISP',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+        ];
+
+      case 'DEPARTMENT':
+        return [
+          {
+            lineCode: 'DEP-IT',
+            lineName: 'Information Technology & Cloud Systems',
+            costCenterCode: 'CC-IT-101',
+            glAccountCode: 'GL-71010',
+            spendCategory: 'IT Operations',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+          {
+            lineCode: 'DEP-FIN',
+            lineName: 'Finance, Audit & Compliance Department',
+            costCenterCode: 'CC-FIN-201',
+            glAccountCode: 'GL-71020',
+            spendCategory: 'Financial Services',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+        ];
+
+      case 'MIX_BAG':
+      default:
+        return [
+          {
+            lineCode: 'LN-MIX-01',
+            lineName: 'Primary Cloud Infrastructure Server',
+            costCenterCode: 'CC-IT',
+            glAccountCode: 'GL-81010',
+            spendCategory: 'Cloud Hosting',
+            dimensionType: 'ITEM',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+          {
+            lineCode: 'LN-MIX-02',
+            lineName: 'Strategic Logistics Vendor Alliance',
+            costCenterCode: 'CC-LOG',
+            glAccountCode: 'GL-81020',
+            spendCategory: 'Global Freight',
+            dimensionType: 'SUPPLIER',
+            monthlyPhasing: [...monthlyEven],
+            annualAmount: total,
+            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
+          },
+        ];
+    }
+  };
+
+  // Lines State initialized
+  const [lines, setLines] = useState<DynamicBudgetLine[]>(() => generateInitialLinesForLogic('ITEM'));
+
+  // Switch logic: updates lines when user changes Budget Logic
+  const handleBudgetLogicChange = (newLogic: BudgetLogicType) => {
+    setBudgetLogic(newLogic);
+    setLines(generateInitialLinesForLogic(newLogic));
+  };
+
+  // Mode change handler: if Revision chosen, trigger modal
+  const handleModeChange = (newMode: BudgetMode) => {
+    setBudgetMode(newMode);
+    if (newMode === 'REVISION') {
+      setShowRevisionModal(true);
+    }
+  };
+
+  // Revision modal: select budget
+  const handleSelectBudgetForRevision = (budget: MockExistingBudget) => {
+    setSelectedBudgetForRev(budget);
+    setShowRevisionModal(false);
+    setAdminPasswordInput('');
+    setPasswordError(null);
+    setShowPasswordModal(true);
+  };
+
+  // Admin password verification
+  const handleVerifyAdminPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    if (adminPasswordInput.trim().toUpperCase() !== 'ADMIN') {
+      setPasswordError('Invalid Admin Password. Please enter "ADMIN".');
+      return;
+    }
+
+    if (!selectedBudgetForRev) return;
+
+    // Load selected budget data
+    setBudgetLogic(selectedBudgetForRev.budgetLogic);
+    setBudgetCode(`${selectedBudgetForRev.budgetCode}-REV1`);
+    setBudgetName(`${selectedBudgetForRev.budgetName} (Revised)`);
+    setFiscalYear(selectedBudgetForRev.fiscalYear);
+    setCurrency(selectedBudgetForRev.currency);
+    setLines(selectedBudgetForRev.lines);
+    setShowPasswordModal(false);
+    setSuccessMsg(`Revision mode unlocked for ${selectedBudgetForRev.budgetCode}. Existing dimensional lines and monthly phasing loaded.`);
+    setTimeout(() => setSuccessMsg(null), 5000);
+  };
+
+  const cancelRevision = () => {
+    setShowPasswordModal(false);
+    setShowRevisionModal(false);
+    setSelectedBudgetForRev(null);
+    setBudgetMode('ORIGINAL');
+  };
+
+  // Add line according to current logic
   const addLine = () => {
     const nextIdx = lines.length + 1;
+    let code = `LN-00${nextIdx}`;
+    let dimensionType: DynamicBudgetLine['dimensionType'] = undefined;
+
+    if (budgetLogic === 'ITEM') code = `ITM-00${nextIdx}`;
+    else if (budgetLogic === 'SUPPLIER') code = `SUP-10${nextIdx}`;
+    else if (budgetLogic === 'DEPARTMENT') code = `DEP-0${nextIdx}`;
+    else if (budgetLogic === 'MIX_BAG') {
+      code = `LN-00${nextIdx}`;
+      dimensionType = 'ITEM';
+    }
+
     setLines([
       ...lines,
       {
-        lineCode: `LN-00${nextIdx}`,
+        lineCode: code,
         lineName: '',
         costCenterCode: '',
         glAccountCode: '',
         spendCategory: 'General',
+        dimensionType,
+        monthlyPhasing: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         annualAmount: 0,
         q1Amount: 0,
         q2Amount: 0,
@@ -109,19 +463,44 @@ export default function BudgetCreatePage() {
     setLines(lines.filter((_, i) => i !== idx));
   };
 
-  const updateLineField = (idx: number, field: keyof CreateBudgetLineInput, value: any) => {
+  // Update a single field on a line
+  const updateLineField = (idx: number, field: keyof DynamicBudgetLine, value: any) => {
     const updated = [...lines];
     updated[idx] = { ...updated[idx], [field]: value };
 
-    // Auto-split annual amount evenly across quarters if annual amount changes
+    // Auto-split annual amount evenly across all 12 months (Jan - Dec)
     if (field === 'annualAmount') {
       const num = Number(value) || 0;
-      const quarter = Math.round(num / 4);
-      updated[idx].q1Amount = quarter;
-      updated[idx].q2Amount = quarter;
-      updated[idx].q3Amount = quarter;
-      updated[idx].q4Amount = num - quarter * 3;
+      const monthly = Math.round(num / 12);
+      const newMonthly = Array(12).fill(monthly);
+      // Adjust last month to handle roundoff
+      newMonthly[11] = num - monthly * 11;
+      updated[idx].monthlyPhasing = newMonthly;
+
+      // Update quarters
+      updated[idx].q1Amount = newMonthly[0] + newMonthly[1] + newMonthly[2];
+      updated[idx].q2Amount = newMonthly[3] + newMonthly[4] + newMonthly[5];
+      updated[idx].q3Amount = newMonthly[6] + newMonthly[7] + newMonthly[8];
+      updated[idx].q4Amount = newMonthly[9] + newMonthly[10] + newMonthly[11];
     }
+
+    setLines(updated);
+  };
+
+  // Update an individual month value
+  const updateLineMonth = (lineIdx: number, monthIdx: number, value: number) => {
+    const updated = [...lines];
+    const newPhasing = [...updated[lineIdx].monthlyPhasing];
+    newPhasing[monthIdx] = Math.max(0, Number(value) || 0);
+    updated[lineIdx].monthlyPhasing = newPhasing;
+
+    // Recalculate annual sum and quarters
+    const newAnnual = newPhasing.reduce((sum, v) => sum + v, 0);
+    updated[lineIdx].annualAmount = newAnnual;
+    updated[lineIdx].q1Amount = newPhasing[0] + newPhasing[1] + newPhasing[2];
+    updated[lineIdx].q2Amount = newPhasing[3] + newPhasing[4] + newPhasing[5];
+    updated[lineIdx].q3Amount = newPhasing[6] + newPhasing[7] + newPhasing[8];
+    updated[lineIdx].q4Amount = newPhasing[9] + newPhasing[10] + newPhasing[11];
 
     setLines(updated);
   };
@@ -137,7 +516,7 @@ export default function BudgetCreatePage() {
     }
 
     if (lines.length === 0 || totalAllocated <= 0) {
-      setError('Please add at least one budget allocation line with an annual amount');
+      setError('Please add at least one budget allocation line with an amount');
       setActiveStep(2);
       return;
     }
@@ -156,7 +535,7 @@ export default function BudgetCreatePage() {
         fxSource,
         vatTreatment,
         fundingSource,
-        erpReference,
+        erpReference: `Logic:${budgetLogic}|Mode:${budgetMode}|${erpReference || ''}`,
         controlLevel,
         tolerancePercent,
         toleranceCap,
@@ -177,11 +556,17 @@ export default function BudgetCreatePage() {
     }
   };
 
+  // Filtered mock budgets for revision
+  const filteredExistingBudgets = MOCK_EXISTING_BUDGETS.filter((b) => {
+    if (revisionFilterLogic === 'ALL') return true;
+    return b.budgetLogic === revisionFilterLogic;
+  });
+
   return (
     <PageFrame className="space-y-6">
       {/* Top Header */}
       <PageLead
-        title="Create New Budget"
+        title={budgetMode === 'REVISION' ? `Revise Budget (${budgetCode})` : 'Create New Budget'}
         description="Configure header parameters, dimensional allocation lines, and multi-tier control rules"
         actions={
           <Button
@@ -196,7 +581,7 @@ export default function BudgetCreatePage() {
         }
       />
 
-      {/* Step Indicator */}
+      {/* ── Step Progress Indicator ── */}
       <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-muted/60 border border-border/60 text-xs font-semibold">
         <button
           type="button"
@@ -221,7 +606,7 @@ export default function BudgetCreatePage() {
           }`}
         >
           <span className="w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">2</span>
-          <span className="truncate">Lines & Dimensions (B, C)</span>
+          <span className="truncate">Lines &amp; Dimensions (B, C)</span>
         </button>
 
         <button
@@ -234,9 +619,16 @@ export default function BudgetCreatePage() {
           }`}
         >
           <span className="w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-bold">3</span>
-          <span className="truncate">Rules & Approvals (D, E, H)</span>
+          <span className="truncate">Rules &amp; Approvals (D, E, H)</span>
         </button>
       </div>
+
+      {successMsg && (
+        <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
+          <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+          <span>{successMsg}</span>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
@@ -250,13 +642,116 @@ export default function BudgetCreatePage() {
         <Card className="p-6 border-border/80 shadow-sm space-y-6">
           <div className="border-b border-border/60 pb-3">
             <h3 className="text-base font-semibold text-foreground">
-              Section A: Budget Header & Financial Setup
+              Section A: Budget Header &amp; Financial Setup
             </h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Specify budgeting boundaries, currency, accounting treatment, and planning dates.
+              Specify budgeting logic, dimensions, boundaries, currency, and planning dates.
             </p>
           </div>
 
+          {/* ── WIREFRAME CONTROL CARD (From User Sketch) ── */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-primary/5 via-card to-primary/10 border-2 border-primary/30 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Sliders className="size-4 text-primary" />
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Budget Governance &amp; Dimensional Logic Control
+                </span>
+              </div>
+              <span className="text-[11px] text-muted-foreground">
+                Set Budget By: <strong className="text-primary">{budgetLogic}</strong> · Mode: <strong className="text-foreground">{budgetMode}</strong>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Budget Logic */}
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+                  <Package className="size-3.5 text-primary" />
+                  <span>Budget Logic</span>
+                  <span className="text-destructive">*</span>
+                </label>
+                <Select
+                  value={budgetLogic}
+                  onChange={(e) => handleBudgetLogicChange(e.target.value as BudgetLogicType)}
+                  className="h-10 text-sm font-semibold rounded-xl bg-card"
+                >
+                  <option value="ITEM">Item — Set Budget By Item</option>
+                  <option value="SUPPLIER">Supplier — Set Budget By Supplier</option>
+                  <option value="DEPARTMENT">Department — Set Budget By Department</option>
+                  <option value="MIX_BAG">Mix Bag — Composite Dimensions</option>
+                </Select>
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  {budgetLogic === 'ITEM' && 'Aligns Section B & C to Item No., Item Name & Monthly Phasing'}
+                  {budgetLogic === 'SUPPLIER' && 'Aligns Section B & C to Supplier No., Supplier Name & Quota'}
+                  {budgetLogic === 'DEPARTMENT' && 'Aligns Section B & C to Department Code, Name & Cost Center'}
+                  {budgetLogic === 'MIX_BAG' && 'Permits mixing Items, Suppliers and Department lines'}
+                </span>
+              </div>
+
+              {/* 2. Original / Revision */}
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+                  <FileCheck className="size-3.5 text-primary" />
+                  <span>Original / Revision</span>
+                  <span className="text-destructive">*</span>
+                </label>
+                <Select
+                  value={budgetMode}
+                  onChange={(e) => handleModeChange(e.target.value as BudgetMode)}
+                  className="h-10 text-sm font-semibold rounded-xl bg-card"
+                >
+                  <option value="ORIGINAL">Original (New Master Budget)</option>
+                  <option value="REVISION">Revision (Modify Existing Budget)</option>
+                </Select>
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  {budgetMode === 'ORIGINAL'
+                    ? 'Enter budget number or use auto-generated reference'
+                    : 'Unlocks revision modal filtered by Budget Logic'}
+                </span>
+              </div>
+
+              {/* 3. Budget No */}
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+                  <span className="font-mono text-primary font-bold">#</span>
+                  <span>Budget No.</span>
+                  <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={budgetCode}
+                  onChange={(e) => setBudgetCode(e.target.value)}
+                  placeholder="e.g. BDG-2026-665"
+                  className="h-10 text-sm font-semibold rounded-xl bg-card"
+                />
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Unique organizational identifier
+                </span>
+              </div>
+
+              {/* 4. Budget Year */}
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="size-3.5 text-primary" />
+                  <span>Budget Year</span>
+                  <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={fiscalYear}
+                  onChange={(e) => setFiscalYear(e.target.value)}
+                  placeholder="e.g. 2026 / FY2026"
+                  className="h-10 text-sm font-semibold rounded-xl bg-card"
+                />
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Active financial planning year
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── General Header Details ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -267,18 +762,6 @@ export default function BudgetCreatePage() {
                 value={budgetName}
                 onChange={(e) => setBudgetName(e.target.value)}
                 placeholder="e.g. FY2026 Commercial Banking OPEX"
-                className="h-10 text-sm rounded-xl"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Budget Code <span className="text-destructive font-normal">*</span>
-              </label>
-              <Input
-                type="text"
-                value={budgetCode}
-                onChange={(e) => setBudgetCode(e.target.value)}
                 className="h-10 text-sm rounded-xl"
               />
             </div>
@@ -301,19 +784,6 @@ export default function BudgetCreatePage() {
 
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Fiscal Year <span className="text-destructive font-normal">*</span>
-              </label>
-              <Input
-                type="text"
-                value={fiscalYear}
-                onChange={(e) => setFiscalYear(e.target.value)}
-                placeholder="e.g. FY2026"
-                className="h-10 text-sm rounded-xl"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Base Currency (Single Budget Currency) <span className="text-destructive font-normal">*</span>
               </label>
               <Select
@@ -324,12 +794,9 @@ export default function BudgetCreatePage() {
                 <option value="KES">KES — Kenya Shilling</option>
                 <option value="UGX">UGX — Uganda Shilling</option>
                 <option value="RWF">RWF — Rwandan Franc</option>
-                <option value="ZMW">ZMW — Zambian Kwacha</option>
-                <option value="MWK">MWK — Malawian Kwacha</option>
-                <option value="GHS">GHS — Ghana Cedi</option>
-                <option value="CDF">CDF — Congolese Franc</option>
+                <option value="USD">USD — US Dollar</option>
                 <option value="AED">AED — UAE Dirham</option>
-                <option value="USD">USD — US Dollar (Donor / Regional)</option>
+                <option value="EUR">EUR — Euro</option>
               </Select>
             </div>
 
@@ -342,10 +809,9 @@ export default function BudgetCreatePage() {
                 onChange={(e) => setPeriodGranularity(e.target.value)}
                 className="h-10 text-sm rounded-xl"
               >
+                <option value="MONTHLY">Monthly (January to December) — Recommended</option>
                 <option value="QUARTERLY">Quarterly (Q1, Q2, Q3, Q4)</option>
-                <option value="MONTHLY">Monthly (M1 – M12)</option>
-                <option value="SEMI_ANNUAL">Semi-Annual (H1, H2)</option>
-                <option value="ANNUAL">Annual (Lump sum)</option>
+                <option value="ANNUAL">Annual (Lump Sum)</option>
               </Select>
             </div>
 
@@ -382,9 +848,8 @@ export default function BudgetCreatePage() {
                 onChange={(e) => setVatTreatment(e.target.value)}
                 className="h-10 text-sm rounded-xl"
               >
-                <option value="EXCLUSIVE">Exclusive of VAT</option>
-                <option value="INCLUSIVE">Inclusive of VAT</option>
-                <option value="EXEMPT">Exempt / Zero-rated</option>
+                <option value="EXCLUSIVE">Exclusive of VAT (Net Amount)</option>
+                <option value="INCLUSIVE">Inclusive of VAT (Gross Amount)</option>
               </Select>
             </div>
 
@@ -398,15 +863,15 @@ export default function BudgetCreatePage() {
                 className="h-10 text-sm rounded-xl"
               >
                 <option value="INTERNAL_REVENUE">Internal Revenue / Operational Cashflow</option>
-                <option value="COMMERCIAL_LOAN">Commercial Bank Loan</option>
-                <option value="DONOR_GRANT">Donor Grant / Development Partner</option>
-                <option value="EQUITY">Equity Financing</option>
+                <option value="BANK_DEBT">Bank Credit / Loan Facility</option>
+                <option value="EQUITY_CAPITAL">Equity / Shareholder Inflow</option>
+                <option value="DONOR_GRANT">Donor / NGO Grant</option>
               </Select>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                FX Source
+                FX Conversion Source
               </label>
               <Select
                 value={fxSource}
@@ -414,22 +879,9 @@ export default function BudgetCreatePage() {
                 className="h-10 text-sm rounded-xl"
               >
                 <option value="LIVE_MARKET">Live Market Rates (open.er-api.com)</option>
-                <option value="FIXED_PLANNING_RATE">Fixed Planning Rate</option>
-                <option value="CENTRAL_BANK">Central Bank Official Rate</option>
+                <option value="FIXED_BUDGET_RATE">Fixed Budget Master Table</option>
+                <option value="CENTRAL_BANK">Central Bank Daily Fixing</option>
               </Select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                ERP Reference Code (Optional)
-              </label>
-              <Input
-                type="text"
-                value={erpReference}
-                onChange={(e) => setErpReference(e.target.value)}
-                placeholder="e.g. SAP-2026-BDG"
-                className="h-10 text-sm rounded-xl"
-              />
             </div>
           </div>
 
@@ -437,7 +889,7 @@ export default function BudgetCreatePage() {
             <Button
               type="button"
               onClick={() => setActiveStep(2)}
-              className="gap-2"
+              className="gap-2 font-semibold shadow-xs"
             >
               <span>Next: Allocation Lines (B, C)</span>
               <span>&rarr;</span>
@@ -451,136 +903,227 @@ export default function BudgetCreatePage() {
         <Card className="p-6 border-border/80 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-foreground">
-                Sections B & C: Dimensions & Allocation Lines
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Total Budget: <strong className="text-primary text-sm font-bold">{totalAllocated.toLocaleString()} {currency}</strong> across {lines.length} line(s)
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 uppercase tracking-wider">
+                  Logic: {budgetLogic}
+                </span>
+                <h3 className="text-sm font-bold text-foreground">
+                  {budgetLogic === 'ITEM' && 'Section B & C: Item-Wise Allocation Lines & Monthly Phasing'}
+                  {budgetLogic === 'SUPPLIER' && 'Section B & C: Supplier-Wise Allocation Lines & Monthly Phasing'}
+                  {budgetLogic === 'DEPARTMENT' && 'Section B & C: Department-Wise Allocation Lines & Monthly Phasing'}
+                  {budgetLogic === 'MIX_BAG' && 'Section B & C: Mix Bag Dimensional Lines & Monthly Phasing'}
+                </h3>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Total Budget: <strong className="text-primary text-sm font-bold">{totalAllocated.toLocaleString()} {currency}</strong> across {lines.length} line(s) · January to December monthly distribution
               </p>
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addLine}
-              className="gap-1.5 self-start sm:self-auto"
-            >
-              <Plus className="size-4" />
-              <span>Add Line</span>
-            </Button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {/* Phasing Display View Toggle */}
+              <div className="flex items-center p-1 rounded-xl bg-muted/60 border border-border/60 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPhasingDisplayMode('MONTHLY')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                    phasingDisplayMode === 'MONTHLY'
+                      ? 'bg-card text-foreground shadow-xs font-bold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  12 Months (Jan–Dec)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhasingDisplayMode('QUARTERLY')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                    phasingDisplayMode === 'QUARTERLY'
+                      ? 'bg-card text-foreground shadow-xs font-bold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Quarters (Q1–Q4)
+                </button>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addLine}
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                <span>
+                  {budgetLogic === 'ITEM' && 'Add Item'}
+                  {budgetLogic === 'SUPPLIER' && 'Add Supplier'}
+                  {budgetLogic === 'DEPARTMENT' && 'Add Department'}
+                  {budgetLogic === 'MIX_BAG' && 'Add Line'}
+                </span>
+              </Button>
+            </div>
           </div>
 
+          {/* ── Dynamic Lines Table ── */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[900px] table-divided">
+            <table className="w-full text-left text-xs min-w-[1100px] table-divided">
               <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/70">
                 <tr>
-                  <th className="px-3 py-2.5 w-24">Line Code</th>
-                  <th className="px-3 py-2.5 w-48">Line Name</th>
-                  <th className="px-3 py-2.5 w-36">Cost Centre</th>
-                  <th className="px-3 py-2.5 w-36">GL Account</th>
-                  <th className="px-3 py-2.5 w-32">Spend Category</th>
-                  <th className="px-3 py-2.5 w-32 text-right">Annual ({currency})</th>
-                  <th className="px-3 py-2.5 w-28 text-right">Q1</th>
-                  <th className="px-3 py-2.5 w-28 text-right">Q2</th>
-                  <th className="px-3 py-2.5 w-28 text-right">Q3</th>
-                  <th className="px-3 py-2.5 w-28 text-right">Q4</th>
-                  <th className="px-3 py-2.5 w-10 text-center"></th>
+                  <th className="px-2.5 py-2.5 w-10 text-center">#</th>
+
+                  {/* Dynamic Dimension Column Headers */}
+                  {budgetLogic === 'MIX_BAG' && (
+                    <th className="px-3 py-2.5 w-32">Dimension</th>
+                  )}
+
+                  <th className="px-3 py-2.5 w-28">
+                    {budgetLogic === 'ITEM' && 'Item No.'}
+                    {budgetLogic === 'SUPPLIER' && 'Supplier No.'}
+                    {budgetLogic === 'DEPARTMENT' && 'Dept Code'}
+                    {budgetLogic === 'MIX_BAG' && 'Code / No.'}
+                  </th>
+
+                  <th className="px-3 py-2.5 w-44">
+                    {budgetLogic === 'ITEM' && 'Item Name'}
+                    {budgetLogic === 'SUPPLIER' && 'Supplier Name'}
+                    {budgetLogic === 'DEPARTMENT' && 'Department Name'}
+                    {budgetLogic === 'MIX_BAG' && 'Name / Description'}
+                  </th>
+
+                  <th className="px-3 py-2.5 w-36">
+                    {budgetLogic === 'ITEM' && 'Category'}
+                    {budgetLogic === 'SUPPLIER' && 'Category / Service'}
+                    {budgetLogic === 'DEPARTMENT' && 'Cost Center'}
+                    {budgetLogic === 'MIX_BAG' && 'Cost Center / Cat'}
+                  </th>
+
+                  {/* 12-Month Columns (January to December) or Quarterly Columns */}
+                  {phasingDisplayMode === 'MONTHLY' ? (
+                    MONTH_NAMES.map((m, mIdx) => (
+                      <th key={m} className="px-2 py-2.5 w-20 text-right font-medium">
+                        {m}
+                      </th>
+                    ))
+                  ) : (
+                    <>
+                      <th className="px-3 py-2.5 w-24 text-right font-medium">Q1 (Jan–Mar)</th>
+                      <th className="px-3 py-2.5 w-24 text-right font-medium">Q2 (Apr–Jun)</th>
+                      <th className="px-3 py-2.5 w-24 text-right font-medium">Q3 (Jul–Sep)</th>
+                      <th className="px-3 py-2.5 w-24 text-right font-medium">Q4 (Oct–Dec)</th>
+                    </>
+                  )}
+
+                  <th className="px-3 py-2.5 w-32 text-right font-bold text-foreground">
+                    Total ({currency})
+                  </th>
+                  <th className="px-2 py-2.5 w-10 text-center"></th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-border/40">
                 {lines.map((line, idx) => (
                   <tr key={idx} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-2.5 py-2 text-center text-muted-foreground font-semibold text-[11px]">
+                      {idx + 1}
+                    </td>
+
+                    {/* Mix Bag Dimension Selector */}
+                    {budgetLogic === 'MIX_BAG' && (
+                      <td className="px-3 py-2">
+                        <Select
+                          value={line.dimensionType || 'ITEM'}
+                          onChange={(e) => updateLineField(idx, 'dimensionType', e.target.value)}
+                          className="h-8 text-xs"
+                        >
+                          <option value="ITEM">Item</option>
+                          <option value="SUPPLIER">Supplier</option>
+                          <option value="DEPARTMENT">Department</option>
+                        </Select>
+                      </td>
+                    )}
+
+                    {/* Line Code / No */}
                     <td className="px-3 py-2">
                       <Input
                         type="text"
                         value={line.lineCode}
                         onChange={(e) => updateLineField(idx, 'lineCode', e.target.value)}
-                        className="h-8 text-xs"
+                        placeholder={
+                          budgetLogic === 'ITEM' ? 'ITM-001' :
+                          budgetLogic === 'SUPPLIER' ? 'SUP-101' :
+                          budgetLogic === 'DEPARTMENT' ? 'DEP-01' : 'CODE-01'
+                        }
+                        className="h-8 text-xs font-mono font-semibold"
                       />
                     </td>
+
+                    {/* Line Name */}
                     <td className="px-3 py-2">
                       <Input
                         type="text"
                         value={line.lineName}
                         onChange={(e) => updateLineField(idx, 'lineName', e.target.value)}
-                        placeholder="e.g. Server Upgrades"
+                        placeholder={
+                          budgetLogic === 'ITEM' ? 'e.g. Developer Laptops' :
+                          budgetLogic === 'SUPPLIER' ? 'e.g. Dell Corp' :
+                          budgetLogic === 'DEPARTMENT' ? 'e.g. IT Department' : 'Name / Title'
+                        }
                         className="h-8 text-xs"
                       />
                     </td>
+
+                    {/* Category or Cost Center */}
                     <td className="px-3 py-2">
                       <Input
                         type="text"
-                        value={line.costCenterCode}
-                        onChange={(e) => updateLineField(idx, 'costCenterCode', e.target.value)}
-                        placeholder="e.g. CC-IT"
+                        value={budgetLogic === 'DEPARTMENT' ? line.costCenterCode : line.spendCategory}
+                        onChange={(e) =>
+                          updateLineField(
+                            idx,
+                            budgetLogic === 'DEPARTMENT' ? 'costCenterCode' : 'spendCategory',
+                            e.target.value
+                          )
+                        }
+                        placeholder={budgetLogic === 'DEPARTMENT' ? 'e.g. CC-IT-101' : 'e.g. Hardware'}
                         className="h-8 text-xs"
                       />
                     </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="text"
-                        value={line.glAccountCode}
-                        onChange={(e) => updateLineField(idx, 'glAccountCode', e.target.value)}
-                        placeholder="e.g. GL-5100"
-                        className="h-8 text-xs"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="text"
-                        value={line.spendCategory}
-                        onChange={(e) => updateLineField(idx, 'spendCategory', e.target.value)}
-                        placeholder="e.g. IT Equipment"
-                        className="h-8 text-xs"
-                      />
-                    </td>
+
+                    {/* Monthly Inputs (Jan to Dec) or Quarterly View */}
+                    {phasingDisplayMode === 'MONTHLY' ? (
+                      line.monthlyPhasing.map((val, mIdx) => (
+                        <td key={mIdx} className="px-1.5 py-2 text-right">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={val}
+                            onChange={(e) => updateLineMonth(idx, mIdx, Number(e.target.value))}
+                            className="h-8 text-xs text-right px-1 font-mono"
+                          />
+                        </td>
+                      ))
+                    ) : (
+                      <>
+                        <td className="px-2 py-2 text-right font-mono text-xs">{line.q1Amount.toLocaleString()}</td>
+                        <td className="px-2 py-2 text-right font-mono text-xs">{line.q2Amount.toLocaleString()}</td>
+                        <td className="px-2 py-2 text-right font-mono text-xs">{line.q3Amount.toLocaleString()}</td>
+                        <td className="px-2 py-2 text-right font-mono text-xs">{line.q4Amount.toLocaleString()}</td>
+                      </>
+                    )}
+
+                    {/* Total Annual Amount */}
                     <td className="px-3 py-2 text-right">
                       <Input
                         type="number"
                         min="0"
                         value={line.annualAmount}
                         onChange={(e) => updateLineField(idx, 'annualAmount', Number(e.target.value))}
-                        className="h-8 text-xs text-right font-semibold"
+                        className="h-8 text-xs text-right font-bold text-primary"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={line.q1Amount}
-                        onChange={(e) => updateLineField(idx, 'q1Amount', Number(e.target.value))}
-                        className="h-8 text-xs text-right"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={line.q2Amount}
-                        onChange={(e) => updateLineField(idx, 'q2Amount', Number(e.target.value))}
-                        className="h-8 text-xs text-right"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={line.q3Amount}
-                        onChange={(e) => updateLineField(idx, 'q3Amount', Number(e.target.value))}
-                        className="h-8 text-xs text-right"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={line.q4Amount}
-                        onChange={(e) => updateLineField(idx, 'q4Amount', Number(e.target.value))}
-                        className="h-8 text-xs text-right"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-center">
+
+                    {/* Delete Line */}
+                    <td className="px-2 py-2 text-center">
                       {lines.length > 1 && (
                         <button
                           type="button"
@@ -606,14 +1149,14 @@ export default function BudgetCreatePage() {
               className="gap-2"
             >
               <span>&larr;</span>
-              <span>Back</span>
+              <span>Back: Header (A)</span>
             </Button>
             <Button
               type="button"
               onClick={() => setActiveStep(3)}
-              className="gap-2"
+              className="gap-2 font-semibold shadow-xs"
             >
-              <span>Next: Rules & Approvals</span>
+              <span>Next: Rules &amp; Approvals</span>
               <span>&rarr;</span>
             </Button>
           </div>
@@ -625,7 +1168,7 @@ export default function BudgetCreatePage() {
         <Card className="p-6 border-border/80 shadow-sm space-y-6">
           <div className="border-b border-border/60 pb-3">
             <h3 className="text-base font-semibold text-foreground">
-              Screen 2: Control Rules & Multi-Tier Approvals
+              Screen 2: Control Rules &amp; Multi-Tier Approvals
             </h3>
             <p className="text-sm text-muted-foreground mt-0.5">
               Set automated tolerance thresholds and lifecycle document checkpoints.
@@ -637,7 +1180,7 @@ export default function BudgetCreatePage() {
             <div className="p-4 rounded-xl bg-muted/40 border border-border/60 space-y-4">
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Sliders className="size-4 text-primary" />
-                <span>Section D: Control Level & Tolerance</span>
+                <span>Section D: Control Level &amp; Tolerance</span>
               </h4>
 
               <div>
@@ -727,10 +1270,9 @@ export default function BudgetCreatePage() {
               <span>Section H: Multi-Tier Approval Routing (Level 1 &rarr; 2 &rarr; 3)</span>
             </h4>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Submitting this budget for approval will trigger the sequential approval chain:
+              Submitting this budget will initiate multi-tier governance:
               <br />
               <strong className="text-foreground font-semibold">Level 1 (Dept Head)</strong> &rarr; <strong className="text-foreground font-semibold">Level 2 (Finance Manager)</strong> &rarr; <strong className="text-foreground font-semibold">Level 3 (CFO / Board)</strong>.
-              Upon final Level 3 approval, status automatically becomes <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">ACTIVE</strong>.
             </p>
           </div>
 
@@ -742,7 +1284,7 @@ export default function BudgetCreatePage() {
               className="gap-2"
             >
               <span>&larr;</span>
-              <span>Back</span>
+              <span>Back: Lines &amp; Dimensions</span>
             </Button>
 
             <div className="flex items-center gap-2">
@@ -759,13 +1301,187 @@ export default function BudgetCreatePage() {
                 type="button"
                 disabled={submitting}
                 onClick={() => handleSubmit(true)}
-                className="gap-2 font-semibold"
+                className="gap-2 font-semibold shadow-xs"
               >
                 {submitting ? 'Submitting...' : 'Submit for Level 1, 2, 3 Approval'}
               </Button>
             </div>
           </div>
         </Card>
+      )}
+
+      {/* ── MODAL 1: REVISION SELECTION MODAL ── */}
+      {showRevisionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl p-6 space-y-5 animate-in fade-in-50 zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <FileCheck className="size-5 text-primary" />
+                  Select Budget for Revision
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Filtered based on Budget Logic: choose an active budget to create a revision.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cancelRevision}
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            {/* Filter by Budget Logic */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                <Filter size={13} /> Filter:
+              </span>
+              {[
+                { id: 'ALL', label: 'All Budgets' },
+                { id: 'ITEM', label: 'Item Wise' },
+                { id: 'SUPPLIER', label: 'Supplier Wise' },
+                { id: 'DEPARTMENT', label: 'Department Wise' },
+                { id: 'MIX_BAG', label: 'Mix Bag' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setRevisionFilterLogic(f.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium border transition ${
+                    revisionFilterLogic === f.id
+                      ? 'border-primary bg-primary/10 text-primary font-bold'
+                      : 'border-border/70 hover:bg-muted/50 text-muted-foreground'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Budget List */}
+            <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+              {filteredExistingBudgets.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl">
+                  No budgets match the selected filter.
+                </div>
+              ) : (
+                filteredExistingBudgets.map((b) => (
+                  <div
+                    key={b.budgetCode}
+                    className="p-3.5 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition flex items-center justify-between gap-3 cursor-pointer"
+                    onClick={() => handleSelectBudgetForRevision(b)}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-primary">
+                          {b.budgetCode}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground border border-border/60">
+                          {b.budgetLogic}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                          {b.status}
+                        </span>
+                      </div>
+                      <div className="text-xs font-semibold text-foreground">{b.budgetName}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        FY{b.fiscalYear} · Total Allocated: {b.totalAllocated.toLocaleString()} {b.currency} across {b.lines.length} line(s)
+                      </div>
+                    </div>
+
+                    <Button type="button" size="sm" variant="outline" className="text-xs shrink-0 gap-1">
+                      <span>Select</span>
+                      <span>&rarr;</span>
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-border/60">
+              <Button type="button" variant="outline" size="sm" onClick={cancelRevision}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 2: ADMIN PASSWORD VERIFICATION MODAL ── */}
+      {showPasswordModal && selectedBudgetForRev && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-6 space-y-5 animate-in fade-in-50 zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <Lock size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Admin Verification Required</h3>
+                  <p className="text-[11px] text-muted-foreground">Budget Revision Authorization</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={cancelRevision}
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVerifyAdminPassword} className="space-y-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Revising <strong className="text-foreground">{selectedBudgetForRev.budgetCode}</strong> will generate a tracked revision. Please enter the Administrator password to authorize this action:
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">
+                  Admin Password
+                </label>
+                <div className="relative">
+                  <Input
+                    type={showPasswordText ? 'text' : 'password'}
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    placeholder="Enter password (ADMIN)"
+                    className="h-10 text-sm rounded-xl pr-10"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordText(!showPasswordText)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPasswordText ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <span className="text-[11px] text-muted-foreground mt-1.5 block">
+                  💡 Hint: Enter <code className="px-1.5 py-0.5 rounded bg-muted font-bold text-primary">ADMIN</code> to unlock.
+                </span>
+              </div>
+
+              {passwordError && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+                  <AlertCircle size={14} className="shrink-0" />
+                  <span>{passwordError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+                <Button type="button" variant="outline" size="sm" onClick={cancelRevision}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" className="font-semibold gap-1.5">
+                  <Lock size={14} />
+                  <span>Verify &amp; Unlock Revision</span>
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </PageFrame>
   );

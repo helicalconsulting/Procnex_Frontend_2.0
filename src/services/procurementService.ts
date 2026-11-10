@@ -112,19 +112,170 @@ export interface SendInvitationPayload {
   anyOtherTemplateId?: string;
 }
 
+export interface UploadedRegistrationDoc {
+  type: 'trade_license' | 'vat_certificate' | 'emirates_id' | string;
+  label: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  dataUrl?: string;
+  uploadedAt: string;
+}
+
+export interface VendorSelfRegistrationPayload {
+  companyName: string;
+  contactEmail: string;
+  contactPerson?: string;
+  countryCode: string;
+  phone: string;
+  category?: string;
+  categoryId?: string;
+  supplierType?: string;
+  notes?: string;
+  companyCode?: string;
+  documents?: UploadedRegistrationDoc[];
+}
+
+export interface SelfRegisteredVendorRecord {
+  id: string;
+  vendorNo: string;
+  name: string;
+  email: string;
+  phone: string;
+  contactPerson?: string;
+  category?: string;
+  categoryId?: string;
+  supplierType?: string;
+  notes?: string;
+  companyCode?: string;
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  submittedAt: string;
+  isSelfRegistered: true;
+  documents?: UploadedRegistrationDoc[];
+}
+
+const STORAGE_KEY_REGISTRATIONS = 'procnex_vendor_registrations';
+
+export function getSelfRegisteredVendors(): SelfRegisteredVendorRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY_REGISTRATIONS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSelfRegisteredVendor(payload: VendorSelfRegistrationPayload): SelfRegisteredVendorRecord {
+  const existing = getSelfRegisteredVendors();
+  const index = existing.length + 1;
+  const vendorNo = `VND-${String(index).padStart(4, '0')}`;
+  const id = `reg_${Date.now()}`;
+  const fullPhone = payload.phone ? `${payload.countryCode || ''} ${payload.phone}`.trim() : '';
+  const now = new Date().toISOString().slice(0, 10);
+
+  const record: SelfRegisteredVendorRecord = {
+    id,
+    vendorNo,
+    name: payload.companyName.trim(),
+    email: payload.contactEmail.trim().toLowerCase(),
+    phone: fullPhone,
+    contactPerson: payload.contactPerson?.trim() || undefined,
+    category: payload.category || undefined,
+    categoryId: payload.categoryId || undefined,
+    supplierType: payload.supplierType || undefined,
+    notes: payload.notes?.trim() || undefined,
+    companyCode: payload.companyCode || 'alzorah',
+    status: 'PENDING_APPROVAL',
+    submittedAt: now,
+    isSelfRegistered: true,
+    documents: payload.documents || [],
+  };
+
+  const updated = [record, ...existing.filter((r) => r.email !== record.email)];
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(STORAGE_KEY_REGISTRATIONS, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('vendor_registered', { detail: record }));
+  }
+  return record;
+}
+
+export function updateSelfRegisteredStatus(vendorId: string, status: 'APPROVED' | 'REJECTED', reason?: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const list = getSelfRegisteredVendors();
+  let updated = false;
+  const next = list.map((item) => {
+    if (item.id === vendorId || item.vendorNo === vendorId) {
+      updated = true;
+      return {
+        ...item,
+        status,
+        rejectionReason: reason || undefined,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return item;
+  });
+  if (updated) {
+    window.localStorage.setItem(STORAGE_KEY_REGISTRATIONS, JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent('vendor_queue_updated'));
+  }
+  return updated;
+}
+
 const ONBOARDING_MOCK: OnboardingVendor[] = [
-  { id: '10', name: 'LabTech Solutions', email: 'contact@labtech.in', status: 'PENDING_APPROVAL', submittedAt: '2024-04-25' },
-  { id: '11', name: 'SteelWorks India', email: 'bid@steelworks.in', status: 'PENDING_APPROVAL', submittedAt: '2024-04-24' },
+  { id: '10', name: 'LabTech Solutions', email: 'contact@labtech.in', status: 'PENDING_APPROVAL', submittedAt: '2024-04-25', phone: '+971 50 123 4567' },
+  { id: '11', name: 'SteelWorks India', email: 'bid@steelworks.in', status: 'PENDING_APPROVAL', submittedAt: '2024-04-24', phone: '+91 98765 43210' },
 ];
 
+function mapSelfRegisteredToOnboarding(reg: SelfRegisteredVendorRecord): OnboardingVendor {
+  const docs: VendorDocument[] = (reg.documents || []).map((doc, idx) => ({
+    id: `${reg.id}_doc_${idx}`,
+    vendorId: reg.id,
+    documentType: doc.label || doc.type,
+    originalName: doc.fileName,
+    publicUrl: doc.dataUrl || '',
+    mimeType: doc.mimeType,
+    fileSize: doc.fileSize,
+    status: 'PENDING',
+    uploadedAt: doc.uploadedAt || reg.submittedAt,
+  }));
+
+  return {
+    id: reg.id,
+    name: reg.name,
+    email: reg.email,
+    status: reg.status,
+    submittedAt: reg.submittedAt,
+    phone: reg.phone,
+    contactPerson: reg.contactPerson,
+    category: reg.category,
+    supplierType: reg.supplierType,
+    onboardingNotes: reg.notes,
+    isSubmitted: true,
+    documentSummary: {
+      required: docs.length,
+      uploaded: docs.length,
+      pending: docs.length,
+      verified: 0,
+      rejected: 0,
+    },
+    documents: docs,
+  };
+}
+
 async function mockOnboardingQueue(): Promise<OnboardingVendor[]> {
-  return ONBOARDING_MOCK;
+  const selfReg = getSelfRegisteredVendors().map(mapSelfRegisteredToOnboarding);
+  return [...selfReg, ...ONBOARDING_MOCK];
 }
 
 async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
-  const data = await apiRequest<{ vendors: Vendor[] }>('/procurement/vendor-approval-queue');
-  const vendors = pickList<Vendor>(data, ['vendors']);
-  return vendors.map((v) => {
+  const selfReg = getSelfRegisteredVendors().map(mapSelfRegisteredToOnboarding);
+  let apiVendors: OnboardingVendor[] = [];
+  try {
+    const data = await apiRequest<{ vendors: Vendor[] }>('/procurement/vendor-approval-queue');
+    const vendors = pickList<Vendor>(data, ['vendors']);
+    apiVendors = vendors.map((v) => {
     const extended = v as Vendor & {
       status?: string;
       documentSummary?: DocumentSummary;
@@ -177,33 +328,100 @@ async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
       rejectionReason: extended.rejectionReason ?? null,
       documents: extended.documents || [],
     };
-  });
+    });
+  } catch {
+    apiVendors = [];
+  }
+  return [...selfReg, ...apiVendors];
 }
 
 async function mockVendors(): Promise<Vendor[]> {
   return MOCK_VENDORS;
 }
 
-async function mockApproveVendor(_id: string, _message?: string): Promise<void> {
+async function mockApproveVendor(
+  id: string,
+  _message?: string,
+  _meta?: {
+    email?: string;
+    name?: string;
+    phone?: string;
+    contactPerson?: string;
+    category?: string;
+    supplierType?: string;
+    onboardingNotes?: string;
+  }
+): Promise<void> {
+  updateSelfRegisteredStatus(id, 'APPROVED');
   await new Promise((r) => setTimeout(r, 200));
 }
 
-async function apiApproveVendor(vendorId: string, message?: string): Promise<void> {
-  await apiRequest(`/procurement/approve-vendor/${vendorId}`, {
+async function apiApproveVendor(
+  vendorId: string,
+  message?: string,
+  meta?: {
+    email?: string;
+    name?: string;
+    phone?: string;
+    contactPerson?: string;
+    category?: string;
+    supplierType?: string;
+    onboardingNotes?: string;
+  }
+): Promise<void> {
+  updateSelfRegisteredStatus(vendorId, 'APPROVED');
+  const res = await apiRequest<{ data?: { id?: string } }>(`/procurement/approve-vendor/${vendorId}`, {
     method: 'POST',
-    body: JSON.stringify({ notes: message || '' }),
+    body: JSON.stringify({
+      notes: message || '',
+      vendorEmail: meta?.email,
+      vendorName: meta?.name,
+      phone: meta?.phone,
+      contactPerson: meta?.contactPerson,
+      category: meta?.category,
+      supplierType: meta?.supplierType,
+      onboardingNotes: meta?.onboardingNotes,
+    }),
   });
+
+  if (res?.data?.id) {
+    const list = getSelfRegisteredVendors();
+    const next = list.map((item) =>
+      item.id === vendorId || item.vendorNo === vendorId || item.email === meta?.email
+        ? { ...item, id: res.data!.id!, status: 'APPROVED' as const }
+        : item
+    );
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(STORAGE_KEY_REGISTRATIONS, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('vendor_queue_updated'));
+      window.dispatchEvent(new CustomEvent('vendors_updated'));
+    }
+  }
 }
 
-async function mockRejectVendor(_id: string, _reason?: string): Promise<void> {
+async function mockRejectVendor(id: string, reason?: string, _meta?: { email?: string; name?: string }): Promise<void> {
+  updateSelfRegisteredStatus(id, 'REJECTED', reason);
   await new Promise((r) => setTimeout(r, 200));
 }
 
-async function apiRejectVendor(vendorId: string, reason?: string): Promise<void> {
-  await apiRequest(`/procurement/reject-vendor/${vendorId}`, {
-    method: 'POST',
-    body: JSON.stringify({ reason: reason || '' }),
-  });
+async function apiRejectVendor(
+  vendorId: string,
+  reason?: string,
+  meta?: { email?: string; name?: string }
+): Promise<void> {
+  const handled = updateSelfRegisteredStatus(vendorId, 'REJECTED', reason);
+  try {
+    await apiRequest(`/procurement/reject-vendor/${vendorId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: reason || '',
+        vendorEmail: meta?.email,
+        vendorName: meta?.name,
+      }),
+    });
+  } catch (err) {
+    if (!handled) throw err;
+  }
 }
 
 const MOCK_INVITATIONS: VendorInvitationRow[] = [];
@@ -317,14 +535,57 @@ async function mockGetVendorDocuments(_vendorId: string) {
 }
 
 async function apiGetVendorDocuments(vendorId: string) {
+  const selfReg = getSelfRegisteredVendors().find((r) => r.id === vendorId || r.vendorNo === vendorId);
+  if (selfReg && selfReg.documents && selfReg.documents.length > 0) {
+    const docs: VendorDocument[] = selfReg.documents.map((doc, idx) => ({
+      id: `${selfReg.id}_doc_${idx}`,
+      vendorId: selfReg.id,
+      documentType: doc.label || doc.type,
+      originalName: doc.fileName,
+      publicUrl: doc.dataUrl || '',
+      mimeType: doc.mimeType,
+      fileSize: doc.fileSize,
+      status: 'PENDING',
+      uploadedAt: doc.uploadedAt || selfReg.submittedAt,
+    }));
+    return {
+      documents: docs,
+      summary: {
+        required: docs.length,
+        uploaded: docs.length,
+        pending: docs.length,
+        verified: 0,
+        rejected: 0,
+      },
+      requiredDocuments: [],
+    };
+  }
   return apiRequest<{ documents: VendorDocument[]; summary: DocumentSummary; requiredDocuments: string[] }>(
     `/procurement/vendors/${vendorId}/documents`
   );
 }
 
-async function mockGetVendorProfile(_vendorId: string) {
+async function mockGetVendorProfile(vendorId: string) {
+  const selfReg = getSelfRegisteredVendors().find((r) => r.id === vendorId || r.vendorNo === vendorId);
+  if (selfReg) {
+    return {
+      id: selfReg.id,
+      vendorNo: selfReg.vendorNo,
+      name: selfReg.name,
+      email: selfReg.email,
+      phone: selfReg.phone,
+      contactPerson: selfReg.contactPerson,
+      category: selfReg.category,
+      supplierType: selfReg.supplierType,
+      onboardingNotes: selfReg.notes,
+      status: selfReg.status,
+      createdAt: selfReg.submittedAt,
+      isSelfRegistered: true,
+      documents: selfReg.documents || [],
+    };
+  }
   return {
-    id: _vendorId,
+    id: vendorId,
     name: 'Mock Vendor',
     email: 'mock@example.com',
     phone: '+254712345678',
@@ -347,6 +608,24 @@ async function mockGetVendorProfile(_vendorId: string) {
 }
 
 async function apiGetVendorProfile(vendorId: string) {
+  const selfReg = getSelfRegisteredVendors().find((r) => r.id === vendorId || r.vendorNo === vendorId);
+  if (selfReg) {
+    return {
+      id: selfReg.id,
+      vendorNo: selfReg.vendorNo,
+      name: selfReg.name,
+      email: selfReg.email,
+      phone: selfReg.phone,
+      contactPerson: selfReg.contactPerson,
+      category: selfReg.category,
+      supplierType: selfReg.supplierType,
+      onboardingNotes: selfReg.notes,
+      status: selfReg.status,
+      createdAt: selfReg.submittedAt,
+      isSelfRegistered: true,
+      documents: selfReg.documents || [],
+    };
+  }
   return apiRequest<Record<string, unknown>>(`/procurement/vendors/${vendorId}/profile`);
 }
 
@@ -415,4 +694,34 @@ export const procurementService = {
   rejectDocument: USE_MOCK ? mockDocumentAction : apiRejectDocument,
   listPendingDocuments: USE_MOCK ? mockListPendingDocuments : apiListPendingDocuments,
   searchVendors: USE_MOCK ? mockSearchVendors : apiSearchVendors,
+  registerVendor: async (payload: VendorSelfRegistrationPayload) => {
+    const record = saveSelfRegisteredVendor(payload);
+    try {
+      if (!USE_MOCK) {
+        const res = await apiRequest<{ success?: boolean; data?: { vendorNo?: string; id?: string } }>(
+          '/public/vendor-register',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          }
+        );
+        if (res?.data) {
+          const nextId = res.data.id || record.id;
+          const nextVendorNo = res.data.vendorNo || record.vendorNo;
+          record.id = nextId;
+          record.vendorNo = nextVendorNo;
+          const existing = getSelfRegisteredVendors();
+          const next = existing.map((r) =>
+            r.email === record.email ? { ...r, id: nextId, vendorNo: nextVendorNo } : r
+          );
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(STORAGE_KEY_REGISTRATIONS, JSON.stringify(next));
+          }
+        }
+      }
+    } catch {
+      // Local/offline fallback already stored in localStorage
+    }
+    return record;
+  },
 };

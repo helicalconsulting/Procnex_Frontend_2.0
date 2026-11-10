@@ -36,6 +36,8 @@ import {
   List,
   Search,
   AlertTriangle,
+  FileCheck2,
+  Tag,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TablePagination } from '../../components/shared/TablePagination';
@@ -61,7 +63,8 @@ import './OnboardingQueuePage.css';
 type QueueStatus = 'pending' | 'approved' | 'rejected';
 
 interface QueueRow {
-  id: number;
+  id: string | number;
+  vendorNo: string;
   name: string;
   email: string;
   submittedDate: string;
@@ -94,11 +97,15 @@ function mapOnboardingVendor(v: OnboardingVendor): QueueRow {
   const isSubmitted = v.isSubmitted !== undefined
     ? v.isSubmitted
     : (st === 'PENDING_APPROVAL' || st === 'DOCUMENTS_SUBMITTED' || st.includes('APPROVE') || st.includes('REJECT'));
+  const idStr = String(v.id || '');
+  const vendorNo = (v as any).vendorNo || (idStr.startsWith('VND-') ? idStr : (idStr.startsWith('reg_') ? `VND-${idStr.slice(-4)}` : `VND-${idStr.padStart(4, '0')}`));
+
   return {
     id: v.id,
+    vendorNo,
     name: v.name,
     email: v.email,
-    submittedDate: new Date(v.submittedAt).toLocaleDateString('en-IN', {
+    submittedDate: new Date(v.submittedAt || Date.now()).toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -139,8 +146,37 @@ function onboardingStatusTone(status: QueueStatus): 'warning' | 'success' | 'dan
 }
 
 function documentUrl(url: string): string {
-  if (url.startsWith('http')) return url;
-  return `${API_BASE.replace(/\/api$/, '')}${url}`;
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  return `${API_BASE.replace(/\/api$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+function viewDocument(url: string): void {
+  const finalUrl = documentUrl(url);
+  if (!finalUrl) return;
+  if (finalUrl.startsWith('data:')) {
+    try {
+      const parts = finalUrl.split(',');
+      const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      return;
+    } catch {
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+  }
+  window.open(finalUrl, '_blank', 'noopener,noreferrer');
 }
 
 const SIGNED_DOC_CSS = `
@@ -234,7 +270,32 @@ function buildSignedDocHtml(docType: string, content: string): string {
 }
 
 async function downloadDocument(docUrl: string, filename: string): Promise<void> {
-  return _downloadDocument(documentUrl(docUrl), filename);
+  const finalUrl = documentUrl(docUrl);
+  if (finalUrl.startsWith('data:')) {
+    try {
+      const parts = finalUrl.split(',');
+      const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename || 'document';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      return;
+    } catch {
+      // fallback to standard download
+    }
+  }
+  return _downloadDocument(finalUrl, filename);
 }
 
 function downloadSignedDocument(doc: VendorDocument): void {
@@ -264,7 +325,7 @@ export default function OnboardingQueuePage() {
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<string | number | null>(null);
   const [rejectTarget, setRejectTarget] = useState<QueueRow | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [approveTarget, setApproveTarget] = useState<QueueRow | null>(null);
@@ -383,7 +444,15 @@ export default function OnboardingQueuePage() {
       setActionSuccess(null);
       setBusyId(row.id);
       try {
-        await procurementService.approveVendor(row.id, message);
+        await procurementService.approveVendor(String(row.id), message, {
+          email: row.email,
+          name: row.name,
+          phone: row.phone || undefined,
+          contactPerson: row.contactPerson || undefined,
+          category: row.category || undefined,
+          supplierType: row.supplierType || undefined,
+          onboardingNotes: row.onboardingNotes || undefined,
+        });
         setActionSuccess(
           `${row.name} approved. Password setup email sent to ${row.email}.`
         );
@@ -421,7 +490,10 @@ export default function OnboardingQueuePage() {
     setActionSuccess(null);
     setBusyId(rejectTarget.id);
     try {
-      await procurementService.rejectVendor(rejectTarget.id, reason);
+      await procurementService.rejectVendor(String(rejectTarget.id), reason, {
+        email: rejectTarget.email,
+        name: rejectTarget.name,
+      });
       setActionSuccess(`${rejectTarget.name} rejected.`);
       setRejectTarget(null);
       setRejectReason('');
@@ -435,13 +507,17 @@ export default function OnboardingQueuePage() {
 
   const openDocuments = useCallback(async (row: QueueRow) => {
     setDocumentTarget(row);
-    setDocuments(row.documents);
+    setDocuments(row.documents || []);
     setActionError(null);
     try {
       const result = await procurementService.getVendorDocuments(row.id);
-      setDocuments(result.documents || []);
+      if (result?.documents && result.documents.length > 0) {
+        setDocuments(result.documents);
+      }
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to load vendor documents');
+      if (!row.documents || row.documents.length === 0) {
+        setActionError(err instanceof Error ? err.message : 'Failed to load vendor documents');
+      }
     }
   }, []);
 
@@ -548,9 +624,10 @@ export default function OnboardingQueuePage() {
               <LandingTable key="onboarding-queue" preferenceKey="onboarding-queue" columns={ONBOARDING_QUEUE_COLUMNS} className="w-full min-w-[900px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
-                    <th className="px-5 py-3.5">Vendor</th>
+                    <th className="px-5 py-3.5">Vendor #</th>
+                    <th className="px-5 py-3.5">Name</th>
+                    <th className="px-5 py-3.5">P.No.</th>
                     <th className="px-5 py-3.5">Email</th>
-                    <th className="px-5 py-3.5">Submitted</th>
                     <th className="px-5 py-3.5">Status</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
@@ -558,14 +635,21 @@ export default function OnboardingQueuePage() {
                 <tbody className="divide-y divide-border/60">
                   {paginated.map((req) => (
                     <tr key={req.id} className="transition-colors hover:bg-accent/35">
+                      <td className="px-5 py-3.5 font-mono text-xs font-bold text-primary whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+                          {req.vendorNo}
+                        </span>
+                      </td>
                       <td className="px-5 py-3.5 font-bold text-foreground">{req.name}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap text-xs font-mono">
+                        {req.phone || '—'}
+                      </td>
                       <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
                           <Mail size={13} className="shrink-0" />
                           {req.email}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{req.submittedDate}</td>
                       <td className="px-5 py-3.5">
                         <Badge tone={onboardingStatusTone(req.status)} className="gap-1.5 font-semibold">
                           <span className="size-1.5 rounded-full bg-current" />
@@ -579,25 +663,17 @@ export default function OnboardingQueuePage() {
                           const notSubmitted = !req.isSubmitted;
                           const notSubmittedTitle = notSubmitted ? 'Vendor has not submitted onboarding form yet' : undefined;
                           return (
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1.5">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-xs gap-1.5"
-                                onClick={() => openDocuments(req)}
-                              >
-                                <FileText className="size-3.5" /> Docs
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-xs gap-1.5"
+                                className="h-8 px-2.5 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
                                 onClick={async () => {
                                   setSnapshotTarget(req);
                                   setSnapshotLoading(true);
                                   setSnapshotData(null);
                                   try {
-                                    const data = await procurementService.getVendorProfile(req.id);
+                                    const data = await procurementService.getVendorProfile(String(req.id));
                                     setSnapshotData(data);
                                   } catch {
                                     setSnapshotData(null);
@@ -605,10 +681,21 @@ export default function OnboardingQueuePage() {
                                     setSnapshotLoading(false);
                                   }
                                 }}
-                                title="View profile snapshot"
+                                title="View registration application"
                               >
-                                <Eye className="size-3.5" /> Profile
+                                <Eye className="size-3.5" />
+                                <span>View</span>
                               </Button>
+                              {hasDocs && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5"
+                                  onClick={() => openDocuments(req)}
+                                >
+                                  <FileText className="size-3.5" /> Docs
+                                </Button>
+                              )}
                               {notSubmitted ? (
                                 <Badge tone="neutral" className="gap-1 text-[11px] font-normal">
                                   <Clock className="size-3" /> Form in progress
@@ -663,12 +750,12 @@ export default function OnboardingQueuePage() {
                               variant="outline"
                               size="sm"
                               className="h-8 text-xs gap-1.5"
-                              onClick={async () => {
+                                onClick={async () => {
                                 setSnapshotTarget(req);
                                 setSnapshotLoading(true);
                                 setSnapshotData(null);
                                 try {
-                                  const data = await procurementService.getVendorProfile(req.id);
+                                  const data = await procurementService.getVendorProfile(String(req.id));
                                   setSnapshotData(data);
                                 } catch {
                                   setSnapshotData(null);
@@ -676,9 +763,9 @@ export default function OnboardingQueuePage() {
                                   setSnapshotLoading(false);
                                 }
                               }}
-                              title="View profile snapshot"
+                              title="View registration application"
                             >
-                              <Eye className="size-3.5" /> Profile
+                              <Eye className="size-3.5" /> View
                             </Button>
                           </div>
                         ) : req.status === 'rejected' ? (
@@ -690,6 +777,27 @@ export default function OnboardingQueuePage() {
                               onClick={() => openDocuments(req)}
                             >
                               <FileText className="size-3.5" /> Docs
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs gap-1.5"
+                              onClick={async () => {
+                                setSnapshotTarget(req);
+                                setSnapshotLoading(true);
+                                setSnapshotData(null);
+                                try {
+                                  const data = await procurementService.getVendorProfile(String(req.id));
+                                  setSnapshotData(data);
+                                } catch {
+                                  setSnapshotData(null);
+                                } finally {
+                                  setSnapshotLoading(false);
+                                }
+                              }}
+                              title="View registration application"
+                            >
+                              <Eye className="size-3.5" /> View
                             </Button>
                             {req.rejectionReason && (
                               <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={req.rejectionReason}>
@@ -714,12 +822,22 @@ export default function OnboardingQueuePage() {
               {paginated.map((req) => (
                 <article key={req.id} className="p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-bold text-foreground">{req.name}</p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground truncate">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-bold">
+                          {req.vendorNo}
+                        </span>
+                        <p className="truncate text-base font-bold text-foreground">{req.name}</p>
+                      </div>
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
                         <Mail size={13} className="shrink-0" />
                         {req.email}
                       </p>
+                      {req.phone && (
+                        <p className="text-xs text-muted-foreground font-mono">
+                          P.No: {req.phone}
+                        </p>
+                      )}
                     </div>
                     <Badge tone={onboardingStatusTone(req.status)} className="shrink-0 gap-1 font-semibold">
                       <span className="size-1.5 rounded-full bg-current" />
@@ -730,19 +848,16 @@ export default function OnboardingQueuePage() {
                     <span>Submitted: <strong>{req.submittedDate}</strong></span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-border/50">
-                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => openDocuments(req)}>
-                      <FileText className="size-3.5" /> Docs
-                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs gap-1.5"
+                      className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
                       onClick={async () => {
                         setSnapshotTarget(req);
                         setSnapshotLoading(true);
                         setSnapshotData(null);
                         try {
-                          const data = await procurementService.getVendorProfile(req.id);
+                          const data = await procurementService.getVendorProfile(String(req.id));
                           setSnapshotData(data);
                         } catch {
                           setSnapshotData(null);
@@ -751,8 +866,13 @@ export default function OnboardingQueuePage() {
                         }
                       }}
                     >
-                      <Eye className="size-3.5" /> Profile
+                      <Eye className="size-3.5" /> View
                     </Button>
+                    {req.documents.length > 0 && (
+                      <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => openDocuments(req)}>
+                        <FileText className="size-3.5" /> Docs
+                      </Button>
+                    )}
                     {req.status === 'pending' && canApproveOnboarding && req.isSubmitted && (
                       <>
                         <Button
@@ -943,7 +1063,7 @@ export default function OnboardingQueuePage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => window.open(documentUrl(doc.publicUrl), '_blank', 'noopener,noreferrer')}
+                                onClick={() => viewDocument(doc.publicUrl)}
                                 title="View document"
                               >
                                 <Eye className="size-4" />
@@ -991,7 +1111,7 @@ export default function OnboardingQueuePage() {
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  onClick={() => window.open(documentUrl(doc.publicUrl), '_blank', 'noopener,noreferrer')}
+                                  onClick={() => viewDocument(doc.publicUrl)}
                                   title="View signed agreement"
                                 >
                                   <Eye className="size-4" />
@@ -1031,8 +1151,15 @@ export default function OnboardingQueuePage() {
                   <Building className="size-5" />
                 </div>
                 <div>
-                  <DialogTitle>{snapshotTarget.name}</DialogTitle>
-                  <DialogDescription>Onboarding Profile Snapshot</DialogDescription>
+                  <div className="flex items-center gap-2">
+                    <DialogTitle>{snapshotTarget.name}</DialogTitle>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-bold">
+                      {snapshotTarget.vendorNo}
+                    </span>
+                  </div>
+                  <DialogDescription>
+                    Vendor Registration Application • Submitted {snapshotTarget.submittedDate}
+                  </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
@@ -1042,23 +1169,181 @@ export default function OnboardingQueuePage() {
                 <div className="text-center py-8 text-sm text-muted-foreground">Loading vendor details…</div>
               ) : snapshotData ? (
                 <div className="space-y-5">
-                  {/* Company Details */}
+                  {/* 1. Supplier Details Section */}
                   <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
                     <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-primary border-b border-border/50 pb-2">
-                      <Briefcase className="size-4" /> Company Details
+                      <Building2 className="size-4" /> Supplier Details
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div><div className="text-muted-foreground font-medium">Company Name</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.name || '—')}</div></div>
-                      <div><div className="text-muted-foreground font-medium">Email</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.email || '—')}</div></div>
-                      <div><div className="text-muted-foreground font-medium">Phone</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.phone || '—')}</div></div>
-                      <div><div className="text-muted-foreground font-medium">Contact Person</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.contactPerson || '—')}</div></div>
-                      <div><div className="text-muted-foreground font-medium">Category</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.category || '—')}</div></div>
-                      <div><div className="text-muted-foreground font-medium">Supplier Type</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.supplierType || '—')}</div></div>
-                      <div><div className="text-muted-foreground font-medium">Location</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.location || '—')}</div></div>
-                      <div><div className="text-muted-foreground font-medium">Website</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.website || '—')}</div></div>
-                      <div className="sm:col-span-2"><div className="text-muted-foreground font-medium">Address</div><div className="font-semibold text-foreground mt-0.5">{String(snapshotData.address || '—')}</div></div>
+                      <div>
+                        <div className="text-muted-foreground font-medium">Company Name</div>
+                        <div className="font-semibold text-foreground mt-0.5">
+                          {String(snapshotData.name || snapshotTarget.name || '—')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground font-medium">Vendor Email</div>
+                        <div className="font-semibold text-foreground mt-0.5">
+                          {String(snapshotData.email || snapshotTarget.email || '—')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground font-medium">Contact Person</div>
+                        <div className="font-semibold text-foreground mt-0.5">
+                          {String(snapshotData.contactPerson || snapshotTarget.contactPerson || '—')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground font-medium">Phone Number (P.No.)</div>
+                        <div className="font-semibold text-foreground mt-0.5 font-mono">
+                          {String(snapshotData.phone || snapshotTarget.phone || '—')}
+                        </div>
+                      </div>
+                      {snapshotData.website ? (
+                        <div>
+                          <div className="text-muted-foreground font-medium">Website</div>
+                          <div className="font-semibold text-foreground mt-0.5">{String(snapshotData.website)}</div>
+                        </div>
+                      ) : null}
+                      {snapshotData.location ? (
+                        <div>
+                          <div className="text-muted-foreground font-medium">Location</div>
+                          <div className="font-semibold text-foreground mt-0.5">{String(snapshotData.location)}</div>
+                        </div>
+                      ) : null}
+                      {snapshotData.address ? (
+                        <div className="sm:col-span-2">
+                          <div className="text-muted-foreground font-medium">Address</div>
+                          <div className="font-semibold text-foreground mt-0.5">{String(snapshotData.address)}</div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
+
+                  {/* 2. Supplier Information Section */}
+                  <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+                    <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-primary border-b border-border/50 pb-2">
+                      <Tag className="size-4" /> Supplier Information
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <div className="text-muted-foreground font-medium">Vendor Category</div>
+                        <div className="font-semibold text-foreground mt-0.5">
+                          {String(snapshotData.category || snapshotTarget.category || '—')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground font-medium">Supplier Type</div>
+                        <div className="font-semibold text-foreground mt-0.5">
+                          {String(snapshotData.supplierType || snapshotTarget.supplierType || '—')}
+                        </div>
+                      </div>
+                      {snapshotData.onboardingNotes ? (
+                        <div className="sm:col-span-2">
+                          <div className="text-muted-foreground font-medium">Notes / Business Description</div>
+                          <div className="font-semibold text-foreground mt-0.5 whitespace-pre-wrap">
+                            {String(snapshotData.onboardingNotes)}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* 3. Uploaded Registration Documents */}
+                  {(() => {
+                    const rawDocs = (snapshotData.documents as Array<Record<string, unknown>>) ||
+                      (snapshotTarget.documents as Array<Record<string, unknown>>) || [];
+
+                    return (
+                      <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+                        <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                          <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-primary">
+                            <FileCheck2 className="size-4" /> Uploaded Registration Documents
+                          </div>
+                          <span className="text-[11px] font-medium text-muted-foreground">
+                            Trade License, VAT Certificate &amp; Emirates ID
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {[
+                            { key: 'trade_license', title: 'Trade License' },
+                            { key: 'vat_certificate', title: 'VAT Certificate' },
+                            { key: 'emirates_id', title: 'Emirates ID' },
+                          ].map((expected) => {
+                            const match = rawDocs.find((d) => {
+                              const raw = String(d.documentType || d.type || d.label || '').toLowerCase();
+                              return (
+                                raw.includes(expected.key) ||
+                                raw.includes(expected.title.toLowerCase()) ||
+                                (expected.key === 'emirates_id' && raw.includes('emirates')) ||
+                                (expected.key === 'vat_certificate' && (raw.includes('vat') || raw.includes('tax'))) ||
+                                (expected.key === 'trade_license' && (raw.includes('trade') || raw.includes('license') || raw.includes('commercial')))
+                              );
+                            });
+
+                            const fileName = match ? String(match.originalName || match.fileName || `${expected.title}.pdf`) : null;
+                            const fileUrl = match ? String(match.publicUrl || match.dataUrl || '') : '';
+
+                            return (
+                              <div
+                                key={expected.key}
+                                className={cn(
+                                  'p-3 rounded-lg border text-xs flex flex-col justify-between space-y-2',
+                                  match
+                                    ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20'
+                                    : 'border-border/60 bg-muted/20 opacity-75'
+                                )}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-foreground">{expected.title}</span>
+                                    {match ? (
+                                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                                        <Check size={11} /> Uploaded
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground">Not submitted</span>
+                                    )}
+                                  </div>
+                                  {fileName && (
+                                    <p className="mt-1 text-[11px] text-foreground/80 truncate font-mono" title={fileName}>
+                                      {fileName}
+                                    </p>
+                                  )}
+                                </div>
+
+                                {match && fileUrl && (
+                                  <div className="pt-1">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 w-full text-[11px] gap-1.5 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                      onClick={() => {
+                                        if (fileUrl.startsWith('data:') || fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                                          const win = window.open();
+                                          if (win) {
+                                            win.document.write(
+                                              `<iframe src="${fileUrl}" frameborder="0" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`
+                                            );
+                                          } else {
+                                            window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <Eye className="size-3" /> View Document
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Mandatory Information */}
                   <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
@@ -1245,7 +1530,7 @@ export default function OnboardingQueuePage() {
                                     vendorSignedAt: (nda.vendorSignedAt as string) || (nda.signedAt as string) || null,
                                   });
                                 } else if (viewUrl) {
-                                  window.open(documentUrl(viewUrl), '_blank', 'noopener,noreferrer');
+                                  viewDocument(viewUrl);
                                 }
                               }}
                             >
@@ -1273,8 +1558,54 @@ export default function OnboardingQueuePage() {
                 <div className="text-center py-8 text-sm text-muted-foreground">No profile data available for this vendor.</div>
               )}
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setSnapshotTarget(null); setSnapshotData(null); }}>Close</Button>
+            <DialogFooter className="flex flex-row items-center justify-between sm:justify-between w-full pt-3 border-t border-border/60">
+              <div className="flex items-center gap-2">
+                {snapshotTarget.status === 'pending' && canApproveOnboarding && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-rose-600 hover:bg-rose-500/10 border-rose-500/30 gap-1.5"
+                      onClick={() => {
+                        const target = snapshotTarget;
+                        setSnapshotTarget(null);
+                        setSnapshotData(null);
+                        setActionError(null);
+                        setRejectTarget(target);
+                        setRejectReason('');
+                      }}
+                    >
+                      <XCircle className="size-3.5" /> Reject Application
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                      onClick={() => {
+                        const target = snapshotTarget;
+                        setSnapshotTarget(null);
+                        setSnapshotData(null);
+                        openApproveModal(target);
+                      }}
+                    >
+                      <CheckCircle2 className="size-3.5" /> Approve Vendor
+                    </Button>
+                  </>
+                )}
+                {snapshotTarget.status === 'approved' && (
+                  <Badge tone="success" className="gap-1 font-semibold text-xs">
+                    <CheckCircle2 className="size-3.5" /> Vendor Approved
+                  </Badge>
+                )}
+                {snapshotTarget.status === 'rejected' && (
+                  <Badge tone="danger" className="gap-1 font-semibold text-xs">
+                    <XCircle className="size-3.5" /> Vendor Rejected
+                  </Badge>
+                )}
+              </div>
+              <Button variant="outline" size="sm" onClick={() => { setSnapshotTarget(null); setSnapshotData(null); }}>
+                Close
+              </Button>
             </DialogFooter>
           </DialogContent>
         )}
@@ -1408,9 +1739,10 @@ export default function OnboardingQueuePage() {
 
 
 const ONBOARDING_QUEUE_COLUMNS: LandingColumn[] = [
-  { key: 'vendor', label: 'Vendor', defaultVisible: true, required: true },
+  { key: 'vendorNo', label: 'Vendor #', defaultVisible: true, required: true },
+  { key: 'name', label: 'Name', defaultVisible: true, required: true },
+  { key: 'phone', label: 'P.No.', defaultVisible: true },
   { key: 'email', label: 'Email', defaultVisible: true },
-  { key: 'submitted', label: 'Submitted', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
 ];
