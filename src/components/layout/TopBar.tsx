@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
@@ -24,6 +24,7 @@ import AdminNotificationBell from './AdminNotificationBell';
 import HeaderCalendarPopover from './HeaderCalendarPopover';
 import TaskInboxPopover from './TaskInboxPopover';
 import { taskService } from '../../services/taskService';
+import { sseClient } from '../../services/sseClient';
 import { cn } from '../../lib/utils';
 import { motionTransition } from '../../lib/motion';
 
@@ -173,36 +174,65 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isMailOpen, setIsMailOpen] = useState(false);
   const [pendingTaskCount, setPendingTaskCount] = useState(0);
+  const [hasTaskIndicator, setHasTaskIndicator] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownPopupRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   const mailRef = useRef<HTMLDivElement>(null);
 
-  const fetchPendingTaskCount = () => {
+  const fetchPendingTaskCount = useCallback(() => {
     if (user?.id) {
       taskService
-        .getTasks({ type: 'assigned_to_me' })
+        .getTasks({ type: 'all' })
         .then((res) => {
-          const uncompleted = (res.tasks || []).filter((t) => t.status !== 'completed').length;
-          setPendingTaskCount(res.pendingCount ?? uncompleted);
+          const totalCount =
+            res.totalIndicationCount ??
+            ((res.creatorUnseenCount || 0) + (res.assigneeUnseenCount || 0));
+          const hasUpdate = Boolean(
+            res.hasUnseenUpdate ||
+            (res.creatorUnseenCount && res.creatorUnseenCount > 0) ||
+            (res.assigneeUnseenCount && res.assigneeUnseenCount > 0) ||
+            totalCount > 0
+          );
+          setPendingTaskCount(totalCount);
+          setHasTaskIndicator(hasUpdate);
         })
         .catch(() => {});
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     fetchPendingTaskCount();
     const handleUpdate = () => fetchPendingTaskCount();
     window.addEventListener('heliflow_tasks_updated', handleUpdate);
     window.addEventListener('focus', handleUpdate);
+
+    // SSE real-time listeners for instant delivery of task updates
+    const unsubTask = sseClient.on('task_updated', handleUpdate);
+    const unsubNotif = sseClient.on('notification', handleUpdate);
+
     const interval = setInterval(fetchPendingTaskCount, 10000);
     return () => {
       window.removeEventListener('heliflow_tasks_updated', handleUpdate);
       window.removeEventListener('focus', handleUpdate);
+      unsubTask();
+      unsubNotif();
       clearInterval(interval);
     };
-  }, [user?.id]);
+  }, [fetchPendingTaskCount]);
+
+  const handleToggleMail = () => {
+    const nextState = !isMailOpen;
+    setIsMailOpen(nextState);
+    if (nextState) {
+      // Mark tasks seen so green indication dot clears after viewing
+      taskService.markTasksSeen().then(() => {
+        setHasTaskIndicator(false);
+        setPendingTaskCount(0);
+      }).catch(() => {});
+    }
+  };
 
   const handleMyProfile = () => {
     setDropdownOpen(false);
@@ -324,17 +354,27 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
             type="button"
             data-mail-trigger="true"
             className={iconButtonClass}
-            onClick={() => setIsMailOpen(!isMailOpen)}
+            onClick={handleToggleMail}
             title="Assigned Tasks"
             aria-label="Assigned Tasks"
             aria-expanded={isMailOpen}
           >
-            <ListTodo size={19} />
-            {pendingTaskCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex min-w-4 h-4 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-card">
-                {pendingTaskCount > 99 ? '99+' : pendingTaskCount}
-              </span>
-            )}
+            <div className="relative inline-flex items-center justify-center">
+              <ListTodo size={19} />
+              {(hasTaskIndicator || pendingTaskCount > 0) && (
+                <span
+                  className={cn(
+                    "absolute flex items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-card animate-pulse pointer-events-none",
+                    pendingTaskCount > 0
+                      ? "-top-1.5 -right-2.5 min-w-4 h-4 px-1"
+                      : "-top-1 -right-1.5 size-2.5"
+                  )}
+                  title="New task updates"
+                >
+                  {pendingTaskCount > 0 ? (pendingTaskCount > 99 ? '99+' : pendingTaskCount) : ''}
+                </span>
+              )}
+            </div>
           </button>
           {isMailOpen && (
             <TaskInboxPopover

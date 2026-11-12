@@ -78,6 +78,7 @@ class SSEClient {
     'contract_updated',
     'contract_deleted',
     'po_status_changed',
+    'task_updated',
   ];
 
   /**

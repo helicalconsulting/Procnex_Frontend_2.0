@@ -64,8 +64,9 @@ function formatBytes(bytes: number): string {
 export default function VendorSelfRegistrationPage() {
   const { isDark, toggleTheme } = useTheme();
   const { companyCode } = useParams<{ companyCode?: string }>();
-  const activeCompany = (companyCode || 'alzorah').toUpperCase();
-  const companyDisplayName = activeCompany === 'ALZORAH' ? "'Al Zorah' Group" : `${activeCompany} Group`;
+  const activeCompany = (companyCode || 'HFL').toUpperCase();
+  const companyDisplayName = activeCompany === 'HFL' ? 'Procnex' : activeCompany === 'ALZORAH' ? "'Al Zorah' Group" : `${activeCompany} Group`;
+  const supportEmail = activeCompany === 'HFL' ? 'admin@procnex.com' : activeCompany === 'ALZORAH' ? 'procurement@alzorah.com' : `procurement@${activeCompany.toLowerCase()}.com`;
 
   // Form Fields
   const [companyName, setCompanyName] = useState('');
@@ -270,7 +271,7 @@ export default function VendorSelfRegistrationPage() {
         categoryId,
         supplierType,
         notes,
-        companyCode: companyCode || 'alzorah',
+        companyCode: companyCode || 'HFL',
         documents,
       });
       setRegisteredRecord(record);
@@ -379,7 +380,7 @@ export default function VendorSelfRegistrationPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">From:</span>
                     <span className="font-medium text-foreground">
-                      {companyDisplayName} Procurement &lt;procurement@alzorah.com&gt;
+                      {companyDisplayName} Procurement &lt;{supportEmail}&gt;
                     </span>
                   </div>
                   <div className="flex items-center justify-between">

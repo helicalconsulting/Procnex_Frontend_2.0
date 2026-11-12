@@ -30,6 +30,8 @@ export interface TaskItem {
   currentAssigneeId?: string | null;
   currentAssignee?: TaskUser | null;
   attachments?: TaskAttachment[];
+  creatorHasUnseenUpdate?: boolean;
+  assigneeHasUnseenUpdate?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,6 +39,10 @@ export interface TaskItem {
 export interface TaskListResponse {
   tasks: TaskItem[];
   pendingCount: number;
+  creatorUnseenCount?: number;
+  assigneeUnseenCount?: number;
+  totalIndicationCount?: number;
+  hasUnseenUpdate?: boolean;
   currentUserId: string;
 }
 
@@ -115,5 +121,18 @@ export const taskService = {
     await apiRequest(`/tasks/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  /**
+   * Mark all tasks seen for current user
+   */
+  async markTasksSeen(): Promise<void> {
+    try {
+      await apiRequest('/tasks/mark-seen', {
+        method: 'POST',
+      });
+    } catch {
+      // Non-blocking
+    }
   },
 };

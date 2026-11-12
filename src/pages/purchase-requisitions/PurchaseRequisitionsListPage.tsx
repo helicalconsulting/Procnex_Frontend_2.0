@@ -58,8 +58,6 @@ type StatusFilter = string | null;
 
 const releasedStatuses = ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'];
 
-const DEPARTMENTS = ['All', 'Ops', 'Sales', 'Dev', 'Test'];
-
 function getStatusLabel(status: string): string {
   const s = String(status || '').toUpperCase();
   const labels: Record<string, string> = {
@@ -122,7 +120,6 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: 'items', label: 'Requested Items', defaultVisible: true },
   { key: 'conversionStatus', label: 'Next Step / Routing', defaultVisible: true },
   { key: 'poDate', label: 'Date', defaultVisible: true },
-  { key: 'grandTotal', label: 'Est. Total', defaultVisible: true },
 ];
 
 export default function PurchaseRequisitionsListPage() {
@@ -247,8 +244,8 @@ export default function PurchaseRequisitionsListPage() {
     baseRequisitionsForUser.forEach((r) => {
       if (r.department && r.department.trim()) set.add(r.department.trim());
     });
-    const list = Array.from(set);
-    return ['All', ...(list.length > 0 ? list : ['Ops', 'Sales', 'Dev', 'Test'])];
+    const list = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    return ['All', ...list];
   }, [companyDepartments, baseRequisitionsForUser]);
 
   useEffect(() => {
@@ -364,8 +361,8 @@ export default function PurchaseRequisitionsListPage() {
 
       // Department Filter
       if (selectedDept !== 'All') {
-        const dept = (r.department || '').toLowerCase();
-        if (!dept.includes(selectedDept.toLowerCase())) return false;
+        const dept = (r.department || '').trim().toLowerCase();
+        if (dept !== selectedDept.trim().toLowerCase()) return false;
       }
 
       // Conversion Status Filter
@@ -810,7 +807,7 @@ export default function PurchaseRequisitionsListPage() {
       {/* Page Header */}
       <PageLead
         title="Purchase Requisitions"
-        description="Departmental requisitions prior to RFQ or Direct PO creation. Single or multi-user requests (Ops, Sales, Dev, Test) routed directly to purchase."
+        description="Departmental requisitions prior to RFQ or Direct PO creation. Single or multi-user requests routed directly to purchase."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -1232,7 +1229,7 @@ export default function PurchaseRequisitionsListPage() {
           className="mt-5"
           icon={FileText}
           title="No purchase requisitions yet"
-          description="Create your first departmental item requisition (Ops, Sales, Dev, Test) to kickstart your procurement flow."
+          description="Create your first departmental item requisition to kickstart your procurement flow."
           action={
             <Button onClick={() => setShowCreateModal(true)}>
               <Plus /> Create Requisition
@@ -1570,9 +1567,9 @@ export default function PurchaseRequisitionsListPage() {
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-muted-foreground">Estimated Total</dt>
-                            <dd className="mt-1 font-semibold tabular-nums">
-                              {formatAmount(requisition.grandTotal || 0, requisition.currency || companyDefaultCurrency)}
+                            <dt className="text-muted-foreground">Date</dt>
+                            <dd className="mt-1 font-medium text-foreground">
+                              {formatDate(requisition.poDate || requisition.createdAt)}
                             </dd>
                           </div>
                         </dl>
@@ -1792,7 +1789,6 @@ export default function PurchaseRequisitionsListPage() {
                           <th className="p-3">Item Name & Details</th>
                           <th className="p-3 text-center">Qty</th>
                           {viewingPr.requisitionType === 'MULTI' && <th className="p-3">Requested By</th>}
-                          <th className="p-3 text-right pr-3.5">Est. Total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/50">
@@ -1813,12 +1809,6 @@ export default function PurchaseRequisitionsListPage() {
                                 {it.requestedBy || viewingPr.requesterName || '-'} ({it.department || viewingPr.department})
                               </td>
                             )}
-                            <td className="p-3 text-right pr-3.5 font-semibold tabular-nums">
-                              {formatAmount(
-                                Number(it.total || (Number(it.quantity || 1) * Number(it.estimatedPrice || it.unitPrice || 0))),
-                                viewingPr.currency || companyDefaultCurrency
-                              )}
-                            </td>
                           </tr>
                         ))}
                       </tbody>

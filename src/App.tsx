@@ -109,7 +109,6 @@ const MergePurchaseRequisitionsPage = lazy(() => import("./pages/purchase-requis
 const POCreationListPage = lazy(() => import("./pages/purchase-orders/POCreationListPage"));
 const PurchaseOrdersPage = lazy(() => import("./pages/purchase-orders/PurchaseOrdersPage"));
 const CreatePurchaseOrderPage = lazy(() => import("./pages/purchase-orders/CreatePurchaseOrderPage"));
-const BudgetListPage = lazy(() => import("./pages/budget/BudgetListPage"));
 const BudgetCreatePage = lazy(() => import("./pages/budget/BudgetCreatePage"));
 const BudgetDetailPage = lazy(() => import("./pages/budget/BudgetDetailPage"));
 const DocumentVerificationPage = lazy(() => import("./pages/verify/DocumentVerificationPage"));
@@ -245,7 +244,7 @@ export default function App() {
                             element={page(ApprovalLevelsPage)}
                           />
                           <Route path="/approvals" element={page(ApprovalsPage)} />
-                          <Route path="/budget" element={page(BudgetListPage)} />
+                          <Route path="/budget" element={page(BudgetCreatePage)} />
                           <Route path="/budget/create" element={page(BudgetCreatePage)} />
                           <Route path="/budget/:id" element={page(BudgetDetailPage)} />
                           <Route

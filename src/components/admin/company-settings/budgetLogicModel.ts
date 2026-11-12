@@ -55,6 +55,11 @@ export interface BudgetLogicConfig {
   defaultBudgetDimension: 'ITEM' | 'SUPPLIER' | 'DEPARTMENT' | 'MIX_BAG';
   allowVirementBetweenLines: boolean;
   requireFinanceSignoffForVirement: boolean;
+  budgetTypes?: string[];
+  fundingSources?: string[];
+  fxConversionSources?: Array<{ code: string; label: string }>;
+  defaultBudgetType?: string;
+  defaultFundingSource?: string;
   updatedAt?: string;
 }
 
@@ -96,6 +101,25 @@ export const DEFAULT_BUDGET_LOGIC: BudgetLogicConfig = {
   vatTreatment: 'EXCLUSIVE',
   allowVirementBetweenLines: true,
   requireFinanceSignoffForVirement: true,
+  budgetTypes: [
+    'OPEX (Operating Expenditure)',
+    'CAPEX (Capital Expenditure)',
+    'Project Spend',
+    'Donor / Grant Funded',
+  ],
+  fundingSources: [
+    'Internal Revenue / Operational Cashflow',
+    'Bank Credit / Loan Facility',
+    'Equity / Shareholder Inflow',
+    'Donor / NGO Grant',
+  ],
+  fxConversionSources: [
+    { code: 'LIVE_MARKET', label: 'Live Market Rates (open.er-api.com)' },
+    { code: 'FIXED_BUDGET_RATE', label: 'Fixed Budget Master Table' },
+    { code: 'CENTRAL_BANK', label: 'Central Bank Daily Fixing' },
+  ],
+  defaultBudgetType: 'OPEX (Operating Expenditure)',
+  defaultFundingSource: 'Internal Revenue / Operational Cashflow',
   updatedAt: new Date().toISOString(),
 };
 
@@ -207,6 +231,9 @@ export function loadBudgetLogicSettings(): BudgetLogicConfig {
       checkPoints: { ...DEFAULT_BUDGET_LOGIC.checkPoints, ...(parsed.checkPoints || {}) },
       phasing: { ...DEFAULT_BUDGET_LOGIC.phasing, ...(parsed.phasing || {}) },
       alerts: { ...DEFAULT_BUDGET_LOGIC.alerts, ...(parsed.alerts || {}) },
+      budgetTypes: parsed.budgetTypes && parsed.budgetTypes.length > 0 ? parsed.budgetTypes : DEFAULT_BUDGET_LOGIC.budgetTypes,
+      fundingSources: parsed.fundingSources && parsed.fundingSources.length > 0 ? parsed.fundingSources : DEFAULT_BUDGET_LOGIC.fundingSources,
+      fxConversionSources: parsed.fxConversionSources && parsed.fxConversionSources.length > 0 ? parsed.fxConversionSources : DEFAULT_BUDGET_LOGIC.fxConversionSources,
     };
   } catch (err) {
     console.error('Failed to parse budget logic settings from localStorage', err);

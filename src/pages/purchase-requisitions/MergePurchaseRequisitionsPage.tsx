@@ -920,7 +920,7 @@ export default function MergePurchaseRequisitionsPage() {
                       <Boxes className="size-4 text-primary" /> Select Item / Product Demand
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      Pick a requested item to aggregate requisitions across all departments (Ops, Sales, Dev, Test).
+                      Pick a requested item to aggregate requisitions across all departments.
                     </p>
                   </div>
 

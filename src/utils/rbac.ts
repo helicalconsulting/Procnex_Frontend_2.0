@@ -188,7 +188,7 @@ export const NAVIGATION_MENU: MenuItem[] = [
   {
     id: 'budget-management',
     label: 'Budget Management',
-    path: '/budget',
+    path: '/budget/create',
     roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
   },
   {

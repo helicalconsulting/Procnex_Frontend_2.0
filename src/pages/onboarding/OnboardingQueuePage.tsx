@@ -1,6 +1,5 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import DOMPurify from 'dompurify';
 import { createPortal } from 'react-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -366,7 +365,8 @@ export default function OnboardingQueuePage() {
 
       const target = e.target as Node | null;
       if (
-        (container && target && container.contains(target)) ||
+        (container && target && (container === target || container.contains(target))) ||
+        (target && (target as Element).classList?.contains('oq-signed-modal-portal-overlay')) ||
         (target && (target as Element).classList?.contains('oq-signed-modal-backdrop')) ||
         (target && (target as Element).classList?.contains('oq-signed-modal-wrapper'))
       ) {
@@ -1612,23 +1612,19 @@ export default function OnboardingQueuePage() {
       </Dialog>
 
       {/* Signed Agreement Preview Modal */}
-      {signedPreviewDoc && (
-        <DialogPrimitive.Root open={Boolean(signedPreviewDoc)} onOpenChange={(open) => !open && setSignedPreviewDoc(null)}>
-          <DialogPrimitive.Portal>
-            <DialogPrimitive.Overlay className="oq-signed-modal-backdrop" />
-            <div className="oq-signed-modal-wrapper">
-              <DialogPrimitive.Content
-                ref={modalContainerRef}
-                className="oq-signed-modal"
-                aria-describedby={undefined}
-                onOpenAutoFocus={(e) => {
-                  e.preventDefault();
-                  signedModalBodyRef.current?.focus();
-                }}
-              >
-                <DialogPrimitive.Title className="sr-only">
-                  {signedPreviewDoc.documentType} Signed Agreement
-                </DialogPrimitive.Title>
+      {signedPreviewDoc && createPortal(
+        <div
+          className="oq-signed-modal-portal-overlay"
+          onClick={() => setSignedPreviewDoc(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${signedPreviewDoc.documentType} Signed Agreement`}
+        >
+          <div
+            ref={modalContainerRef}
+            className="oq-signed-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
 
                 <div className="oq-signed-modal__header">
                   <div className="oq-signed-modal__header-left">
@@ -1728,10 +1724,9 @@ export default function OnboardingQueuePage() {
                     />
                   </div>
                 </div>
-              </DialogPrimitive.Content>
-            </div>
-          </DialogPrimitive.Portal>
-        </DialogPrimitive.Root>
+          </div>
+        </div>,
+        document.body
       )}
     </PageFrame>
   );

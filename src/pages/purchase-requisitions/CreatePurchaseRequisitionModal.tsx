@@ -33,7 +33,7 @@ interface RequisitionItemRow {
   description: string;
   quantity: number;
   unit: string;
-  estimatedPrice: number;
+  estimatedPrice?: number;
 }
 
 interface CreatePurchaseRequisitionModalProps {
@@ -88,7 +88,6 @@ export default function CreatePurchaseRequisitionModal({
       description: '',
       quantity: 1,
       unit: 'pcs',
-      estimatedPrice: 0,
     },
   ]);
 
@@ -184,7 +183,6 @@ export default function CreatePurchaseRequisitionModal({
         description: '',
         quantity: 1,
         unit: 'pcs',
-        estimatedPrice: 0,
       },
     ]);
   };
@@ -208,7 +206,7 @@ export default function CreatePurchaseRequisitionModal({
 
     // Validation
     if (!effectiveDepartment) {
-      setError('Please select or specify a department (e.g. Ops, Sales, Dev, Test).');
+      setError('Please select or specify a department.');
       return;
     }
     if (!requesterName.trim()) {
@@ -310,7 +308,7 @@ export default function CreatePurchaseRequisitionModal({
               {department === '__OTHER__' && (
                 <Input
                   className="mt-2 text-xs"
-                  placeholder="Type department name (e.g. D1 Ops, D3 Dev)"
+                  placeholder="Type department name..."
                   value={customDepartment}
                   onChange={(e) => setCustomDepartment(e.target.value)}
                 />
@@ -435,7 +433,7 @@ export default function CreatePurchaseRequisitionModal({
                         required
                       />
                     </div>
-                    <div className="col-span-4 sm:col-span-2">
+                    <div className="col-span-6 sm:col-span-3">
                       <Input
                         type="number"
                         min="1"
@@ -446,29 +444,18 @@ export default function CreatePurchaseRequisitionModal({
                         required
                       />
                     </div>
-                    <div className="col-span-4 sm:col-span-2">
+                    <div className="col-span-6 sm:col-span-3 flex items-center gap-1">
                       <Input
                         placeholder="Unit (pcs)"
-                        className="text-xs text-center"
+                        className="text-xs text-center flex-1"
                         value={item.unit}
                         onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2 flex items-center justify-end gap-1">
-                      <Input
-                        type="number"
-                        placeholder="Est. Price"
-                        className="text-xs"
-                        value={item.estimatedPrice || ''}
-                        onChange={(e) =>
-                          handleItemChange(idx, 'estimatedPrice', Number(e.target.value) || 0)
-                        }
                       />
                       {items.length > 1 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
-                          className="text-muted-foreground hover:text-rose-500 p-1 rounded-md transition-colors"
+                          className="text-muted-foreground hover:text-rose-500 p-1.5 rounded-md transition-colors shrink-0"
                           title="Remove item"
                         >
                           <Trash2 className="size-4" />

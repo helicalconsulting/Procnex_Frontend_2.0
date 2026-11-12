@@ -860,7 +860,7 @@ export default function CreatePaymentVoucherPage() {
     };
   }, [isCreating, selectedVendorId, vendorName, invoiceEntryMode]);
 
-  // Recalculate totals, invoice references, and 3-way multi-matching from invoice selection
+  // Recalculate totals and invoice references from invoice selection
   const updateTotalsFromInvoices = (list: VendorInvoiceItem[], mode: 'single' | 'multiple' = selectionMode) => {
     const selected = list.filter((i) => i.selected);
     if (selected.length > 0) {
@@ -869,80 +869,9 @@ export default function CreatePaymentVoucherPage() {
 
       const refText = selected.map((i) => i.invoiceNumber).join(', ') + (selected.length > 1 ? ` (${selected.length} Invoices)` : '');
       setInvoiceRef(refText);
-
-      // Aggregate item quantities and shortfall values
-      let totalOrd = 0;
-      let totalRec = 0;
-      let totalGrnAmt = 0;
-      let totalShortfallAmt = 0;
-      let totalShortfallUnits = 0;
-
-      selected.forEach((i) => {
-        if (Array.isArray(i.items) && i.items.length > 0) {
-          i.items.forEach((it) => {
-            totalOrd += it.orderedQty;
-            totalRec += it.receivedQty;
-            totalGrnAmt += it.receivedValue;
-            totalShortfallAmt += it.shortfallValue;
-            totalShortfallUnits += it.shortfallQty;
-          });
-        } else {
-          if (i.grnOrderedQty && i.grnOrderedQty > 0) {
-            totalOrd += i.grnOrderedQty;
-            totalRec += i.grnReceivedQty ?? i.grnOrderedQty;
-          }
-          if (i.grnReceivedAmount && i.grnReceivedAmount > 0) {
-            totalGrnAmt += i.grnReceivedAmount;
-          }
-        }
-      });
-
-      const hasGrnQtyShortfall = totalOrd > 0 && totalRec < totalOrd && (totalOrd - totalRec) / totalOrd > 0.02;
-      const hasGrnAmtShortfall = (totalShortfallAmt > 0.01) || (totalGrnAmt > 0 && totalGross > 0 && totalGrnAmt < totalGross * 0.98);
-      const hasGrnShortfall = hasGrnQtyShortfall || hasGrnAmtShortfall;
-
-      // 3-Way Multi-Matching Check: check actual variances
-      const hasOverbilling = selected.some((i) => i.paymentAmount > i.amount);
-      const hasItemDiscrepancy = selected.some((i) => {
-        if (Array.isArray(i.items) && i.items.length > 0) {
-          return i.items.some((it) => it.shortfallQty > 0 || it.shortfallValue > 0.01);
-        }
-        return i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH';
-      });
-      const hasDiscrepancy = hasOverbilling || hasItemDiscrepancy || hasGrnShortfall;
-
-      if (hasDiscrepancy) {
-        setMatchStatus('DISCREPANCY');
-        const discNames = selected.map((i) => i.invoiceNumber).filter(Boolean).join(', ') || 'Selected Invoices';
-        const missingVal = totalShortfallAmt > 0 ? totalShortfallAmt : Math.max(0, totalGross - totalGrnAmt);
-        const missingUnits = totalShortfallUnits > 0 ? totalShortfallUnits : Math.max(0, totalOrd - totalRec);
-
-        let reason = '';
-        if (missingUnits > 0 || missingVal > 0) {
-          reason = `Goods Received Note (GRN) Shortfall: Received ${totalRec}/${totalOrd} units (Missing ${missingUnits} units — Shortfall Value: ${formatAmount(missingVal, currency)}). Invoice(s): ${discNames}. Flagged for mandatory Manager & Finance approval.`;
-        } else {
-          reason = `Discrepancy detected in 3-Way Match for invoice(s): ${discNames} (Variance between PO, Employee GRN, and Invoice). Flagged for mandatory Manager & Finance approval.`;
-        }
-        setDiscrepancyReason(reason);
-      } else {
-        setMatchStatus('MATCHED');
-        setDiscrepancyReason('');
-      }
+      setMatchStatus('MATCHED');
+      setDiscrepancyReason('');
     }
-  };
-
-  const handleToggleInvoiceMatch = (invId: string) => {
-    setVendorInvoices((prev) => {
-      const updated = prev.map((item) => {
-        if (item.id === invId) {
-          const nextMatch: 'MATCHED' | 'DISCREPANCY' = item.threeWayMatch === 'MATCHED' ? 'DISCREPANCY' : 'MATCHED';
-          return { ...item, threeWayMatch: nextMatch };
-        }
-        return item;
-      });
-      updateTotalsFromInvoices(updated);
-      return updated;
-    });
   };
 
   const handleToggleSelectInvoice = (invId: string) => {
@@ -2356,7 +2285,7 @@ export default function CreatePaymentVoucherPage() {
         <div className="cpv-section">
           <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="cpv-section__num">02B</span>
+              <span className="cpv-section__num">03</span>
               <span className="cpv-section__title">Select Invoices for Payment (Single & Multiple Invoices)</span>
             </div>
             <div className="cpv-invoice-mode-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2560,7 +2489,7 @@ export default function CreatePaymentVoucherPage() {
                         <th style={{ minWidth: 130 }}>Invoice Date</th>
                         <th style={{ minWidth: 130 }}>Due Date</th>
                         <th style={{ minWidth: 150, textAlign: 'right' }}>Amount ({currency}) *</th>
-                        <th style={{ minWidth: 120, textAlign: 'center' }}>3-Way Match</th>
+                        <th style={{ minWidth: 120, textAlign: 'center' }}>Invoice Status</th>
                         <th style={{ width: 50, textAlign: 'center' }}>Action</th>
                       </tr>
                     </thead>
@@ -2632,15 +2561,11 @@ export default function CreatePaymentVoucherPage() {
                             />
                           </td>
                           <td style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleInvoiceMatch(inv.id)}
-                              className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}
+                            <span
+                              className="cpv-match-tag cpv-match-tag--matched"
                               style={{
-                                cursor: 'pointer',
-                                border: 'none',
-                                background: inv.threeWayMatch === 'MATCHED' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                color: inv.threeWayMatch === 'MATCHED' ? '#10b981' : '#ef4444',
+                                background: inv.threeWayMatch === 'MATCHED' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(120, 120, 120, 0.08)',
+                                color: inv.threeWayMatch === 'MATCHED' ? '#10b981' : 'var(--text-secondary)',
                                 padding: '4px 8px',
                                 borderRadius: '6px',
                                 fontWeight: 600,
@@ -2650,10 +2575,9 @@ export default function CreatePaymentVoucherPage() {
                                 gap: '4px',
                                 whiteSpace: 'nowrap',
                               }}
-                              title="Click to toggle 3-Way Match status"
                             >
-                              {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
-                            </button>
+                              {inv.threeWayMatch === 'MATCHED' ? '✅ Verified' : 'Approved'}
+                            </span>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <button
@@ -2748,7 +2672,7 @@ export default function CreatePaymentVoucherPage() {
                         <th>Invoice Number</th>
                         <th>PO Ref</th>
                         <th>GRN Ref</th>
-                        <th>3-Way Match</th>
+                        <th>Invoice Status</th>
                         <th>Invoice Date</th>
                         <th>Due Date</th>
                         <th style={{ textAlign: 'right' }}>Amount</th>
@@ -2787,15 +2711,11 @@ export default function CreatePaymentVoucherPage() {
                             </span>
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleInvoiceMatch(inv.id)}
-                              className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}
+                            <span
+                              className="cpv-match-tag cpv-match-tag--matched"
                               style={{
-                                cursor: 'pointer',
-                                border: 'none',
-                                background: inv.threeWayMatch === 'MATCHED' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                color: inv.threeWayMatch === 'MATCHED' ? '#10b981' : '#ef4444',
+                                background: inv.threeWayMatch === 'MATCHED' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(120, 120, 120, 0.08)',
+                                color: inv.threeWayMatch === 'MATCHED' ? '#10b981' : 'var(--text-secondary)',
                                 padding: '4px 8px',
                                 borderRadius: '6px',
                                 fontWeight: 600,
@@ -2803,12 +2723,11 @@ export default function CreatePaymentVoucherPage() {
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '4px',
-                                transition: 'all 0.15s ease',
+                                whiteSpace: 'nowrap',
                               }}
-                              title="Click to toggle 3-Way Match status (MATCHED / DISCREPANCY)"
                             >
-                              {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
-                            </button>
+                              {inv.threeWayMatch === 'MATCHED' ? '✅ 3-Way Matched' : 'Verified'}
+                            </span>
                           </td>
                           <td>
                             <span className="text-xs text-muted-foreground">
@@ -2836,590 +2755,6 @@ export default function CreatePaymentVoucherPage() {
           </>
           )}
         </div>
-
-        {/* Section 03: Automated 3-Way Multi-Match Verification Engine (only for AUTO_FILL mode with selected invoices) */}
-        {invoiceEntryMode === 'AUTO_FILL' && (() => {
-          const selectedInvs = vendorInvoices.filter((i) => i.selected);
-          if (selectedInvs.length === 0) return null;
-          const billedTotal = selectedInvs.reduce((sum, i) => sum + (i.paymentAmount || 0), 0);
-
-          // Build unified reconciled items from selected invoices
-          const reconciledItems: ReconciledItem[] = selectedInvs.flatMap((inv, invIdx) => {
-            if (Array.isArray(inv.items) && inv.items.length > 0) {
-              return inv.items;
-            }
-            const isDisc = inv.threeWayMatch === 'DISCREPANCY' || (inv.threeWayMatch as string) === 'MISMATCH';
-            const ordQty = inv.grnOrderedQty || 10;
-            const recQty = inv.grnReceivedQty ?? (isDisc ? Math.floor(ordQty * 0.8) : ordQty);
-            const shortQty = Math.max(0, ordQty - recQty);
-            const uPrice = inv.amount > 0 && ordQty > 0 ? inv.amount / ordQty : (inv.paymentAmount || 1000) / (ordQty || 1);
-            const ordVal = ordQty * uPrice;
-            const recVal = recQty * uPrice;
-            const shortVal = shortQty * uPrice;
-
-            return [
-              {
-                id: `fallback_item_${inv.id || invIdx}`,
-                invoiceNumber: inv.invoiceNumber,
-                poNumber: inv.poNumber,
-                grnNumber: inv.grnNumber,
-                itemName: `${inv.invoiceNumber || 'Invoice'} - Goods Delivery Line Items`,
-                orderedQty: ordQty,
-                receivedQty: recQty,
-                shortfallQty: shortQty,
-                unitPrice: uPrice,
-                orderedValue: ordVal,
-                receivedValue: recVal,
-                shortfallValue: shortVal,
-                status: (shortQty > 0 ? 'SHORTFALL' : 'MATCHED') as 'SHORTFALL' | 'MATCHED',
-                remarks: shortQty > 0 ? `${shortQty} units missing from GRN inspection` : 'Goods inspected & verified in good condition',
-              },
-            ];
-          });
-
-          // Compute aggregated quantities and financial values
-          let totalOrd = 0;
-          let totalRec = 0;
-          let totalShortfallUnits = 0;
-          let totalOrderedVal = 0;
-          let totalReceivedVal = 0;
-          let totalShortfallVal = 0;
-
-          if (reconciledItems.length > 0) {
-            reconciledItems.forEach((it) => {
-              totalOrd += it.orderedQty;
-              totalRec += it.receivedQty;
-              totalShortfallUnits += it.shortfallQty;
-              totalOrderedVal += it.orderedValue;
-              totalReceivedVal += it.receivedValue;
-              totalShortfallVal += it.shortfallValue;
-            });
-          } else {
-            selectedInvs.forEach((i) => {
-              const o = i.grnOrderedQty || 0;
-              const r = i.grnReceivedQty ?? o;
-              totalOrd += o;
-              totalRec += r;
-              totalShortfallUnits += Math.max(0, o - r);
-              totalOrderedVal += i.amount;
-              totalReceivedVal += i.grnReceivedAmount || (i.amount * (o > 0 ? r / o : 1));
-            });
-            totalShortfallVal = Math.max(0, billedTotal - totalReceivedVal);
-          }
-
-          if (totalOrderedVal === 0 && billedTotal > 0) {
-            totalOrderedVal = billedTotal;
-          }
-
-          // Compute GRN %
-          const grnPercent = totalOrd > 0
-            ? Math.min(100, Math.round((totalRec / totalOrd) * 100))
-            : (totalOrderedVal > 0 ? Math.min(100, Math.round((totalReceivedVal / totalOrderedVal) * 100)) : 100);
-
-          // Employee GRN shortfall checks
-          const hasGrnQtyShortfall = totalOrd > 0 && totalRec < totalOrd && (totalOrd - totalRec) / totalOrd > 0.02;
-          const hasGrnAmtShortfall = totalShortfallVal > 0.01;
-          const hasGrnShortfall = hasGrnQtyShortfall || hasGrnAmtShortfall;
-
-          // Check if any invoice has actual rate/spec discrepancy or overbilling
-          const overBilledInvs = selectedInvs.filter((i) => i.paymentAmount > i.amount);
-          const rateDiscrepantInvs = selectedInvs.filter((i) => {
-            if (i.paymentAmount > i.amount) return false;
-            if (Array.isArray(i.items) && i.items.length > 0) {
-              return i.items.some((it) => it.shortfallQty > 0 || it.shortfallValue > 0.01);
-            }
-            if (i.grnReceivedAmount && i.amount) {
-              return i.grnReceivedAmount < i.amount * 0.98;
-            }
-            return (i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH') && hasGrnShortfall;
-          });
-
-          const poAgreedTotal = totalOrderedVal > 0 ? totalOrderedVal : billedTotal;
-
-          // ── Build structured discrepancy items ───────────────────────────
-          interface DiscrepancyItemData {
-            id: string;
-            icon: any;
-            title: string;
-            description: string;
-            badge?: string;
-            details?: { name: string; ordered: number; received: number; shortfall: number; unitPrice: number; shortfallVal: number }[];
-          }
-          const discrepancyItems: DiscrepancyItemData[] = [];
-
-          if (hasGrnShortfall || totalShortfallUnits > 0 || totalShortfallVal > 0) {
-            const shortfallItems = reconciledItems.filter((it) => it.shortfallQty > 0 || it.shortfallValue > 0);
-            discrepancyItems.push({
-              id: 'grn_shortfall',
-              icon: PackageX,
-              title: 'Goods Received Note (GRN) Shortfall',
-              description: `Received ${totalRec} of ${totalOrd} ordered units (${totalShortfallUnits} units missing/rejected during store receiving inspection).`,
-              badge: `${formatAmount(totalShortfallVal, currency)} Shortfall`,
-              details: shortfallItems.map((it) => ({
-                name: it.itemName,
-                ordered: it.orderedQty,
-                received: it.receivedQty,
-                shortfall: it.shortfallQty,
-                unitPrice: it.unitPrice,
-                shortfallVal: it.shortfallValue,
-              })),
-            });
-          }
-
-          if (rateDiscrepantInvs.length > 0) {
-            discrepancyItems.push({
-              id: 'rate_variance',
-              icon: Scale,
-              title: 'PO Rate & Specification Variance',
-              description: `Invoice(s) ${rateDiscrepantInvs.map((i) => i.invoiceNumber).join(', ')} — PO agreed unit rates or accepted quantities do not match billed lines.`,
-              badge: 'Rate Mismatch',
-            });
-          }
-
-          if (overBilledInvs.length > 0) {
-            overBilledInvs.forEach((inv) => {
-              const excess = inv.paymentAmount - inv.amount;
-              discrepancyItems.push({
-                id: `overbill_${inv.id}`,
-                icon: TrendingDown,
-                title: `Overbilled Invoice (${inv.invoiceNumber})`,
-                description: `Payment allocated (${formatAmount(inv.paymentAmount, currency)}) exceeds invoice face value (${formatAmount(inv.amount, currency)}).`,
-                badge: `+${formatAmount(excess, currency)} Excess`,
-              });
-            });
-          }
-
-          if (matchStatus === 'DISCREPANCY' && discrepancyItems.length === 0 && (hasGrnShortfall || overBilledInvs.length > 0 || rateDiscrepantInvs.length > 0)) {
-            discrepancyItems.push({
-              id: 'manual_flag',
-              icon: ShieldAlert,
-              title: 'Manual Review Discrepancy Flag',
-              description: 'Flagged for mandatory review by finance management prior to payment voucher approval.',
-              badge: 'Under Review',
-            });
-          }
-
-          const isDiscrepant = discrepancyItems.length > 0;
-
-          const poRefs = Array.from(new Set(selectedInvs.map((i) => typeof i.poNumber === 'string' ? i.poNumber : '').filter(Boolean))).join(', ') || 'PO-2026';
-          const grnRefs = Array.from(new Set(selectedInvs.map((i) => typeof i.grnNumber === 'string' ? i.grnNumber : '').filter(Boolean))).join(', ') || 'GRN-2026';
-
-          return (
-            <div className={`cpv-section cpv-match-card ${isDiscrepant ? 'cpv-match-card--discrepancy' : ''}`}>
-              <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span className="cpv-section__num">03</span>
-                  <div>
-                    <span className="cpv-section__title">
-                      3-Way Multi-Match Engine ({selectedInvs.length} Selected Invoice{selectedInvs.length !== 1 ? 's' : ''})
-                    </span>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                      Automated PO, Goods Receipt (GRN) &amp; Vendor Invoice Multi-Line Reconciliation
-                    </div>
-                  </div>
-                </div>
-                <div className="cpv-match-header-actions">
-                  <span className={`cpv-status-badge ${!isDiscrepant ? 'cpv-status-badge--success' : 'cpv-status-badge--danger'}`}>
-                    {!isDiscrepant ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
-                    <span>{!isDiscrepant ? '100% 3-Way Match Verified' : 'Discrepancy Detected'}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="cpv-btn cpv-btn--sm cpv-btn--outline"
-                    onClick={() => updateTotalsFromInvoices(vendorInvoices)}
-                    title="Re-verify 3-Way Match across selected invoices"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 30 }}
-                  >
-                    <RotateCcw size={12} />
-                    <span>Re-Verify</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Banner */}
-              <div className={`cpv-match-banner ${!isDiscrepant ? 'cpv-match-banner--matched' : 'cpv-match-banner--discrepancy'}`}>
-                <div className="cpv-match-banner-header">
-                  <div className={`cpv-match-banner-icon ${!isDiscrepant ? 'cpv-match-banner-icon--matched' : 'cpv-match-banner-icon--discrepancy'}`}>
-                    {!isDiscrepant ? <ShieldCheck size={22} /> : <ShieldAlert size={22} />}
-                  </div>
-                  <div>
-                    <div className={`cpv-match-banner-title ${!isDiscrepant ? 'cpv-match-banner-title--matched' : 'cpv-match-banner-title--discrepancy'}`}>
-                      {!isDiscrepant
-                        ? `3-Way Multi-Match Verified (${selectedInvs.length || 1} Invoice(s): PO = Employee GRN = Invoice)`
-                        : `3-Way Multi-Match Discrepancy Flagged (${discrepancyItems.length} Issue${discrepancyItems.length !== 1 ? 's' : ''} Detected)`
-                      }
-                    </div>
-                    <div className="cpv-match-banner-subtitle">
-                      {!isDiscrepant
-                        ? `Quantities & unit rates across Purchase Orders (${poRefs}), Employee Goods Received Notes (${grnRefs}), and ${selectedInvs.length || 1} selected Supplier Invoice(s) align 100%. Verified by internal store inspection.`
-                        : 'Variance identified between Purchase Orders, Goods Receipt quantities, and billed Supplier Invoices.'
-                      }
-                    </div>
-                  </div>
-                </div>
-
-                {/* If Discrepant: Structured Discrepancy Breakdown */}
-                {isDiscrepant && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-                    <div className="cpv-discrepancy-grid">
-                      {discrepancyItems.map((item) => {
-                        const ItemIcon = item.icon;
-                        return (
-                          <div key={item.id} className="cpv-discrepancy-item-card">
-                            <div className="cpv-discrepancy-item-icon">
-                              <ItemIcon size={16} />
-                            </div>
-                            <div className="cpv-discrepancy-item-content">
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                                <div className="cpv-discrepancy-item-title">{item.title}</div>
-                                {item.badge && (
-                                  <span className="cpv-discrepancy-item-highlight">{item.badge}</span>
-                                )}
-                              </div>
-                              <div className="cpv-discrepancy-item-desc">{item.description}</div>
-                              {item.details && item.details.length > 0 && (
-                                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  {item.details.map((d, dIdx) => (
-                                    <div
-                                      key={dIdx}
-                                      style={{
-                                        fontSize: 11,
-                                        background: 'rgba(239, 68, 68, 0.05)',
-                                        padding: '4px 8px',
-                                        borderRadius: 4,
-                                        border: '1px solid rgba(239, 68, 68, 0.15)',
-                                        color: 'var(--text-secondary)',
-                                      }}
-                                    >
-                                      <strong style={{ color: 'var(--text-primary)' }}>{d.name}</strong>: Ordered {d.ordered}, Received {d.received} (
-                                      <span style={{ color: '#ef4444', fontWeight: 700 }}>
-                                        {d.shortfall} missing @ {formatAmount(d.unitPrice, currency)} = {formatAmount(d.shortfallVal, currency)}
-                                      </span>)
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="cpv-discrepancy-routing-strip">
-                      <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                      <span>
-                        <strong>Mandatory Approval Routing:</strong> This payment voucher will require elevated Manager &amp; Finance audit approval before disbursement release due to active reconciliation variance.
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 3 Overview Comparator Cards */}
-              <div className="cpv-match-comparator-grid">
-                {/* Box A: Purchase Order */}
-                <div className="cpv-match-box-pro">
-                  <div>
-                    <div className="cpv-match-box-top">
-                      <span className="cpv-step-tag">Step A • Baseline</span>
-                      <span className="cpv-match-box-ref" title={poRefs}>PO: {poRefs}</span>
-                    </div>
-                    <div className="cpv-match-box-header-title">Purchase Order Total</div>
-                    <div className="cpv-match-box-main-value">{formatAmount(poAgreedTotal, currency)}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                      {totalOrd} Total Units Contracted
-                    </div>
-                  </div>
-                  <div className={`cpv-match-box-status-chip ${!isDiscrepant ? 'cpv-match-box-status-chip--ok' : 'cpv-match-box-status-chip--warn'}`}>
-                    {!isDiscrepant ? (
-                      <>
-                        <CheckCircle2 size={13} />
-                        <span>PO Agreed Baseline</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle size={13} />
-                        <span>PO Baseline Contract</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Box B: Goods Received Note (GRN) */}
-                <div className="cpv-match-box-pro">
-                  <div>
-                    <div className="cpv-match-box-top">
-                      <span className="cpv-step-tag">Step B • Fulfilment</span>
-                      <span className="cpv-match-box-ref" title={grnRefs}>GRN: {grnRefs}</span>
-                    </div>
-                    <div className="cpv-match-box-header-title">Store Received Value</div>
-                    <div className="cpv-match-box-main-value" style={{ color: totalShortfallUnits > 0 ? '#ef4444' : '#10b981' }}>
-                      {formatAmount(totalReceivedVal, currency)}
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="cpv-match-progress-wrap">
-                      <div className="cpv-match-progress-bar">
-                        <div
-                          className="cpv-match-progress-fill"
-                          style={{
-                            width: `${grnPercent}%`,
-                            background: totalShortfallUnits > 0 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'linear-gradient(90deg, #10b981, #059669)',
-                          }}
-                        />
-                      </div>
-                      <div className="cpv-match-progress-label">
-                        <span>{totalRec} of {totalOrd} units accepted</span>
-                        <span>{grnPercent}%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`cpv-match-box-status-chip ${!hasGrnShortfall && !isDiscrepant ? 'cpv-match-box-status-chip--ok' : 'cpv-match-box-status-chip--warn'}`}>
-                    {!hasGrnShortfall && !isDiscrepant ? (
-                      <>
-                        <CheckCircle2 size={13} />
-                        <span>100% Store Fulfilled</span>
-                      </>
-                    ) : (
-                      <>
-                        <PackageX size={13} />
-                        <span>Shortfall: -{totalShortfallUnits} units ({formatAmount(totalShortfallVal, currency)})</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Box C: Selected Invoices */}
-                <div className="cpv-match-box-pro">
-                  <div>
-                    <div className="cpv-match-box-top">
-                      <span className="cpv-step-tag">Step C • Settlement</span>
-                      <span className="cpv-match-box-ref">{selectedInvs.length} Invoice{selectedInvs.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="cpv-match-box-header-title">Supplier Billed Total</div>
-                    <div className="cpv-match-box-main-value">{formatAmount(billedTotal, currency)}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Net Payable:</span>
-                      <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>
-                        {formatAmount(totalReceivedVal > 0 ? Math.min(billedTotal, totalReceivedVal) : billedTotal, currency)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className={`cpv-match-box-status-chip ${!isDiscrepant ? 'cpv-match-box-status-chip--ok' : 'cpv-match-box-status-chip--warn'}`}>
-                    {!isDiscrepant ? (
-                      <>
-                        <ShieldCheck size={13} />
-                        <span>All Invoices Matched</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertTriangle size={13} />
-                        <span>Variance: {formatAmount(totalShortfallVal, currency)}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Itemized 3-Way Reconciliation Breakdown Table */}
-              {reconciledItems.length > 0 && (
-                <div className="cpv-recon-container">
-                  <div className="cpv-recon-header">
-                    <div className="cpv-recon-title-area">
-                      <div style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 8,
-                        background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)',
-                        color: 'var(--primary-500, #0a6ed1)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                        <PackageCheck size={16} />
-                      </div>
-                      <div>
-                        <div className="cpv-recon-title">
-                          Itemized 3-Way Reconciliation Breakdown
-                        </div>
-                        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                          Comparative audit: PO Contract vs Store GRN Receipt vs Vendor Invoice Line Items
-                        </div>
-                      </div>
-                    </div>
-                    {totalShortfallVal > 0 && (
-                      <div className="cpv-recon-badge-alert">
-                        <AlertTriangle size={13} />
-                        <span>Shortfall Impact: {formatAmount(totalShortfallVal, currency)} ({totalShortfallUnits} units)</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="cpv-recon-table-wrap">
-                    <table className="cpv-recon-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: 40, textAlign: 'center' }}>#</th>
-                          <th>Item Description &amp; Receiving Note</th>
-                          <th>PO / Invoice Ref</th>
-                          <th style={{ textAlign: 'right' }}>Ordered</th>
-                          <th style={{ textAlign: 'right' }}>Received (GRN)</th>
-                          <th style={{ textAlign: 'right' }}>Variance</th>
-                          <th style={{ textAlign: 'right' }}>Unit Rate</th>
-                          <th style={{ textAlign: 'right' }}>Accepted Value</th>
-                          <th style={{ textAlign: 'right' }}>Missing Value</th>
-                          <th style={{ textAlign: 'center' }}>Recon Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reconciledItems.map((item, idx) => {
-                          const hasItemShortfall = item.shortfallQty > 0 || item.shortfallValue > 0;
-                          return (
-                            <tr key={item.id || idx} className={hasItemShortfall ? 'cpv-row--shortfall' : ''}>
-                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                                {idx + 1}
-                              </td>
-                              <td>
-                                <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.itemName}</div>
-                                {item.remarks && (
-                                  <div style={{
-                                    fontSize: 11,
-                                    color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)',
-                                    marginTop: 2,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                  }}>
-                                    {hasItemShortfall && <AlertCircle size={10} />}
-                                    <span>{item.remarks}</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                  <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    color: 'var(--primary-500)',
-                                    fontFamily: 'var(--font-mono, monospace)',
-                                  }}>
-                                    {item.invoiceNumber || '—'}
-                                  </span>
-                                  <span style={{
-                                    fontSize: 10.5,
-                                    color: 'var(--text-secondary)',
-                                    fontFamily: 'var(--font-mono, monospace)',
-                                  }}>
-                                    {item.poNumber || '—'}
-                                  </span>
-                                </div>
-                              </td>
-                              <td style={{ textAlign: 'right', fontWeight: 600 }} className="cpv-mono-val">
-                                {item.orderedQty}
-                              </td>
-                              <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="cpv-mono-val">
-                                {item.receivedQty}
-                              </td>
-                              <td style={{
-                                textAlign: 'right',
-                                fontWeight: 700,
-                                color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)',
-                              }} className="cpv-mono-val">
-                                {item.shortfallQty > 0 ? `-${item.shortfallQty}` : '0'}
-                              </td>
-                              <td style={{ textAlign: 'right' }} className="cpv-mono-val">
-                                {formatAmount(item.unitPrice, currency)}
-                              </td>
-                              <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="cpv-mono-val">
-                                {formatAmount(item.receivedValue, currency)}
-                              </td>
-                              <td style={{
-                                textAlign: 'right',
-                                fontWeight: 700,
-                                color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)',
-                              }} className="cpv-mono-val">
-                                {item.shortfallValue > 0 ? formatAmount(item.shortfallValue, currency) : '—'}
-                              </td>
-                              <td style={{ textAlign: 'center' }}>
-                                {hasItemShortfall ? (
-                                  <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    padding: '3px 8px',
-                                    borderRadius: 6,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    background: 'rgba(239, 68, 68, 0.12)',
-                                    color: '#ef4444',
-                                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                                  }}>
-                                    <AlertTriangle size={11} />
-                                    <span>Missing {item.shortfallQty}</span>
-                                  </span>
-                                ) : (
-                                  <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    padding: '3px 8px',
-                                    borderRadius: 6,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    background: 'rgba(16, 185, 129, 0.12)',
-                                    color: '#10b981',
-                                    border: '1px solid rgba(16, 185, 129, 0.25)',
-                                  }}>
-                                    <CheckCircle2 size={11} />
-                                    <span>Matched</span>
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan={3} style={{ textAlign: 'right', color: 'var(--text-primary)', fontWeight: 700 }}>
-                            Reconciliation Totals:
-                          </td>
-                          <td style={{ textAlign: 'right' }} className="cpv-mono-val">{totalOrd}</td>
-                          <td style={{ textAlign: 'right', color: '#10b981' }} className="cpv-mono-val">{totalRec}</td>
-                          <td style={{
-                            textAlign: 'right',
-                            color: totalShortfallUnits > 0 ? '#ef4444' : 'inherit',
-                          }} className="cpv-mono-val">
-                            {totalShortfallUnits > 0 ? `-${totalShortfallUnits}` : '0'}
-                          </td>
-                          <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>—</td>
-                          <td style={{ textAlign: 'right', color: '#10b981' }} className="cpv-mono-val">
-                            {formatAmount(totalReceivedVal, currency)}
-                          </td>
-                          <td style={{
-                            textAlign: 'right',
-                            color: totalShortfallVal > 0 ? '#ef4444' : 'inherit',
-                          }} className="cpv-mono-val">
-                            {totalShortfallVal > 0 ? formatAmount(totalShortfallVal, currency) : '—'}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            {totalShortfallVal > 0 ? (
-                              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>⚠️ Variance</span>
-                            ) : (
-                              <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓ 100% Match</span>
-                            )}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
 
         {/* Section 04: Purpose & Attachments & Section 05: Disbursement Summary Card */}
         <div className="cpv-grid cpv-grid--split">

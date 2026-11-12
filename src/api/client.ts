@@ -229,6 +229,7 @@ async function fetchApi<T>(
     res = await fetch(`${API_BASE}${path}`, {
       ...fetchOptions,
       cache: 'no-store',
+      credentials: 'include',
       signal: controller.signal,
       headers: {
         ...authHeaders(undefined, path),

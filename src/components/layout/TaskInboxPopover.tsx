@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   ListTodo,
   Clock,
@@ -16,6 +16,7 @@ import {
   User,
   ArrowRight,
   Plus,
+  Check,
 } from 'lucide-react';
 import { taskService, type TaskItem, type TaskAttachment } from '../../services/taskService';
 import { adminService, type UserWithRoles } from '../../services/adminService';
@@ -48,6 +49,7 @@ export default function TaskInboxPopover({
 
   // Reassignment state: map of taskId -> boolean indicating dropdown is open
   const [reassigningTaskId, setReassigningTaskId] = useState<string | null>(null);
+  const [selectedReassignUserId, setSelectedReassignUserId] = useState<string>('');
   const [companyUsers, setCompanyUsers] = useState<UserWithRoles[]>([]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
 
@@ -68,6 +70,11 @@ export default function TaskInboxPopover({
         search: searchQuery.trim() || undefined,
       });
       setTasks(res.tasks || []);
+      if (res.hasUnseenUpdate || (res.totalIndicationCount && res.totalIndicationCount > 0)) {
+        taskService.markTasksSeen().then(() => {
+          onTasksUpdated?.();
+        }).catch(() => {});
+      }
     } catch (err: any) {
       console.error('Failed to load tasks', err);
       setError(err?.message || 'Failed to load tasks');
@@ -76,22 +83,39 @@ export default function TaskInboxPopover({
     }
   };
 
+  const hasAssignedToMeUpdates = useMemo(() => {
+    return tasks.some(
+      (t) =>
+        t.assigneeHasUnseenUpdate &&
+        (t.currentAssigneeId === currentUserId || (!t.currentAssigneeId && t.assignedToId === currentUserId))
+    );
+  }, [tasks, currentUserId]);
+
+  const hasAssignedByMeUpdates = useMemo(() => {
+    return tasks.some(
+      (t) => t.creatorHasUnseenUpdate && t.assignedById === currentUserId
+    );
+  }, [tasks, currentUserId]);
+
   // Fetch company users for reassignment dropdown
-  useEffect(() => {
-    adminService
-      .listUsers()
-      .then((users) => {
+  const loadCompanyUsers = useCallback(async () => {
+    try {
+      const users = await adminService.listUsers();
+      if (Array.isArray(users)) {
         setCompanyUsers(users.filter((u) => u.isActive));
-      })
-      .catch((err) => console.error('Failed to fetch users for reassignment', err));
+      }
+    } catch (err) {
+      console.error('Failed to fetch users for reassignment', err);
+    }
   }, []);
 
-  // Fetch tasks when popover opens, tab changes, or status filter changes
+  // Fetch tasks and company users when popover opens, tab changes, or status filter changes
   useEffect(() => {
     if (isOpen) {
+      loadCompanyUsers();
       fetchTasks();
     }
-  }, [isOpen, activeTab, statusFilter]);
+  }, [isOpen, activeTab, statusFilter, loadCompanyUsers]);
 
   // Click outside to close
   useEffect(() => {
@@ -163,6 +187,10 @@ export default function TaskInboxPopover({
     if (newStatus === 'assigned_to_someone_else' || newStatus === 'reassigned') {
       // Open inline user dropdown to pick who to reassign to
       setReassigningTaskId(task.id);
+      setSelectedReassignUserId('');
+      if (companyUsers.length === 0) {
+        loadCompanyUsers();
+      }
       return;
     }
 
@@ -188,11 +216,12 @@ export default function TaskInboxPopover({
     setIsUpdatingStatus(taskId);
     try {
       const updated = await taskService.updateTaskStatus(taskId, {
-        status: 'pending',
+        status: 'reassigned',
         reassignToUserId: targetUserId,
       });
       setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
       setReassigningTaskId(null);
+      setSelectedReassignUserId('');
       window.dispatchEvent(new CustomEvent('heliflow_tasks_updated'));
       onTasksUpdated?.();
     } catch (err: any) {
@@ -291,14 +320,24 @@ export default function TaskInboxPopover({
             className={`task-inbox-tab ${activeTab === 'assigned_to_me' ? 'task-inbox-tab--active' : ''}`}
             onClick={() => setActiveTab('assigned_to_me')}
           >
-            Assigned to Me
+            <span className="inline-flex items-center gap-1.5 justify-center">
+              Assigned to Me
+              {hasAssignedToMeUpdates && (
+                <span className="size-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              )}
+            </span>
           </button>
           <button
             type="button"
             className={`task-inbox-tab ${activeTab === 'assigned_by_me' ? 'task-inbox-tab--active' : ''}`}
             onClick={() => setActiveTab('assigned_by_me')}
           >
-            Assigned by Me
+            <span className="inline-flex items-center gap-1.5 justify-center">
+              Assigned by Me
+              {hasAssignedByMeUpdates && (
+                <span className="size-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              )}
+            </span>
           </button>
           <button
             type="button"
@@ -381,6 +420,18 @@ export default function TaskInboxPopover({
                     <div className="task-card__left" onClick={() => toggleExpand(task.id)}>
                       <div className="task-card__title-row">
                         <span className="task-card__title">{task.title}</span>
+                        {task.creatorHasUnseenUpdate && isCreator && (
+                          <span className="task-badge task-badge--new-update animate-pulse">
+                            <span className="inline-block size-1.5 rounded-full bg-emerald-500 mr-1" />
+                            {task.status === 'completed' ? 'Newly Completed' : 'Newly Reassigned'}
+                          </span>
+                        )}
+                        {task.assigneeHasUnseenUpdate && isCurrentAssignee && (
+                          <span className="task-badge task-badge--new-update animate-pulse">
+                            <span className="inline-block size-1.5 rounded-full bg-emerald-500 mr-1" />
+                            New Task
+                          </span>
+                        )}
                         {task.status === 'completed' ? (
                           <span className="task-badge task-badge--completed">
                             <CheckCircle2 size={11} /> Completed
@@ -439,15 +490,17 @@ export default function TaskInboxPopover({
                       <div className="task-status-selector">
                         <select
                           value={
-                            task.status === 'completed'
+                            isReassigning
+                              ? 'assigned_to_someone_else'
+                              : task.status === 'completed'
                               ? 'completed'
-                              : isCurrentAssignee
-                              ? 'pending'
-                              : 'assigned_to_someone_else'
+                              : (!isCurrentAssignee || (task.currentAssigneeId && task.assignedToId && task.currentAssigneeId !== task.assignedToId))
+                              ? 'assigned_to_someone_else'
+                              : 'pending'
                           }
-                          disabled={isUpdatingStatus === task.id || !isCurrentAssignee}
+                          disabled={isUpdatingStatus === task.id || (!isCurrentAssignee && !isCreator)}
                           onChange={(e) => handleStatusChange(task, e.target.value)}
-                          className={`task-status-select task-status-select--${task.status === 'completed' ? 'completed' : isCurrentAssignee ? 'pending' : 'reassigned'}`}
+                          className={`task-status-select task-status-select--${task.status === 'completed' ? 'completed' : isReassigning || (!isCurrentAssignee || (task.currentAssigneeId && task.assignedToId && task.currentAssigneeId !== task.assignedToId)) ? 'reassigned' : 'pending'}`}
                         >
                           <option value="pending">Pending</option>
                           <option value="completed">Completed</option>
@@ -477,29 +530,61 @@ export default function TaskInboxPopover({
                         <button
                           type="button"
                           className="task-reassign-picker__cancel"
-                          onClick={() => setReassigningTaskId(null)}
+                          onClick={() => {
+                            setReassigningTaskId(null);
+                            setSelectedReassignUserId('');
+                          }}
                         >
                           <X size={12} />
                         </button>
                       </div>
                       <div className="task-reassign-picker__controls">
-                        <select
-                          defaultValue=""
-                          onChange={(e) => handleExecuteReassign(task.id, e.target.value)}
-                          className="task-reassign-select"
-                          autoFocus
-                        >
-                          <option value="" disabled>
-                            -- Choose Company User --
-                          </option>
-                          {companyUsers
-                            .filter((u) => u.id !== currentUserId)
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.fullName} {u.department ? `(${u.department})` : ''} - {u.email}
+                        {companyUsers.length === 0 ? (
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '6px 0' }}>
+                            Loading company colleagues...
+                          </div>
+                        ) : (
+                          <>
+                            <select
+                              value={selectedReassignUserId}
+                              onChange={(e) => setSelectedReassignUserId(e.target.value)}
+                              className="task-reassign-select"
+                              autoFocus
+                            >
+                              <option value="">
+                                -- Choose Company Colleague --
                               </option>
-                            ))}
-                        </select>
+                              {companyUsers
+                                .filter((u) => u.id !== currentUserId)
+                                .map((u) => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.fullName} {u.department ? `(${u.department})` : ''} - {u.email}
+                                  </option>
+                                ))}
+                            </select>
+                            <div className="task-reassign-picker__actions">
+                              <button
+                                type="button"
+                                className="task-reassign-cancel-btn"
+                                onClick={() => {
+                                  setReassigningTaskId(null);
+                                  setSelectedReassignUserId('');
+                                }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="task-reassign-confirm-btn"
+                                disabled={!selectedReassignUserId || isUpdatingStatus === task.id}
+                                onClick={() => handleExecuteReassign(task.id, selectedReassignUserId)}
+                              >
+                                <Check size={12} />
+                                {isUpdatingStatus === task.id ? 'Reassigning…' : 'Confirm Reassign'}
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}

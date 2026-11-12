@@ -679,7 +679,7 @@
 .pr-col--no     { width: 44px; }
 .pr-col--desc   { width: auto; min-width: 220px; }
 .pr-col--num    { width: 90px; }
-.pr-col--unit   { width: 90px; }
+.pr-col--unit   { width: 115px; }
 .pr-col--price  { width: 130px; }
 .pr-col--total  { width: 210px; }
 .pr-col--action { width: 54px; }
@@ -702,6 +702,7 @@
 
 .pr-th--no     { text-align: center !important; }
 .pr-th--num    { text-align: right !important; }
+.pr-th--unit   { text-align: center !important; width: 115px; }
 .pr-th--price  { text-align: right !important; }
 .pr-th--total  { text-align: right !important; padding-right: 18px !important; }
 .pr-th--action { text-align: center !important; width: 54px; padding: 0 !important; }
@@ -728,7 +729,20 @@
 /* Column alignment */
 .pr-td--no     { text-align: center; font-weight: 700; color: var(--text-secondary); }
 .pr-td--num    { text-align: right; }
-.pr-td--unit   { text-align: left; }
+.pr-td--unit   {
+  text-align: center;
+  width: 115px;
+  padding: 8px 6px !important;
+}
+.pr-td--unit select {
+  width: 100%;
+  min-width: 90px;
+  padding: 7px 18px 7px 8px !important;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
 .pr-td--total  {
   text-align: right;
   font-weight: 700;

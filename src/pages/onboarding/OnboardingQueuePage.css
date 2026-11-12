@@ -719,20 +719,27 @@
    Signed Agreement Preview — A4 Document Viewer
    ═══════════════════════════════════════════════════════════ */
 
-/* Backdrop — dark fixed overlay without compositor lag */
+/* Portal Overlay — dark fixed overlay with modal centered inside */
+.oq-signed-modal-portal-overlay,
 .oq-signed-modal-backdrop {
   position: fixed !important;
   inset: 0 !important;
-  background: rgba(0, 0, 0, 0.78) !important;
-  z-index: 99999 !important;
+  background: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  z-index: 1000000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
   animation: oqFadeIn 0.15s ease-out !important;
 }
 
-/* Modal Wrapper — centered flex overlay for Radix content */
+/* Modal Wrapper — kept for backwards compatibility */
 .oq-signed-modal-wrapper {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 100000 !important;
+  z-index: 1000000 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -742,6 +749,8 @@
 
 /* Modal Container — sleek dark card containing header and paper document */
 .oq-signed-modal {
+  position: relative !important;
+  z-index: 1000001 !important;
   pointer-events: auto !important;
   background: #1e2128 !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -1185,6 +1194,7 @@
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
+  .oq-signed-modal-portal-overlay,
   .oq-signed-modal-backdrop {
     padding: 12px;
   }

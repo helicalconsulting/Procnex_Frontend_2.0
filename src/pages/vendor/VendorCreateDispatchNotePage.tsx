@@ -45,11 +45,127 @@ interface LineItemState {
   id: string;
   itemCode?: string;
   itemName: string;
-  orderedQty: number;
-  dispatchedQty: number;
+  orderedQty: number; // PO Quantity
+  deliveredQty: number; // Delivered Quantity (previously delivered)
+  quantityToBeDelivered: number; // Quantity to be delivered in this note
+  remainingQty: number; // Remaining Quantity: orderedQty - (deliveredQty + quantityToBeDelivered)
+  dispatchedQty: number; // Synced with quantityToBeDelivered
   unit: string;
   unitPrice?: number;
   remarks: string;
+}
+
+export interface PoItemDeliverySummary {
+  rawItem: any;
+  itemCode?: string;
+  itemName: string;
+  orderedQty: number;
+  deliveredQty: number;
+  remainingAvailable: number;
+}
+
+export interface PoDispatchSummary {
+  totalOrdered: number;
+  totalDelivered: number;
+  totalRemainingAvailable: number;
+  isFullyDispatched: boolean;
+  isPartiallyDispatched: boolean;
+  hasPriorDispatches: boolean;
+  items: PoItemDeliverySummary[];
+}
+
+export function getPoDispatchSummary(po: any, dnData: any): PoDispatchSummary {
+  if (!po) {
+    return {
+      totalOrdered: 0,
+      totalDelivered: 0,
+      totalRemainingAvailable: 0,
+      isFullyDispatched: false,
+      isPartiallyDispatched: false,
+      hasPriorDispatches: false,
+      items: [],
+    };
+  }
+
+  const poIdStr = String(po.id || '').trim().toLowerCase();
+  const poNumStr = String(po.poNumber || '').trim().toLowerCase();
+
+  const dns = (Array.isArray(dnData) ? dnData : (dnData as any)?.dispatchNotes || [])
+    .filter((dn: any) => {
+      const s = String(dn?.status || '').toUpperCase();
+      if (s === 'CANCELLED') return false;
+      const dnPoId = String(dn?.poId || dn?.purchaseOrder?.id || '').trim().toLowerCase();
+      const dnPoNum = String(dn?.poNumber || dn?.purchaseOrder?.poNumber || '').trim().toLowerCase();
+      return (poIdStr && (dnPoId === poIdStr || dnPoNum === poIdStr)) ||
+             (poNumStr && (dnPoId === poNumStr || dnPoNum === poNumStr));
+    });
+
+  const deliveredMap = new Map<string, number>();
+  dns.forEach((dn: any) => {
+    const itms = Array.isArray(dn?.items) ? dn.items : [];
+    itms.forEach((it: any) => {
+      const qty = Number(it.dispatchedQty ?? it.quantityToBeDelivered ?? it.quantity ?? 0);
+      if (it.itemCode) {
+        const cKey = `code:${String(it.itemCode).trim().toLowerCase()}`;
+        deliveredMap.set(cKey, (deliveredMap.get(cKey) || 0) + qty);
+      }
+      if (it.itemName) {
+        const nKey = `name:${String(it.itemName).trim().toLowerCase()}`;
+        deliveredMap.set(nKey, (deliveredMap.get(nKey) || 0) + qty);
+      }
+    });
+  });
+
+  const rawItems: any[] =
+    (po.items && po.items.length > 0 && po.items) ||
+    (po.lineItems && po.lineItems.length > 0 && po.lineItems) ||
+    [];
+
+  let totalOrdered = 0;
+  let totalDelivered = 0;
+  let totalRemainingAvailable = 0;
+
+  const itemSummaries: PoItemDeliverySummary[] = rawItems.map((rawItem: any, idx: number) => {
+    const orderedQty = Number(rawItem.quantity || rawItem.orderedQty || 0);
+    const itemCode = rawItem.itemCode || `ITM-00${idx + 1}`;
+    const itemName = rawItem.itemName || rawItem.name || rawItem.description || `Item ${idx + 1}`;
+
+    const codeKey = rawItem.itemCode ? `code:${String(rawItem.itemCode).trim().toLowerCase()}` : '';
+    const nameKey = `name:${String(itemName).trim().toLowerCase()}`;
+
+    const deliveredQty = (codeKey && deliveredMap.has(codeKey))
+      ? (deliveredMap.get(codeKey) || 0)
+      : (deliveredMap.get(nameKey) || 0);
+
+    const remainingAvailable = Math.max(0, orderedQty - deliveredQty);
+    totalOrdered += orderedQty;
+    totalDelivered += deliveredQty;
+    totalRemainingAvailable += remainingAvailable;
+
+    return {
+      rawItem,
+      itemCode,
+      itemName,
+      orderedQty,
+      deliveredQty,
+      remainingAvailable,
+    };
+  });
+
+  const poStatus = String(po.status || '').toUpperCase();
+  const isClosedOrRecv = poStatus === 'RECEIVED' || poStatus === 'CLOSED';
+  const isFullyDispatched = isClosedOrRecv || (rawItems.length > 0 && totalOrdered > 0 && totalRemainingAvailable <= 0);
+  const isPartiallyDispatched = !isFullyDispatched && (totalDelivered > 0 || dns.length > 0);
+
+  return {
+    totalOrdered,
+    totalDelivered,
+    totalRemainingAvailable,
+    isFullyDispatched,
+    isPartiallyDispatched,
+    hasPriorDispatches: dns.length > 0,
+    items: itemSummaries,
+  };
 }
 
 const localDateValue = (date: Date) =>
@@ -73,53 +189,13 @@ export default function VendorCreateDispatchNotePage() {
   );
   const poList = useMemo(() => poData.orders || [], [poData.orders]);
 
-  // Load existing dispatch notes & GRNs to prevent duplicate dispatch note creation
+  // Load existing dispatch notes & GRNs to track delivered quantities
   const { data: dnData } = useServiceData(
     () => dispatchNoteService.list({ limit: 100 }),
     { dispatchNotes: [] as any[], total: 0 },
     [],
     { cacheKey: 'vendor:dns', cacheTtlMs: 30000 }
   );
-  const { data: grnData } = useServiceData(
-    () => grnService.list({ limit: 100 }),
-    { grns: [] as any[], total: 0 },
-    []
-  );
-
-  // Set of all PO IDs and PO Numbers that already have a dispatch note created
-  const dispatchedPoKeys = useMemo(() => {
-    const keys = new Set<string>();
-
-    const checkAndAdd = (poId?: string, poNum?: string, status?: string) => {
-      const s = String(status || '').toUpperCase();
-      if (s === 'CANCELLED') return;
-      if (poId) keys.add(String(poId).trim().toLowerCase());
-      if (poNum) keys.add(String(poNum).trim().toLowerCase());
-    };
-
-    const dns = Array.isArray(dnData) ? dnData : (dnData as any)?.dispatchNotes || [];
-    dns.forEach((dn: any) => {
-      checkAndAdd(dn.poId || dn.purchaseOrder?.id, dn.poNumber || dn.purchaseOrder?.poNumber, dn.status);
-    });
-
-    const grns = grnData?.grns || [];
-    grns.forEach((g: any) => {
-      checkAndAdd(g.poId || g.purchaseOrder?.id, g.poNumber || g.purchaseOrder?.poNumber, g.status);
-    });
-
-    return keys;
-  }, [dnData, grnData]);
-
-  const isPoAlreadyDispatched = useCallback((po: any): boolean => {
-    if (!po) return false;
-    const s = String(po.status || '').toUpperCase();
-    if (s === 'DISPATCHED' || s === 'IN_TRANSIT' || s === 'RECEIVED' || s === 'CLOSED') return true;
-    const poId = String(po.id || '').trim().toLowerCase();
-    const poNum = String(po.poNumber || '').trim().toLowerCase();
-    if (poId && dispatchedPoKeys.has(poId)) return true;
-    if (poNum && dispatchedPoKeys.has(poNum)) return true;
-    return false;
-  }, [dispatchedPoKeys]);
 
   // Form State
   const [selectedPoId, setSelectedPoId] = useState<string>(() => poIdParam || '');
@@ -171,13 +247,12 @@ export default function VendorCreateDispatchNotePage() {
 
   const isInvoiceOnly = selectedPO?.vendorFulfillmentAllowed === 'INVOICE_ONLY';
 
-  // Check if current selected PO is already dispatched
-  const isAlreadyDispatched = useMemo(() => {
-    if (!selectedPO && !selectedPoId) return false;
-    if (selectedPO) return isPoAlreadyDispatched(selectedPO);
-    const idLower = String(selectedPoId).trim().toLowerCase();
-    return dispatchedPoKeys.has(idLower);
-  }, [selectedPO, selectedPoId, isPoAlreadyDispatched, dispatchedPoKeys]);
+  // Calculate delivery summary for selected PO
+  const selectedPOSummary = useMemo(() => {
+    return getPoDispatchSummary(selectedPO, dnData);
+  }, [selectedPO, dnData]);
+
+  const isAlreadyDispatched = selectedPOSummary.isFullyDispatched;
 
   // Sync PO Param
   useEffect(() => {
@@ -213,33 +288,78 @@ export default function VendorCreateDispatchNotePage() {
       setDispatchFromAddress(vendorAddr);
     }
 
-    // Auto-populate line items
-    const rawItems: any[] =
-      (selectedPO.items && selectedPO.items.length > 0 && selectedPO.items) ||
-      (selectedPO.lineItems && selectedPO.lineItems.length > 0 && selectedPO.lineItems) ||
-      [];
-
-    if (rawItems.length > 0) {
+    // Auto-populate line items with delivery tracking (PO Quantity, Delivered Quantity, Quantity to be delivered, Remaining Quantity)
+    const summary = getPoDispatchSummary(selectedPO, dnData);
+    if (summary.items.length > 0) {
       setLineItems(
-        rawItems.map((item: any, idx: number) => {
-          const qty = Number(item.quantity || item.orderedQty || 1);
+        summary.items.map((item, idx) => {
+          const defaultToDeliver = item.remainingAvailable;
+          const remaining = Math.max(0, item.orderedQty - (item.deliveredQty + defaultToDeliver));
           return {
             id: `item_${idx}_${Date.now()}`,
-            itemCode: item.itemCode || `ITM-00${idx + 1}`,
-            itemName: item.itemName || item.name || item.description || `Item ${idx + 1}`,
-            orderedQty: qty,
-            dispatchedQty: qty,
-            unit: item.unit || item.uom || 'Units',
-            unitPrice: Number(item.unitPrice || item.price || 0),
-            remarks: 'Dispatched in good condition',
+            itemCode: item.itemCode,
+            itemName: item.itemName,
+            orderedQty: item.orderedQty,
+            deliveredQty: item.deliveredQty,
+            quantityToBeDelivered: defaultToDeliver,
+            remainingQty: remaining,
+            dispatchedQty: defaultToDeliver,
+            unit: item.rawItem.unit || item.rawItem.uom || 'Units',
+            unitPrice: Number(item.rawItem.unitPrice || item.rawItem.price || 0),
+            remarks: item.deliveredQty > 0
+              ? `Subsequent dispatch (Prev delivered: ${item.deliveredQty})`
+              : 'Dispatched in good condition',
           };
         })
       );
     }
-  }, [selectedPO]);
+  }, [selectedPO, dnData]);
+
+  // Update Quantity to be delivered with formula: Remaining Quantity = PO Quantity - (Delivered Quantity + Quantity to be delivered)
+  const handleUpdateQuantityToBeDelivered = (id: string, value: any) => {
+    const num = value === '' ? 0 : Number(value);
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const validVal = isNaN(num) ? 0 : num;
+        const remaining = Math.max(0, item.orderedQty - (item.deliveredQty + validVal));
+        return {
+          ...item,
+          quantityToBeDelivered: validVal,
+          dispatchedQty: validVal,
+          remainingQty: remaining,
+        };
+      })
+    );
+  };
+
+  // Update Ordered Qty (for manual items)
+  const handleUpdateOrderedQty = (id: string, value: any) => {
+    const num = value === '' ? 0 : Number(value);
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const validVal = isNaN(num) ? 0 : num;
+        const remaining = Math.max(0, validVal - (item.deliveredQty + item.quantityToBeDelivered));
+        return {
+          ...item,
+          orderedQty: validVal,
+          remainingQty: remaining,
+        };
+      })
+    );
+  };
 
   // Update Line Item Values
   const handleUpdateLineItem = (id: string, field: keyof LineItemState, value: any) => {
+    if (field === 'quantityToBeDelivered' || field === 'dispatchedQty') {
+      handleUpdateQuantityToBeDelivered(id, value);
+      return;
+    }
+    if (field === 'orderedQty') {
+      handleUpdateOrderedQty(id, value);
+      return;
+    }
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
@@ -253,6 +373,9 @@ export default function VendorCreateDispatchNotePage() {
         id: `manual_${Date.now()}_${prev.length}`,
         itemName: '',
         orderedQty: 1,
+        deliveredQty: 0,
+        quantityToBeDelivered: 1,
+        remainingQty: 0,
         dispatchedQty: 1,
         unit: 'Units',
         remarks: 'Direct package item',
@@ -398,8 +521,8 @@ export default function VendorCreateDispatchNotePage() {
       setErrorMsg('This Purchase Order is configured for Direct Invoicing only. Dispatch note creation is not permitted for this order.');
       return false;
     }
-    if (isAlreadyDispatched) {
-      setErrorMsg(`A dispatch note has already been created for Purchase Order ${selectedPO?.poNumber || selectedPoId}. Duplicate dispatch notes are strictly not allowed.`);
+    if (selectedPOSummary.isFullyDispatched) {
+      setErrorMsg(`All ordered items for Purchase Order ${selectedPO?.poNumber || selectedPoId} have already been fully dispatched across previous delivery notes.`);
       return false;
     }
     if (!dispatchNoteNumber.trim()) {
@@ -439,13 +562,30 @@ export default function VendorCreateDispatchNotePage() {
       setErrorMsg('Please add at least one line item to dispatch.');
       return false;
     }
-    const hasInvalidQty = lineItems.some(
-      (item) => Number(item.dispatchedQty || 0) <= 0 || !item.itemName.trim()
-    );
-    if (hasInvalidQty) {
-      setErrorMsg('All line items must have a valid name and dispatched quantity greater than 0.');
+
+    for (const item of lineItems) {
+      if (!item.itemName.trim()) {
+        setErrorMsg('All line items must have a valid item description.');
+        return false;
+      }
+      const toDeliver = Number(item.quantityToBeDelivered);
+      if (isNaN(toDeliver) || toDeliver < 0) {
+        setErrorMsg(`Quantity to be delivered for "${item.itemName}" cannot be negative.`);
+        return false;
+      }
+      const maxAllowed = Math.max(0, item.orderedQty - item.deliveredQty);
+      if (toDeliver > maxAllowed) {
+        setErrorMsg(`Quantity to be delivered for "${item.itemName}" (${toDeliver}) cannot exceed the remaining quantity (${maxAllowed}).`);
+        return false;
+      }
+    }
+
+    const totalToDeliver = lineItems.reduce((acc, it) => acc + (Number(it.quantityToBeDelivered) || 0), 0);
+    if (totalToDeliver <= 0) {
+      setErrorMsg('Please enter a Quantity to be delivered greater than 0 for at least one item.');
       return false;
     }
+
     return true;
   };
 
@@ -455,8 +595,8 @@ export default function VendorCreateDispatchNotePage() {
       setErrorMsg('This Purchase Order is configured for Direct Invoicing only. Dispatch note creation is not permitted for this order.');
       return;
     }
-    if (isAlreadyDispatched) {
-      setErrorMsg(`A dispatch note has already been created for Purchase Order ${selectedPO?.poNumber || selectedPoId}. Duplicate dispatch notes are strictly not allowed.`);
+    if (selectedPOSummary.isFullyDispatched) {
+      setErrorMsg(`All ordered items for Purchase Order ${selectedPO?.poNumber || selectedPoId} have already been fully dispatched across previous delivery notes.`);
       return;
     }
     if (!validateForm()) return;
@@ -467,10 +607,16 @@ export default function VendorCreateDispatchNotePage() {
     setErrorMsg(null);
 
     try {
-      const itemsPayload: DispatchNoteItem[] = lineItems.map((item) => ({
+      const activeItems = lineItems.filter((i) => Number(i.quantityToBeDelivered) > 0);
+      const itemsPayload: DispatchNoteItem[] = (activeItems.length > 0 ? activeItems : lineItems).map((item) => ({
+        itemCode: item.itemCode,
         itemName: item.itemName,
+        poQty: Number(item.orderedQty) || 1,
         orderedQty: Number(item.orderedQty) || 1,
-        dispatchedQty: Number(item.dispatchedQty) || 1,
+        deliveredQty: Number(item.deliveredQty) || 0,
+        quantityToBeDelivered: Number(item.quantityToBeDelivered) || 0,
+        dispatchedQty: Number(item.quantityToBeDelivered) || 0,
+        remainingQty: Number(item.remainingQty) || 0,
         unit: item.unit || 'Units',
         unitPrice: item.unitPrice,
         remarks: item.remarks,
@@ -603,17 +749,17 @@ export default function VendorCreateDispatchNotePage() {
           </div>
         )}
 
-        {/* Duplicate Dispatch Warning Banner */}
-        {isAlreadyDispatched && (
+        {/* Fully Dispatched Banner */}
+        {selectedPOSummary.isFullyDispatched && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 shrink-0">
-                <Truck className="size-5" />
+                <CheckCircle2 className="size-5" />
               </div>
               <div>
-                <p className="font-semibold text-sm">Dispatch Note Already Created for this Purchase Order</p>
+                <p className="font-semibold text-sm">Purchase Order Fully Dispatched</p>
                 <p className="text-xs text-rose-700/90 dark:text-rose-300/80 mt-0.5">
-                  A dispatch note has already been recorded for <strong>{selectedPO?.poNumber || selectedPoId}</strong>. Duplicate dispatch notes for the same Purchase Order are not allowed.
+                  All ordered items for Purchase Order <strong>{selectedPO?.poNumber || selectedPoId}</strong> have already been completely dispatched across previous delivery notes.
                 </p>
               </div>
             </div>
@@ -623,6 +769,31 @@ export default function VendorCreateDispatchNotePage() {
               onClick={() => navigate(getVendorPath('/vendor/invoices?tab=dispatches'))}
             >
               <Truck className="size-4" /> View Existing Dispatches
+            </Button>
+          </div>
+        )}
+
+        {/* Partial Dispatch Information Banner */}
+        {selectedPOSummary.isPartiallyDispatched && !selectedPOSummary.isFullyDispatched && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-sky-300 bg-sky-50 dark:bg-sky-950/20 text-sky-900 dark:text-sky-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 shrink-0">
+                <Truck className="size-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Partial Dispatch Mode Active</p>
+                <p className="text-xs text-sky-700/90 dark:text-sky-300/80 mt-0.5">
+                  Previous dispatches exist for Purchase Order <strong>{selectedPO?.poNumber || selectedPoId}</strong>. You can deliver up to the remaining quantity ({selectedPOSummary.totalRemainingAvailable} units remaining).
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-sky-300 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/40 shrink-0 gap-1.5"
+              onClick={() => navigate(getVendorPath('/vendor/invoices?tab=dispatches'))}
+            >
+              <FileText className="size-4" /> View Prior Dispatches
             </Button>
           </div>
         )}
@@ -648,18 +819,28 @@ export default function VendorCreateDispatchNotePage() {
               >
                 <option value="">-- Select Purchase Order to Dispatch --</option>
                 {poList.map((po) => {
-                  const alreadyDispatched = isPoAlreadyDispatched(po);
+                  const poSum = getPoDispatchSummary(po, dnData);
+                  const isInvOnly = po.vendorFulfillmentAllowed === 'INVOICE_ONLY';
+                  const isFull = poSum.isFullyDispatched;
+                  const isPart = poSum.isPartiallyDispatched;
+
+                  let labelSuffix = '';
+                  if (isInvOnly) labelSuffix = ' [Invoice Only]';
+                  else if (isFull) labelSuffix = ' [Fully Dispatched - Completed]';
+                  else if (isPart) labelSuffix = ` [Partially Dispatched — ${poSum.totalRemainingAvailable} remaining]`;
+                  else labelSuffix = ' [Ready for Dispatch]';
+
                   return (
-                    <option key={po.id} value={po.id} disabled={alreadyDispatched}>
-                      {po.poNumber} — {formatAmount(po.totalAmount, companyDefaultCurrency)} ({po.status})
-                      {po.vendorFulfillmentAllowed === 'INVOICE_ONLY' ? ' [Invoice Only]' : ''}
-                      {alreadyDispatched ? ' [Dispatch Note Already Created]' : ''}
+                    <option key={po.id} value={po.id} disabled={isInvOnly || isFull}>
+                      {po.poNumber} — {formatAmount(po.totalAmount, companyDefaultCurrency)} ({po.status}){labelSuffix}
                     </option>
                   );
                 })}
                 {selectedPoId && !poList.some((po) => String(po.id) === String(selectedPoId)) && (
-                  <option value={selectedPoId} disabled={isAlreadyDispatched}>
-                    {selectedPO?.poNumber || selectedPoId}{isAlreadyDispatched ? ' [Dispatch Note Already Created]' : ''}
+                  <option value={selectedPoId} disabled={selectedPOSummary.isFullyDispatched}>
+                    {selectedPO?.poNumber || selectedPoId}
+                    {selectedPOSummary.isFullyDispatched ? ' [Fully Dispatched - Completed]' : ''}
+                    {selectedPOSummary.isPartiallyDispatched && !selectedPOSummary.isFullyDispatched ? ` [Partially Dispatched — ${selectedPOSummary.totalRemainingAvailable} remaining]` : ''}
                   </option>
                 )}
               </select>
@@ -977,88 +1158,151 @@ export default function VendorCreateDispatchNotePage() {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-border/70">
-            <table className="w-full text-left text-sm min-w-[700px]">
+            <table className="w-full text-left text-sm min-w-[860px]">
               <thead className="bg-muted/50 text-muted-foreground text-xs uppercase font-semibold border-b border-border/70">
                 <tr>
                   <th className="py-3 px-3.5 w-10 text-center">#</th>
                   <th className="py-3 px-3.5 min-w-[200px]">Material / Item Description *</th>
-                  <th className="py-3 px-3.5 w-28 text-center">Ordered Qty</th>
-                  <th className="py-3 px-3.5 w-32 text-center">Dispatched Qty *</th>
+                  <th className="py-3 px-3.5 w-28 text-center">PO Quantity</th>
+                  <th className="py-3 px-3.5 w-32 text-center">Delivered Quantity</th>
+                  <th className="py-3 px-3.5 w-36 text-center">Quantity to be delivered *</th>
+                  <th className="py-3 px-3.5 w-32 text-center">Remaining Quantity</th>
                   <th className="py-3 px-3.5 w-24 text-center">Unit</th>
-                  <th className="py-3 px-3.5 min-w-[160px]">Remarks / Batch #</th>
+                  <th className="py-3 px-3.5 min-w-[150px]">Remarks / Batch #</th>
                   <th className="py-3 px-3.5 w-10 text-center"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {lineItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="py-8 text-center text-muted-foreground">
                       No line items added. Select a Purchase Order above to auto-populate materials.
                     </td>
                   </tr>
                 ) : (
-                  lineItems.map((item, index) => (
-                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-3.5 text-center text-muted-foreground font-mono text-xs">
-                        {index + 1}
-                      </td>
-                      <td className="py-3 px-3.5">
-                        <Input
-                          type="text"
-                          value={item.itemName}
-                          placeholder="Item name / specifications"
-                          onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
-                          className="h-9 text-sm bg-background font-medium"
-                        />
-                      </td>
-                      <td className="py-3 px-3.5 text-center font-semibold text-muted-foreground font-mono">
-                        {item.orderedQty}
-                      </td>
-                      <td className="py-3 px-3.5 text-center">
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.dispatchedQty}
-                          onChange={(e) =>
-                            handleUpdateLineItem(
-                              item.id,
-                              'dispatchedQty',
-                              e.target.value ? Number(e.target.value) : 0
-                            )
-                          }
-                          className="h-9 text-sm text-center font-bold font-mono bg-background text-primary"
-                        />
-                      </td>
-                      <td className="py-3 px-3.5 text-center">
-                        <Input
-                          type="text"
-                          value={item.unit}
-                          onChange={(e) => handleUpdateLineItem(item.id, 'unit', e.target.value)}
-                          className="h-9 text-xs text-center bg-background"
-                        />
-                      </td>
-                      <td className="py-3 px-3.5">
-                        <Input
-                          type="text"
-                          value={item.remarks}
-                          placeholder="Batch / Serial No."
-                          onChange={(e) => handleUpdateLineItem(item.id, 'remarks', e.target.value)}
-                          className="h-9 text-xs bg-background"
-                        />
-                      </td>
-                      <td className="py-3 px-3.5 text-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="size-7 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
+                  lineItems.map((item, index) => {
+                    const maxAllowed = Math.max(0, item.orderedQty - item.deliveredQty);
+                    const isFullyDelivered = item.orderedQty > 0 && maxAllowed === 0;
+                    const isExceeded = item.quantityToBeDelivered > maxAllowed;
+
+                    return (
+                      <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-3.5 text-center text-muted-foreground font-mono text-xs">
+                          {index + 1}
+                        </td>
+                        <td className="py-3 px-3.5">
+                          <Input
+                            type="text"
+                            value={item.itemName}
+                            placeholder="Item name / specifications"
+                            onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
+                            className="h-9 text-sm bg-background font-medium"
+                          />
+                          {item.itemCode && (
+                            <span className="text-[11px] font-mono text-muted-foreground mt-0.5 block">
+                              Code: {item.itemCode}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          {item.id.startsWith('manual_') ? (
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.orderedQty}
+                              onChange={(e) => handleUpdateOrderedQty(item.id, e.target.value)}
+                              className="h-9 text-sm text-center font-semibold font-mono bg-background"
+                            />
+                          ) : (
+                            <span className="font-semibold text-foreground font-mono text-sm">
+                              {item.orderedQty}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <span className="inline-block font-mono text-sm px-2.5 py-1 rounded-md bg-muted/60 text-muted-foreground font-semibold">
+                            {item.deliveredQty}
+                          </span>
+                          {item.deliveredQty > 0 && (
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                              in prev notes
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <div className="flex flex-col items-center">
+                            <Input
+                              type="number"
+                              min="0"
+                              max={maxAllowed}
+                              disabled={isFullyDelivered}
+                              value={item.quantityToBeDelivered}
+                              onChange={(e) => handleUpdateQuantityToBeDelivered(item.id, e.target.value)}
+                              className={`h-9 text-sm text-center font-bold font-mono bg-background ${
+                                isExceeded
+                                  ? 'border-rose-500 text-rose-600 focus-visible:ring-rose-500'
+                                  : 'text-primary'
+                              }`}
+                            />
+                            {isExceeded && (
+                              <span className="text-[10px] text-rose-500 font-medium mt-1">
+                                Max: {maxAllowed}
+                              </span>
+                            )}
+                            {isFullyDelivered && (
+                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 mt-1">
+                                Completed
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <div className="flex flex-col items-center">
+                            <span
+                              className={`inline-block font-mono font-bold text-sm px-2.5 py-1 rounded-md ${
+                                item.remainingQty === 0
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                                  : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                              }`}
+                            >
+                              {item.remainingQty}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground mt-0.5">
+                              {item.remainingQty === 0 ? 'Full' : 'Balance'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <Input
+                            type="text"
+                            value={item.unit}
+                            onChange={(e) => handleUpdateLineItem(item.id, 'unit', e.target.value)}
+                            className="h-9 text-xs text-center bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5">
+                          <Input
+                            type="text"
+                            value={item.remarks}
+                            placeholder="Batch / Serial No."
+                            onChange={(e) => handleUpdateLineItem(item.id, 'remarks', e.target.value)}
+                            className="h-9 text-xs bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="size-7 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1098,17 +1342,31 @@ export default function VendorCreateDispatchNotePage() {
                   <span className="font-semibold text-foreground">{selectedPO?.poNumber || selectedPoId || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center text-muted-foreground">
-                  <span>Materials Count:</span>
-                  <span className="font-semibold text-primary">{lineItems.length} items</span>
+                  <span>Total Ordered in PO:</span>
+                  <span className="font-semibold text-foreground">
+                    {lineItems.reduce((acc, i) => acc + (Number(i.orderedQty) || 0), 0)} units
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-muted-foreground">
+                  <span>Previously Delivered:</span>
+                  <span className="font-semibold text-muted-foreground">
+                    {lineItems.reduce((acc, i) => acc + (Number(i.deliveredQty) || 0), 0)} units
+                  </span>
                 </div>
                 <div className="flex justify-between items-center text-muted-foreground">
                   <span>Transporter:</span>
                   <span className="font-semibold text-foreground">{transporterName || transportMode}</span>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t border-border/60 text-base">
-                  <span className="font-bold text-foreground">Dispatched Qty:</span>
+                  <span className="font-bold text-foreground">Delivering in this Challan:</span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    {lineItems.reduce((acc, i) => acc + (Number(i.dispatchedQty) || 0), 0)} units
+                    {lineItems.reduce((acc, i) => acc + (Number(i.quantityToBeDelivered) || 0), 0)} units
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-muted-foreground">
+                  <span>Remaining PO Balance:</span>
+                  <span className="font-bold text-foreground font-mono">
+                    {lineItems.reduce((acc, i) => acc + (Number(i.remainingQty) || 0), 0)} units
                   </span>
                 </div>
               </div>
@@ -1118,8 +1376,8 @@ export default function VendorCreateDispatchNotePage() {
               <Button
                 type="button"
                 onClick={() => handleSubmit(false)}
-                disabled={submitting || savingDraft || isInvoiceOnly || isAlreadyDispatched}
-                title={isAlreadyDispatched ? 'A dispatch note has already been created for this Purchase Order' : undefined}
+                disabled={submitting || savingDraft || isInvoiceOnly || selectedPOSummary.isFullyDispatched}
+                title={selectedPOSummary.isFullyDispatched ? 'All items for this Purchase Order have already been fully dispatched' : undefined}
                 className="w-full py-2.5 gap-2 shadow-sm font-bold"
               >
                 <Send className="size-4" /> {submitting ? 'Submitting Challan…' : 'Submit Dispatch Note'}
@@ -1128,8 +1386,8 @@ export default function VendorCreateDispatchNotePage() {
                 type="button"
                 variant="outline"
                 onClick={() => handleSubmit(true)}
-                disabled={submitting || savingDraft || isInvoiceOnly || isAlreadyDispatched}
-                title={isAlreadyDispatched ? 'A dispatch note has already been created for this Purchase Order' : undefined}
+                disabled={submitting || savingDraft || isInvoiceOnly || selectedPOSummary.isFullyDispatched}
+                title={selectedPOSummary.isFullyDispatched ? 'All items for this Purchase Order have already been fully dispatched' : undefined}
                 className="w-full py-2.5 gap-2 font-medium"
               >
                 <Save className="size-4" /> {savingDraft ? 'Saving Draft…' : 'Save Draft'}
@@ -1173,12 +1431,16 @@ export default function VendorCreateDispatchNotePage() {
             poNumber: selectedPO?.poNumber || selectedPoId,
             vendorName: user?.name || (selectedPO as any)?.vendorName || (selectedPO as any)?.vendor?.name || 'Authorized Supplier',
             status: 'IN_TRANSIT',
-            items: lineItems.map((li) => ({
+            items: lineItems.filter(li => Number(li.quantityToBeDelivered) > 0).map((li) => ({
               id: li.id,
               itemCode: li.itemCode,
               itemName: li.itemName,
+              poQty: li.orderedQty,
               orderedQty: li.orderedQty,
-              dispatchedQty: li.dispatchedQty,
+              deliveredQty: li.deliveredQty,
+              quantityToBeDelivered: li.quantityToBeDelivered,
+              dispatchedQty: li.quantityToBeDelivered,
+              remainingQty: li.remainingQty,
               unit: li.unit,
               remarks: li.remarks,
             })),

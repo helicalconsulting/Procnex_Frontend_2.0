@@ -277,15 +277,19 @@ export default function PurchaseRequisitionPage() {
         if (list.length > 0) {
           const defWh = list.find(w => w.isDefault && w.isActive) || list.find(w => w.isActive) || list[0];
           if (defWh) {
-            setSelectedWarehouseId(defWh.id);
             const whLabel = defWh.code ? `${defWh.code} — ${defWh.name}` : defWh.name;
             const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
             if (defWh.phone) {
               setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
             }
             setPr(prev => {
-              if (!prev) return prev;
+              if (!prev) {
+                setSelectedWarehouseId(defWh.id);
+                return prev;
+              }
               if (!prev.shipToWarehouse || prev.shipToWarehouse.trim() === '') {
+                setSelectedWarehouseId((prevId) => (prevId === '__custom__' ? '__custom__' : defWh.id));
+                // Only default if not explicitly set to custom
                 return {
                   ...prev,
                   shipToWarehouse: whLabel,
@@ -293,6 +297,12 @@ export default function PurchaseRequisitionPage() {
                   shipToContact: defWh.contactPerson || prev.shipToContact,
                   shipToPhone: defWh.phone || prev.shipToPhone,
                 };
+              }
+              const matchedWh = list.find(w => `${w.code} — ${w.name}` === prev.shipToWarehouse || w.name === prev.shipToWarehouse);
+              if (matchedWh) {
+                setSelectedWarehouseId(matchedWh.id);
+              } else {
+                setSelectedWarehouseId('__custom__');
               }
               return prev;
             });
@@ -339,6 +349,7 @@ export default function PurchaseRequisitionPage() {
   // Auto-sync warehouse to pr if warehouse is selected or default exists but pr.shipToWarehouse is empty
   useEffect(() => {
     if (!pr || isReadOnly) return;
+    if (selectedWarehouseId === '__custom__') return;
     if (warehouses.length > 0 && (!pr.shipToWarehouse || !pr.shipToWarehouse.trim())) {
       const defWh = warehouses.find(w => w.id === selectedWarehouseId) 
         || warehouses.find(w => w.isDefault && w.isActive) 
@@ -421,6 +432,15 @@ export default function PurchaseRequisitionPage() {
               initialTaxTotal = (subtotal * initialTaxRate) / 100;
             }
             const grandTotal = Math.round((subtotal + initialTaxTotal) * 100) / 100;
+
+            if (existing.shipToWarehouse) {
+              const matchedWh = warehouses.find(w => `${w.code} — ${w.name}` === existing.shipToWarehouse || w.name === existing.shipToWarehouse);
+              if (matchedWh) {
+                setSelectedWarehouseId(matchedWh.id);
+              } else {
+                setSelectedWarehouseId('__custom__');
+              }
+            }
 
             setPr({
               ...existing,
@@ -1812,7 +1832,9 @@ export default function PurchaseRequisitionPage() {
                   className="pr-select"
                   style={{ width: '100%' }}
                   value={
-                    warehouses.find(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse || w.id === selectedWarehouseId)?.id || (selectedWarehouseId === '__custom__' ? '__custom__' : '')
+                    selectedWarehouseId === '__custom__'
+                      ? '__custom__'
+                      : (warehouses.find(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse)?.id || (selectedWarehouseId || ''))
                   }
                   onChange={e => handleWarehouseChange(e.target.value)}
                 >
@@ -1831,12 +1853,16 @@ export default function PurchaseRequisitionPage() {
                   placeholder="No warehouse selected"
                 />
               )}
-              {!isReadOnly && (selectedWarehouseId === '__custom__' || (warehouses.length > 0 && !warehouses.some(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse || w.id === selectedWarehouseId) && pr.shipToWarehouse)) && (
+              {!isReadOnly && (
+                selectedWarehouseId === '__custom__' || 
+                (warehouses.length > 0 && !warehouses.some(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse) && pr.shipToWarehouse)
+              ) && (
                 <input
                   style={{ marginTop: 6 }}
                   value={pr.shipToWarehouse}
                   placeholder="Enter custom warehouse name..."
                   onChange={e => updateField('shipToWarehouse', e.target.value)}
+                  autoFocus
                 />
               )}
             </div>

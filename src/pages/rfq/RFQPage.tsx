@@ -3,6 +3,7 @@ import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { rfqService } from '../../services/rfqService';
 import { approvalService } from '../../services/approvalService';
+import { companySettingsService } from '../../services/companySettingsService';
 import { sseClient } from '../../services/sseClient';
 import { useServiceData } from '../../hooks/useServiceData';
 import type { RFQTableRow } from '../../types/viewModels';
@@ -41,8 +42,6 @@ import '../../components/shared/ColumnCustomizer.css';
 // ─── Types ───────────────────────────────────────────────────
 
 type MockRFQ = RFQTableRow;
-
-const AVAILABLE_DEPARTMENTS = ['FINANCE', 'Human Resource', 'Information Technology', 'Purchase'];
 
 // ─── Column definitions ───────────────────────────────────────
 
@@ -656,9 +655,31 @@ export default function RFQPage() {
 
   const perPage = 8;
 
-  const departmentOptions = useMemo(() => {
-    return AVAILABLE_DEPARTMENTS;
+  const [companyDepartments, setCompanyDepartments] = useState<string[]>([]);
+  useEffect(() => {
+    companySettingsService
+      .listDepartments()
+      .then((deps) => {
+        const names = Array.from(
+          new Set(
+            (deps || [])
+              .filter((d) => d && d.isActive !== false && d.name?.trim())
+              .map((d) => d.name.trim())
+          )
+        );
+        if (names.length > 0) setCompanyDepartments(names);
+      })
+      .catch(() => {});
   }, []);
+
+  const departmentOptions = useMemo(() => {
+    const set = new Set<string>();
+    companyDepartments.forEach((d) => set.add(d));
+    enrichedRfqList.forEach((r) => {
+      if (r.department && r.department.trim()) set.add(r.department.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [companyDepartments, enrichedRfqList]);
 
   const filtered = useMemo(() => {
     let list = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));

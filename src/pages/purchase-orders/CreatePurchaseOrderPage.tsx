@@ -140,15 +140,26 @@ export default function CreatePurchaseOrderPage() {
         if (list.length > 0) {
           const defWh = list.find((w) => w.isDefault && w.isActive) || list.find((w) => w.isActive) || list[0];
           if (defWh) {
-            setSelectedWarehouseId(defWh.id);
-            setShipToWarehouse(`${defWh.code} — ${defWh.name}`);
-            const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
-            setShipToAddress(fullAddress || 'Central Depot');
-            if (defWh.contactPerson) setShipToContact(defWh.contactPerson);
-            if (defWh.phone) {
-              setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
-              setShipToPhone(defWh.phone);
-            }
+            setShipToWarehouse((prevWh) => {
+              if (prevWh && prevWh !== 'Central Warehouse') {
+                const matched = list.find(w => `${w.code} — ${w.name}` === prevWh || w.name === prevWh);
+                if (matched) {
+                  setSelectedWarehouseId(matched.id);
+                } else {
+                  setSelectedWarehouseId('__custom__');
+                }
+                return prevWh;
+              }
+              setSelectedWarehouseId(defWh.id);
+              const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
+              setShipToAddress(fullAddress || 'Central Depot');
+              if (defWh.contactPerson) setShipToContact(defWh.contactPerson);
+              if (defWh.phone) {
+                setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
+                setShipToPhone(defWh.phone);
+              }
+              return `${defWh.code} — ${defWh.name}`;
+            });
           }
         }
       })
@@ -726,7 +737,15 @@ export default function CreatePurchaseOrderPage() {
           if (existing.specialInstructions) setSpecialInstructions(existing.specialInstructions);
 
           if (existing.shipToCompany) setShipToCompany(existing.shipToCompany);
-          if (existing.shipToWarehouse) setShipToWarehouse(existing.shipToWarehouse);
+          if (existing.shipToWarehouse) {
+            setShipToWarehouse(existing.shipToWarehouse);
+            const matched = warehouses.find(w => `${w.code} — ${w.name}` === existing.shipToWarehouse || w.name === existing.shipToWarehouse);
+            if (matched) {
+              setSelectedWarehouseId(matched.id);
+            } else {
+              setSelectedWarehouseId('__custom__');
+            }
+          }
           if (existing.shipToAddress) setShipToAddress(existing.shipToAddress);
           if (existing.shipToContact) setShipToContact(existing.shipToContact);
           if (existing.shipToPhone) {
@@ -1964,7 +1983,7 @@ export default function CreatePurchaseOrderPage() {
                   <th style={{ width: '120px' }}>Item Code</th>
                   <th>Item Name / Description *</th>
                   <th style={{ width: '90px' }}>Qty</th>
-                  <th style={{ width: '80px' }}>Unit</th>
+                  <th style={{ width: '100px' }}>Unit</th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
                   {taxMode === 'LINE_ITEM' && <th style={{ width: '110px', textAlign: 'center' }}>Tax (%)</th>}
                   <th style={{ width: '180px', textAlign: 'right', paddingRight: '16px' }}>Total</th>
@@ -2019,7 +2038,7 @@ export default function CreatePurchaseOrderPage() {
                           onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
                         />
                       </td>
-                      <td>
+                      <td style={{ width: '100px' }}>
                         <input
                           type="text"
                           className="cpo-table__input"

@@ -4,7 +4,7 @@
 // Supports Item, Supplier, Department, and Mix Bag dimensions with 12-Month (Jan - Dec) phasing
 // and Original / Revision workflow protected with ADMIN password.
 // ============================================================
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Wallet,
@@ -31,9 +31,13 @@ import {
   Check,
   Calendar,
   Sparkles,
+  Settings,
 } from 'lucide-react';
 import { budgetApi } from '../../api/budgetApi';
 import { loadBudgetLogicSettings } from '../../components/admin/company-settings/budgetLogicModel';
+import { companySettingsService } from '../../services/companySettingsService';
+import { vendorService } from '../../services/vendorService';
+import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { PageFrame, PageLead } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -63,7 +67,8 @@ const MONTH_NAMES = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-interface MockExistingBudget {
+export interface ExistingBudgetDisplay {
+  id?: string;
   budgetCode: string;
   budgetName: string;
   budgetLogic: BudgetLogicType;
@@ -74,137 +79,9 @@ interface MockExistingBudget {
   lines: DynamicBudgetLine[];
 }
 
-const MOCK_EXISTING_BUDGETS: MockExistingBudget[] = [
-  {
-    budgetCode: 'BDG-2026-ITM-01',
-    budgetName: 'FY2026 IT Hardware & Systems Procurement',
-    budgetLogic: 'ITEM',
-    fiscalYear: '2026',
-    currency: 'KES',
-    totalAllocated: 4800000,
-    status: 'ACTIVE',
-    lines: [
-      {
-        lineCode: 'ITM-001',
-        lineName: 'High-Performance Developer Laptops',
-        costCenterCode: 'CC-IT-101',
-        glAccountCode: 'GL-52010',
-        spendCategory: 'Hardware & Devices',
-        monthlyPhasing: [200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000],
-        annualAmount: 2400000,
-        q1Amount: 600000, q2Amount: 600000, q3Amount: 600000, q4Amount: 600000,
-      },
-      {
-        lineCode: 'ITM-002',
-        lineName: 'Cloud Server Infrastructure & Workstations',
-        costCenterCode: 'CC-IT-102',
-        glAccountCode: 'GL-52020',
-        spendCategory: 'Server Infrastructure',
-        monthlyPhasing: [200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000],
-        annualAmount: 2400000,
-        q1Amount: 600000, q2Amount: 600000, q3Amount: 600000, q4Amount: 600000,
-      },
-    ],
-  },
-  {
-    budgetCode: 'BDG-2026-SUP-02',
-    budgetName: 'FY2026 Key Vendor Annual Allocation',
-    budgetLogic: 'SUPPLIER',
-    fiscalYear: '2026',
-    currency: 'KES',
-    totalAllocated: 7200000,
-    status: 'ACTIVE',
-    lines: [
-      {
-        lineCode: 'SUP-101',
-        lineName: 'Dell Global Commercial Partners',
-        costCenterCode: 'CC-PROC-01',
-        glAccountCode: 'GL-61010',
-        spendCategory: 'IT Systems Vendor',
-        monthlyPhasing: [350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000, 350000],
-        annualAmount: 4200000,
-        q1Amount: 1050000, q2Amount: 1050000, q3Amount: 1050000, q4Amount: 1050000,
-      },
-      {
-        lineCode: 'SUP-102',
-        lineName: 'Safari Office Stationers & Facilities',
-        costCenterCode: 'CC-ADMIN-02',
-        glAccountCode: 'GL-61020',
-        spendCategory: 'Office & Facilities',
-        monthlyPhasing: [250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000, 250000],
-        annualAmount: 3000000,
-        q1Amount: 750000, q2Amount: 750000, q3Amount: 750000, q4Amount: 750000,
-      },
-    ],
-  },
-  {
-    budgetCode: 'BDG-2026-DEP-03',
-    budgetName: 'FY2026 Central Operations & Tech Departments',
-    budgetLogic: 'DEPARTMENT',
-    fiscalYear: '2026',
-    currency: 'KES',
-    totalAllocated: 6000000,
-    status: 'ACTIVE',
-    lines: [
-      {
-        lineCode: 'DEP-01',
-        lineName: 'Information Technology & Engineering',
-        costCenterCode: 'CC-ENG-101',
-        glAccountCode: 'GL-71001',
-        spendCategory: 'Engineering OPEX',
-        monthlyPhasing: [300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000, 300000],
-        annualAmount: 3600000,
-        q1Amount: 900000, q2Amount: 900000, q3Amount: 900000, q4Amount: 900000,
-      },
-      {
-        lineCode: 'DEP-02',
-        lineName: 'Logistics & Global Operations',
-        costCenterCode: 'CC-OPS-202',
-        glAccountCode: 'GL-71002',
-        spendCategory: 'Operations Supply Chain',
-        monthlyPhasing: [200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000, 200000],
-        annualAmount: 2400000,
-        q1Amount: 600000, q2Amount: 600000, q3Amount: 600000, q4Amount: 600000,
-      },
-    ],
-  },
-  {
-    budgetCode: 'BDG-2026-MIX-04',
-    budgetName: 'FY2026 Enterprise Composite Infrastructure',
-    budgetLogic: 'MIX_BAG',
-    fiscalYear: '2026',
-    currency: 'KES',
-    totalAllocated: 9600000,
-    status: 'ACTIVE',
-    lines: [
-      {
-        lineCode: 'LN-MIX-01',
-        lineName: 'Core Fiber Connectivity Upgrade',
-        costCenterCode: 'CC-TELECOM',
-        glAccountCode: 'GL-81010',
-        spendCategory: 'Item: Infrastructure',
-        dimensionType: 'ITEM',
-        monthlyPhasing: [400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000],
-        annualAmount: 4800000,
-        q1Amount: 1200000, q2Amount: 1200000, q3Amount: 1200000, q4Amount: 1200000,
-      },
-      {
-        lineCode: 'LN-MIX-02',
-        lineName: 'Enterprise Cloud Retainer Vendor',
-        costCenterCode: 'CC-VENDOR',
-        glAccountCode: 'GL-81020',
-        spendCategory: 'Supplier: Cloud Retainer',
-        dimensionType: 'SUPPLIER',
-        monthlyPhasing: [400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000],
-        annualAmount: 4800000,
-        q1Amount: 1200000, q2Amount: 1200000, q3Amount: 1200000, q4Amount: 1200000,
-      },
-    ],
-  },
-];
-
 export default function BudgetCreatePage() {
   const navigate = useNavigate();
+  const { companyDefaultCurrency } = useCurrency();
   const [activeStep, setActiveStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -219,7 +96,7 @@ export default function BudgetCreatePage() {
   // Modals for Revision Flow
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionFilterLogic, setRevisionFilterLogic] = useState<string>('ALL');
-  const [selectedBudgetForRev, setSelectedBudgetForRev] = useState<MockExistingBudget | null>(null);
+  const [selectedBudgetForRev, setSelectedBudgetForRev] = useState<ExistingBudgetDisplay | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [showPasswordText, setShowPasswordText] = useState(false);
@@ -231,11 +108,160 @@ export default function BudgetCreatePage() {
   const [periodGranularity, setPeriodGranularity] = useState('MONTHLY');
   const [startDate, setStartDate] = useState(`${new Date().getFullYear()}-01-01`);
   const [endDate, setEndDate] = useState(`${new Date().getFullYear()}-12-31`);
-  const [currency, setCurrency] = useState('KES');
+  const [currency, setCurrency] = useState(companyDefaultCurrency || 'AED');
+  const userChangedCurrencyRef = useRef(false);
   const [fxSource, setFxSource] = useState('LIVE_MARKET');
   const [vatTreatment, setVatTreatment] = useState('EXCLUSIVE');
-  const [fundingSource, setFundingSource] = useState('INTERNAL_REVENUE');
+  const [fundingSource, setFundingSource] = useState('Internal Revenue / Operational Cashflow');
   const [erpReference, setErpReference] = useState('');
+
+  // Options configured from Budget Settings
+  const [configuredBudgetTypes, setConfiguredBudgetTypes] = useState<string[]>([
+    'OPEX (Operating Expenditure)',
+    'CAPEX (Capital Expenditure)',
+    'Project Spend',
+    'Donor / Grant Funded',
+  ]);
+  const [configuredFundingSources, setConfiguredFundingSources] = useState<string[]>([
+    'Internal Revenue / Operational Cashflow',
+    'Bank Credit / Loan Facility',
+    'Equity / Shareholder Inflow',
+    'Donor / NGO Grant',
+  ]);
+  const [configuredFxSources, setConfiguredFxSources] = useState<Array<{ code: string; label: string }>>([
+    { code: 'LIVE_MARKET', label: 'Live Market Rates (open.er-api.com)' },
+    { code: 'FIXED_BUDGET_RATE', label: 'Fixed Budget Master Table' },
+    { code: 'CENTRAL_BANK', label: 'Central Bank Daily Fixing' },
+  ]);
+
+  // Dynamic Master Data
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [vendors, setVendors] = useState<Array<{ id: string; name: string; vendorNo?: string; category?: string }>>([]);
+  const [existingBudgets, setExistingBudgets] = useState<ExistingBudgetDisplay[]>([]);
+  const [loadingExistingBudgets, setLoadingExistingBudgets] = useState(false);
+
+  // Keep currency synced with company default unless user explicitly changed it
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (currency === 'KES' || !currency)) {
+      setCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
+
+  // Load Company Master Data on mount
+  useEffect(() => {
+    let isMounted = true;
+    companySettingsService
+      .listDepartments()
+      .then((deps) => {
+        if (isMounted) {
+          const names = (deps || [])
+            .filter((d) => d && d.isActive !== false && d.name?.trim())
+            .map((d) => d.name.trim());
+          if (names.length > 0) setDepartments(Array.from(new Set(names)));
+        }
+      })
+      .catch((err) => console.error('Failed to load departments', err));
+
+    companySettingsService
+      .listCategories()
+      .then((cats) => {
+        if (isMounted) {
+          const names = (cats || [])
+            .filter((c) => c && c.name?.trim())
+            .map((c) => c.name.trim());
+          if (names.length > 0) setCategories(Array.from(new Set(names)));
+        }
+      })
+      .catch((err) => console.error('Failed to load categories', err));
+
+    vendorService
+      .listTyped()
+      .then((vList) => {
+        if (isMounted && Array.isArray(vList)) {
+          setVendors(
+            vList.map((v) => ({
+              id: v.id,
+              name: v.name,
+              vendorNo: (v as any).vendorNo,
+              category: v.category,
+            }))
+          );
+        }
+      })
+      .catch((err) => console.error('Failed to load vendors', err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Fetch real existing budgets for revision modal
+  useEffect(() => {
+    if (showRevisionModal) {
+      setLoadingExistingBudgets(true);
+      budgetApi
+        .list({ limit: 100 })
+        .then((res) => {
+          if (res?.budgets && Array.isArray(res.budgets)) {
+            const mapped: ExistingBudgetDisplay[] = res.budgets.map((b) => {
+              let logic: BudgetLogicType = 'ITEM';
+              if (b.erpReference && b.erpReference.includes('Logic:')) {
+                const match = b.erpReference.match(/Logic:([A-Z_]+)/);
+                if (match && ['ITEM', 'SUPPLIER', 'DEPARTMENT', 'MIX_BAG'].includes(match[1])) {
+                  logic = match[1] as BudgetLogicType;
+                }
+              }
+
+              const dynamicLines: DynamicBudgetLine[] = (b.lines || []).map((l, i) => {
+                let monthly: number[] = Array(12).fill(0);
+                if (l.monthlyPhasing) {
+                  if (Array.isArray(l.monthlyPhasing)) {
+                    monthly = l.monthlyPhasing.slice(0, 12);
+                  } else if (typeof l.monthlyPhasing === 'object') {
+                    const keys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                    monthly = keys.map((k) => Number((l.monthlyPhasing as any)[k] || (l.monthlyPhasing as any)[k.toUpperCase()] || 0));
+                  }
+                } else if (l.annualAmount) {
+                  const perMonth = Math.round(Number(l.annualAmount) / 12);
+                  monthly = Array(12).fill(perMonth);
+                  monthly[11] = Number(l.annualAmount) - perMonth * 11;
+                }
+                return {
+                  lineCode: l.lineCode || `LN-${String(i + 1).padStart(3, '0')}`,
+                  lineName: l.lineName || '',
+                  costCenterCode: l.costCenterCode || '',
+                  glAccountCode: l.glAccountCode || '',
+                  spendCategory: l.spendCategory || '',
+                  dimensionType: (l as any).dimensionType || 'ITEM',
+                  monthlyPhasing: monthly,
+                  annualAmount: Number(l.annualAmount || 0),
+                  q1Amount: Number(l.q1Amount || monthly[0] + monthly[1] + monthly[2]),
+                  q2Amount: Number(l.q2Amount || monthly[3] + monthly[4] + monthly[5]),
+                  q3Amount: Number(l.q3Amount || monthly[6] + monthly[7] + monthly[8]),
+                  q4Amount: Number(l.q4Amount || monthly[9] + monthly[10] + monthly[11]),
+                };
+              });
+
+              return {
+                id: b.id,
+                budgetCode: b.budgetCode,
+                budgetName: b.budgetName,
+                budgetLogic: logic,
+                fiscalYear: b.fiscalYear,
+                currency: b.currency || 'AED',
+                totalAllocated: b.totalAllocated || 0,
+                status: b.status || 'ACTIVE',
+                lines: dynamicLines.length > 0 ? dynamicLines : generateInitialLinesForLogic(logic),
+              };
+            });
+            setExistingBudgets(mapped);
+          }
+        })
+        .catch((err) => console.error('Failed to load budgets for revision', err))
+        .finally(() => setLoadingExistingBudgets(false));
+    }
+  }, [showRevisionModal]);
 
   // Step 2 View Mode Toggle (Monthly 12-Month vs Condensed Quarter)
   const [phasingDisplayMode, setPhasingDisplayMode] = useState<'MONTHLY' | 'QUARTERLY'>('MONTHLY');
@@ -253,123 +279,66 @@ export default function BudgetCreatePage() {
     purchaseInvoice: true,
   });
 
-  // Seed default dimension from Settings on mount
+  // Seed default dimension & classification options from Settings on mount
   useEffect(() => {
     const settings = loadBudgetLogicSettings();
     if (settings?.defaultBudgetDimension) {
       setBudgetLogic(settings.defaultBudgetDimension);
     }
+    if (settings?.budgetTypes && settings.budgetTypes.length > 0) {
+      setConfiguredBudgetTypes(settings.budgetTypes);
+      if (settings.defaultBudgetType && settings.budgetTypes.includes(settings.defaultBudgetType)) {
+        setBudgetType(settings.defaultBudgetType);
+      } else {
+        setBudgetType(settings.budgetTypes[0]);
+      }
+    }
+    if (settings?.fundingSources && settings.fundingSources.length > 0) {
+      setConfiguredFundingSources(settings.fundingSources);
+      if (settings.defaultFundingSource && settings.fundingSources.includes(settings.defaultFundingSource)) {
+        setFundingSource(settings.defaultFundingSource);
+      } else {
+        setFundingSource(settings.fundingSources[0]);
+      }
+    }
+    if (settings?.fxConversionSources && settings.fxConversionSources.length > 0) {
+      setConfiguredFxSources(settings.fxConversionSources);
+      if (!settings.fxConversionSources.some((fx) => fx.code === fxSource)) {
+        setFxSource(settings.fxConversionSources[0].code);
+      }
+    }
   }, []);
 
-  // Helper to generate default sample lines based on selected Budget Logic
+  // Helper to generate a clean empty line based on selected Budget Logic
   const generateInitialLinesForLogic = (logic: BudgetLogicType): DynamicBudgetLine[] => {
-    const monthlyEven = [100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000];
-    const total = 1200000;
-    const quarter = 300000;
-
-    switch (logic) {
-      case 'ITEM':
-        return [
-          {
-            lineCode: 'ITM-001',
-            lineName: 'High-End Developer Laptops & Workstations',
-            costCenterCode: 'CC-IT-101',
-            glAccountCode: 'GL-52010',
-            spendCategory: 'Computer Hardware',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-          {
-            lineCode: 'ITM-002',
-            lineName: 'Ergonomic Office Desks & Chairs',
-            costCenterCode: 'CC-ADMIN-02',
-            glAccountCode: 'GL-52020',
-            spendCategory: 'Office Furniture',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-        ];
-
-      case 'SUPPLIER':
-        return [
-          {
-            lineCode: 'SUP-101',
-            lineName: 'Dell Global Commercial Kenya',
-            costCenterCode: 'CC-PROC-01',
-            glAccountCode: 'GL-61010',
-            spendCategory: 'IT Systems & Hardware',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-          {
-            lineCode: 'SUP-102',
-            lineName: 'Safaricom Enterprise Telecom Services',
-            costCenterCode: 'CC-COMM-02',
-            glAccountCode: 'GL-61020',
-            spendCategory: 'Telecom & ISP',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-        ];
-
-      case 'DEPARTMENT':
-        return [
-          {
-            lineCode: 'DEP-IT',
-            lineName: 'Information Technology & Cloud Systems',
-            costCenterCode: 'CC-IT-101',
-            glAccountCode: 'GL-71010',
-            spendCategory: 'IT Operations',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-          {
-            lineCode: 'DEP-FIN',
-            lineName: 'Finance, Audit & Compliance Department',
-            costCenterCode: 'CC-FIN-201',
-            glAccountCode: 'GL-71020',
-            spendCategory: 'Financial Services',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-        ];
-
-      case 'MIX_BAG':
-      default:
-        return [
-          {
-            lineCode: 'LN-MIX-01',
-            lineName: 'Primary Cloud Infrastructure Server',
-            costCenterCode: 'CC-IT',
-            glAccountCode: 'GL-81010',
-            spendCategory: 'Cloud Hosting',
-            dimensionType: 'ITEM',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-          {
-            lineCode: 'LN-MIX-02',
-            lineName: 'Strategic Logistics Vendor Alliance',
-            costCenterCode: 'CC-LOG',
-            glAccountCode: 'GL-81020',
-            spendCategory: 'Global Freight',
-            dimensionType: 'SUPPLIER',
-            monthlyPhasing: [...monthlyEven],
-            annualAmount: total,
-            q1Amount: quarter, q2Amount: quarter, q3Amount: quarter, q4Amount: quarter,
-          },
-        ];
+    let code = 'ITM-001';
+    let dimensionType: DynamicBudgetLine['dimensionType'] = undefined;
+    if (logic === 'SUPPLIER') code = 'SUP-001';
+    else if (logic === 'DEPARTMENT') code = 'DEP-001';
+    else if (logic === 'MIX_BAG') {
+      code = 'LN-001';
+      dimensionType = 'ITEM';
     }
+
+    return [
+      {
+        lineCode: code,
+        lineName: '',
+        costCenterCode: '',
+        glAccountCode: '',
+        spendCategory: '',
+        dimensionType,
+        monthlyPhasing: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        annualAmount: 0,
+        q1Amount: 0,
+        q2Amount: 0,
+        q3Amount: 0,
+        q4Amount: 0,
+      },
+    ];
   };
 
-  // Lines State initialized
+  // Lines State initialized cleanly
   const [lines, setLines] = useState<DynamicBudgetLine[]>(() => generateInitialLinesForLogic('ITEM'));
 
   // Switch logic: updates lines when user changes Budget Logic
@@ -556,8 +525,8 @@ export default function BudgetCreatePage() {
     }
   };
 
-  // Filtered mock budgets for revision
-  const filteredExistingBudgets = MOCK_EXISTING_BUDGETS.filter((b) => {
+  // Filtered real budgets for revision
+  const filteredExistingBudgets = existingBudgets.filter((b) => {
     if (revisionFilterLogic === 'ALL') return true;
     return b.budgetLogic === revisionFilterLogic;
   });
@@ -570,13 +539,13 @@ export default function BudgetCreatePage() {
         description="Configure header parameters, dimensional allocation lines, and multi-tier control rules"
         actions={
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            onClick={() => navigate('/budget')}
+            onClick={() => navigate('/admin/company-settings?tab=budget-logic')}
             className="gap-2"
           >
-            <ArrowLeft className="size-4" />
-            <span>Back to Budgets</span>
+            <Settings className="size-4 text-primary" />
+            <span>Budget Settings</span>
           </Button>
         }
       />
@@ -775,10 +744,11 @@ export default function BudgetCreatePage() {
                 onChange={(e) => setBudgetType(e.target.value)}
                 className="h-10 text-sm rounded-xl"
               >
-                <option value="OPEX">OPEX (Operating Expenditure)</option>
-                <option value="CAPEX">CAPEX (Capital Expenditure)</option>
-                <option value="PROJECT">Project Spend</option>
-                <option value="DONOR_GRANT">Donor / Grant Funded</option>
+                {configuredBudgetTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
               </Select>
             </div>
 
@@ -788,15 +758,24 @@ export default function BudgetCreatePage() {
               </label>
               <Select
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
+                onChange={(e) => {
+                  userChangedCurrencyRef.current = true;
+                  setCurrency(e.target.value);
+                }}
                 className="h-10 text-sm rounded-xl"
               >
+                <option value="AED">AED — UAE Dirham</option>
+                <option value="USD">USD — US Dollar</option>
+                <option value="INR">INR — Indian Rupee</option>
+                <option value="EUR">EUR — Euro</option>
+                <option value="GBP">GBP — British Pound</option>
+                <option value="SAR">SAR — Saudi Riyal</option>
                 <option value="KES">KES — Kenya Shilling</option>
                 <option value="UGX">UGX — Uganda Shilling</option>
                 <option value="RWF">RWF — Rwandan Franc</option>
-                <option value="USD">USD — US Dollar</option>
-                <option value="AED">AED — UAE Dirham</option>
-                <option value="EUR">EUR — Euro</option>
+                {companyDefaultCurrency && !['AED', 'USD', 'INR', 'EUR', 'GBP', 'SAR', 'KES', 'UGX', 'RWF'].includes(companyDefaultCurrency) && (
+                  <option value={companyDefaultCurrency}>{companyDefaultCurrency}</option>
+                )}
               </Select>
             </div>
 
@@ -862,10 +841,11 @@ export default function BudgetCreatePage() {
                 onChange={(e) => setFundingSource(e.target.value)}
                 className="h-10 text-sm rounded-xl"
               >
-                <option value="INTERNAL_REVENUE">Internal Revenue / Operational Cashflow</option>
-                <option value="BANK_DEBT">Bank Credit / Loan Facility</option>
-                <option value="EQUITY_CAPITAL">Equity / Shareholder Inflow</option>
-                <option value="DONOR_GRANT">Donor / NGO Grant</option>
+                {configuredFundingSources.map((source) => (
+                  <option key={source} value={source}>
+                    {source}
+                  </option>
+                ))}
               </Select>
             </div>
 
@@ -878,9 +858,11 @@ export default function BudgetCreatePage() {
                 onChange={(e) => setFxSource(e.target.value)}
                 className="h-10 text-sm rounded-xl"
               >
-                <option value="LIVE_MARKET">Live Market Rates (open.er-api.com)</option>
-                <option value="FIXED_BUDGET_RATE">Fixed Budget Master Table</option>
-                <option value="CENTRAL_BANK">Central Bank Daily Fixing</option>
+                {configuredFxSources.map((fx) => (
+                  <option key={fx.code} value={fx.code}>
+                    {fx.label}
+                  </option>
+                ))}
               </Select>
             </div>
           </div>
@@ -964,6 +946,27 @@ export default function BudgetCreatePage() {
             </div>
           </div>
 
+          {/* Dynamic Master Data Datalists for Step 2 Autocomplete */}
+          <datalist id="budget-depts-list">
+            {departments.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
+
+          <datalist id="budget-categories-list">
+            {categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+
+          <datalist id="budget-vendors-list">
+            {vendors.map((v) => (
+              <option key={v.id} value={v.name}>
+                {v.category ? `Category: ${v.category}` : ''}
+              </option>
+            ))}
+          </datalist>
+
           {/* ── Dynamic Lines Table ── */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs min-w-[1100px] table-divided">
@@ -1021,7 +1024,9 @@ export default function BudgetCreatePage() {
               </thead>
 
               <tbody className="divide-y divide-border/40">
-                {lines.map((line, idx) => (
+                {lines.map((line, idx) => {
+                  const effectiveDimension = budgetLogic === 'MIX_BAG' ? (line.dimensionType || 'ITEM') : budgetLogic;
+                  return (
                   <tr key={idx} className="hover:bg-muted/30 transition-colors">
                     <td className="px-2.5 py-2 text-center text-muted-foreground font-semibold text-[11px]">
                       {idx + 1}
@@ -1050,23 +1055,49 @@ export default function BudgetCreatePage() {
                         onChange={(e) => updateLineField(idx, 'lineCode', e.target.value)}
                         placeholder={
                           budgetLogic === 'ITEM' ? 'ITM-001' :
-                          budgetLogic === 'SUPPLIER' ? 'SUP-101' :
-                          budgetLogic === 'DEPARTMENT' ? 'DEP-01' : 'CODE-01'
+                          budgetLogic === 'SUPPLIER' ? 'SUP-001' :
+                          budgetLogic === 'DEPARTMENT' ? 'DEP-001' : 'LN-001'
                         }
                         className="h-8 text-xs font-mono font-semibold"
                       />
                     </td>
 
-                    {/* Line Name */}
+                    {/* Line Name with Autocomplete */}
                     <td className="px-3 py-2">
                       <Input
                         type="text"
                         value={line.lineName}
-                        onChange={(e) => updateLineField(idx, 'lineName', e.target.value)}
+                        list={
+                          effectiveDimension === 'DEPARTMENT'
+                            ? 'budget-depts-list'
+                            : effectiveDimension === 'SUPPLIER'
+                            ? 'budget-vendors-list'
+                            : undefined
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateLineField(idx, 'lineName', val);
+                          // Auto-suggest category if supplier matched from list
+                          if (effectiveDimension === 'SUPPLIER') {
+                            const found = vendors.find((v) => v.name.toLowerCase() === val.toLowerCase());
+                            if (found?.category && !line.spendCategory) {
+                              updateLineField(idx, 'spendCategory', found.category);
+                            }
+                          }
+                          // Auto-suggest cost center if department matched
+                          if (effectiveDimension === 'DEPARTMENT' && val.trim() && !line.costCenterCode) {
+                            const autoCc = `CC-${val.trim().toUpperCase().replace(/[^A-Z0-9]/g, '-').slice(0, 8)}`;
+                            updateLineField(idx, 'costCenterCode', autoCc);
+                          }
+                        }}
                         placeholder={
-                          budgetLogic === 'ITEM' ? 'e.g. Developer Laptops' :
-                          budgetLogic === 'SUPPLIER' ? 'e.g. Dell Corp' :
-                          budgetLogic === 'DEPARTMENT' ? 'e.g. IT Department' : 'Name / Title'
+                          effectiveDimension === 'ITEM'
+                            ? 'e.g. Workstations, Office Equipment...'
+                            : effectiveDimension === 'SUPPLIER'
+                            ? 'Select or type supplier name...'
+                            : effectiveDimension === 'DEPARTMENT'
+                            ? 'Select or type department...'
+                            : 'Name / Description'
                         }
                         className="h-8 text-xs"
                       />
@@ -1076,15 +1107,16 @@ export default function BudgetCreatePage() {
                     <td className="px-3 py-2">
                       <Input
                         type="text"
-                        value={budgetLogic === 'DEPARTMENT' ? line.costCenterCode : line.spendCategory}
+                        value={effectiveDimension === 'DEPARTMENT' ? line.costCenterCode : line.spendCategory}
+                        list={effectiveDimension !== 'DEPARTMENT' ? 'budget-categories-list' : undefined}
                         onChange={(e) =>
                           updateLineField(
                             idx,
-                            budgetLogic === 'DEPARTMENT' ? 'costCenterCode' : 'spendCategory',
+                            effectiveDimension === 'DEPARTMENT' ? 'costCenterCode' : 'spendCategory',
                             e.target.value
                           )
                         }
-                        placeholder={budgetLogic === 'DEPARTMENT' ? 'e.g. CC-IT-101' : 'e.g. Hardware'}
+                        placeholder={effectiveDimension === 'DEPARTMENT' ? 'e.g. CC-IT-101' : 'Select or type category...'}
                         className="h-8 text-xs"
                       />
                     </td>
@@ -1136,7 +1168,8 @@ export default function BudgetCreatePage() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1362,9 +1395,13 @@ export default function BudgetCreatePage() {
 
             {/* Budget List */}
             <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
-              {filteredExistingBudgets.length === 0 ? (
+              {loadingExistingBudgets ? (
                 <div className="p-8 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl">
-                  No budgets match the selected filter.
+                  Loading budgets from database...
+                </div>
+              ) : filteredExistingBudgets.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl">
+                  No active budgets found in the system.
                 </div>
               ) : (
                 filteredExistingBudgets.map((b) => (

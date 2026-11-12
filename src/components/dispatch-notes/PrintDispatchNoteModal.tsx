@@ -122,14 +122,18 @@ export function PrintDispatchNoteModal({
     const ordered = Number(item.orderedQty || item.poQty || 0);
     const dispatched = Number(item.dispatchedQty || item.qty || ordered || 1);
     const unit = item.unit || 'Units';
-    const remarks = item.remarks || (dispatched === ordered ? 'Full shipment' : 'Part shipment');
+    const delivered = Number(item.deliveredQty ?? 0);
+    const remaining = Number(item.remainingQty ?? Math.max(0, ordered - (delivered + dispatched)));
+    const remarks = item.remarks || (remaining === 0 ? 'Full shipment' : 'Part shipment');
     return {
       id: item.id || idx + 1,
       itemCode,
       itemName,
       description: item.description,
       orderedQty: ordered,
+      deliveredQty: delivered,
       dispatchedQty: dispatched,
+      remainingQty: remaining,
       unit,
       remarks,
     };
@@ -341,14 +345,16 @@ export function PrintDispatchNoteModal({
           <table className="pdn-sheet__items-table">
             <thead>
               <tr>
-                <th style={{ width: 40 }} className="text-center">#</th>
-                <th style={{ width: 110 }}>Item Code</th>
+                <th style={{ width: 35 }} className="text-center">#</th>
+                <th style={{ width: 100 }}>Item Code</th>
                 <th>Description / Specification</th>
-                <th style={{ width: 120 }}>PO Ref</th>
-                <th style={{ width: 90 }} className="text-right">Ordered Qty</th>
-                <th style={{ width: 100 }} className="text-right">Dispatched</th>
-                <th style={{ width: 80 }} className="text-center">Unit</th>
-                <th style={{ width: 130 }}>Remarks</th>
+                <th style={{ width: 100 }}>PO Ref</th>
+                <th style={{ width: 75 }} className="text-right">PO Qty</th>
+                <th style={{ width: 75 }} className="text-right">Delivered</th>
+                <th style={{ width: 85 }} className="text-right">Challan Qty</th>
+                <th style={{ width: 75 }} className="text-right">Remaining</th>
+                <th style={{ width: 65 }} className="text-center">Unit</th>
+                <th style={{ width: 110 }}>Remarks</th>
               </tr>
             </thead>
             <tbody>
@@ -363,14 +369,16 @@ export function PrintDispatchNoteModal({
                     </td>
                     <td className="font-mono text-xs">{poNumber}</td>
                     <td className="text-right font-medium">{item.orderedQty > 0 ? item.orderedQty : '—'}</td>
+                    <td className="text-right text-muted-foreground">{item.deliveredQty}</td>
                     <td className="text-right font-bold text-sky-900">{item.dispatchedQty}</td>
+                    <td className="text-right font-semibold">{item.remainingQty}</td>
                     <td className="text-center">{item.unit}</td>
                     <td className="text-xs text-muted-foreground">{item.remarks}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="text-center py-6 text-muted-foreground">
+                  <td colSpan={10} className="text-center py-6 text-muted-foreground">
                     No items specified on this delivery challan.
                   </td>
                 </tr>
@@ -382,8 +390,14 @@ export function PrintDispatchNoteModal({
                 <td className="text-right font-medium">
                   {itemsList.reduce((acc, it) => acc + (it.orderedQty || 0), 0) || '—'}
                 </td>
+                <td className="text-right text-muted-foreground">
+                  {itemsList.reduce((acc, it) => acc + (it.deliveredQty || 0), 0)}
+                </td>
                 <td className="text-right font-bold text-sky-900">
                   {totalDispatchedQty}
+                </td>
+                <td className="text-right font-semibold">
+                  {itemsList.reduce((acc, it) => acc + (it.remainingQty || 0), 0)}
                 </td>
                 <td colSpan={2}>
                   {data.totalPackages ? `(${data.totalPackages} total pkgs)` : ''}

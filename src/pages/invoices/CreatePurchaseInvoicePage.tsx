@@ -38,6 +38,13 @@ import {
   Download,
   AlertCircle,
   CheckCircle2,
+  ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
+  RotateCcw,
+  PackageX,
+  Scale,
+  TrendingDown,
 } from 'lucide-react';
 import TablePagination from '../../components/shared/TablePagination';
 import { MessageStrip } from '../../components/shared/MessageStrip';
@@ -144,6 +151,7 @@ export default function CreatePurchaseInvoicePage() {
     { key: 'invoiceDate', label: 'INVOICE DATE', defaultVisible: true },
     { key: 'currency', label: 'CURRENCY', defaultVisible: true },
     { key: 'grandTotal', label: 'GRAND TOTAL', defaultVisible: true },
+    { key: 'threeWayMatch', label: '3-WAY MATCH', defaultVisible: true },
     { key: 'status', label: 'STATUS', defaultVisible: true },
   ];
   const [invColOrder, setInvColOrder] = useState<string[]>(INV_COLS.map((c) => c.key));
@@ -214,27 +222,6 @@ export default function CreatePurchaseInvoicePage() {
   );
   const dispatchNotes = dnData.dispatchNotes || [];
 
-  const hasVendorDispatched = useMemo(() => {
-    if (!selectedPoId) return false;
-    const target = String(selectedPoId).toLowerCase().trim();
-    const hasDn = (dispatchNotes || []).some((dn) => {
-      const pId = String(dn.poId || '').toLowerCase().trim();
-      const pNum = String(dn.poNumber || '').toLowerCase().trim();
-      return (pId && (pId === target || pNum === target)) ||
-             (pNum && (pId === target || pNum === target));
-    });
-    if (hasDn) return true;
-    if (invoiceOptions.length > 0) return true;
-    return false;
-  }, [selectedPoId, dispatchNotes, invoiceOptions]);
-
-  const isGrnBlocked = useMemo(() => {
-    // If editing or resubmitting an existing/returned invoice, never block with GRN requirement
-    if (editingInvoiceId || invoiceNumberParam || invoiceIdParam) return false;
-    // If a GRN is already selected, never block
-    if (selectedGrnId) return false;
-    return creationMode === 'linked' && Boolean(selectedPoId) && grnOptions.length === 0;
-  }, [editingInvoiceId, invoiceNumberParam, invoiceIdParam, selectedGrnId, creationMode, selectedPoId, grnOptions]);
 
   useEffect(() => {
     // Do NOT generate a sequence number if we are editing an existing invoice or pre-filling from invoiceNumberParam
@@ -796,7 +783,7 @@ export default function CreatePurchaseInvoicePage() {
               itemName: rawName,
               description: item.description || '',
               poQty: qty,
-              grnQty: qty,
+              grnQty: grnOptions && grnOptions.length > 0 ? qty : 0,
               supplierQty: qty,
               unitPrice: unitPrice,
               taxPercent: Number(item.taxPercent ?? 18),
@@ -1246,6 +1233,217 @@ export default function CreatePurchaseInvoicePage() {
     return { subtotal, totalTax, grandTotal };
   }, [lineItems]);
 
+  // ─── 3-Way Matching Engine: PO vs GRN vs Supplier Invoice ─────────────
+  const threeWayMatchData = useMemo(() => {
+    // 1. PO baseline values
+    const poItems: any[] = selectedPO?.items || selectedPO?.rfq?.items || [];
+    const totalPoContractedVal = Number(selectedPO?.totalAmount || 0);
+
+    // 2. Active GRN values
+    const cleanGrnId = String(selectedGrnId).replace(/^grn_/, '').replace(/^inv_/, '');
+    const activeGRN =
+      grnOptions.find((g) => String(g.id) === cleanGrnId || String(g.grnNumber) === cleanGrnId) ||
+      (grnOptions.length > 0 ? grnOptions[0] : null);
+
+    // 3. Build line-by-line reconciliation items
+    let totalPoQty = 0;
+    let totalGrnQty = 0;
+    let totalBilledQty = 0;
+    let totalPoAgreedVal = 0;
+    let totalGrnFulfilledVal = 0;
+    let totalBilledVal = 0;
+    let totalShortfallUnits = 0;
+    let totalShortfallVal = 0;
+
+    interface ReconciledInvoiceItem {
+      id: string | number;
+      itemCode: string;
+      itemName: string;
+      description: string;
+      poQty: number;
+      grnQty: number;
+      billedQty: number;
+      poUnitPrice: number;
+      billedUnitPrice: number;
+      poValue: number;
+      grnValue: number;
+      billedValue: number;
+      shortfallUnits: number;
+      shortfallVal: number;
+      hasQtyShortfall: boolean;
+      hasRateVariance: boolean;
+      status: 'MATCHED' | 'SHORTFALL' | 'RATE_VARIANCE';
+      remarks: string;
+    }
+
+    const reconciledLines: ReconciledInvoiceItem[] = lineItems.map((item, idx) => {
+      const bQty = typeof item.supplierQty === 'number' ? item.supplierQty : 0;
+      const bRate = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
+      const pQty = Number(item.poQty || 0);
+      const gQty = Number(item.grnQty || 0);
+
+      // Match PO item to find PO agreed unit price
+      const matchedPoItem =
+        poItems.find((p: any) => p.itemCode === item.itemCode || p.itemName === item.itemName) ||
+        poItems[idx];
+      let pRate = Number(matchedPoItem?.unitPrice || 0);
+      if (!pRate && totalPoContractedVal > 0 && pQty > 0) {
+        pRate = Number((totalPoContractedVal / Math.max(1, lineItems.length) / pQty).toFixed(2));
+      }
+      if (!pRate) {
+        pRate = bRate;
+      }
+
+      const pVal = pQty * pRate;
+      const gVal = gQty * pRate;
+      const bVal = bQty * bRate;
+
+      // Check shortfall: if billed quantity exceeds GRN received, or GRN received < PO ordered
+      const missingFromGrn = Math.max(0, bQty - gQty);
+      const missingFromPo = Math.max(0, pQty - gQty);
+      const sUnits = missingFromGrn > 0 ? missingFromGrn : (bQty > 0 && gQty < pQty ? missingFromPo : 0);
+      const sVal = sUnits * (pRate > 0 ? pRate : bRate);
+
+      const hasQtyShortfall = sUnits > 0;
+      const hasRateVariance = pRate > 0 && bRate > pRate * 1.02; // Billed rate exceeds PO agreed rate by > 2%
+
+      let status: 'MATCHED' | 'SHORTFALL' | 'RATE_VARIANCE' = 'MATCHED';
+      let remarks = 'Fully matched with Store GRN inspection';
+      if (hasQtyShortfall) {
+        status = 'SHORTFALL';
+        remarks = `${sUnits} units missing from GRN store receiving`;
+      } else if (hasRateVariance) {
+        status = 'RATE_VARIANCE';
+        remarks = `Billed rate (${formatAmount(bRate, currency)}) exceeds PO rate (${formatAmount(pRate, currency)})`;
+      }
+
+      totalPoQty += pQty;
+      totalGrnQty += gQty;
+      totalBilledQty += bQty;
+      totalPoAgreedVal += pVal;
+      totalGrnFulfilledVal += gVal;
+      totalBilledVal += bVal;
+      totalShortfallUnits += sUnits;
+      totalShortfallVal += sVal;
+
+      return {
+        id: item.id,
+        itemCode: item.itemCode,
+        itemName: item.itemName,
+        description: item.description,
+        poQty: pQty,
+        grnQty: gQty,
+        billedQty: bQty,
+        poUnitPrice: pRate,
+        billedUnitPrice: bRate,
+        poValue: pVal,
+        grnValue: gVal,
+        billedValue: bVal,
+        shortfallUnits: sUnits,
+        shortfallVal: sVal,
+        hasQtyShortfall,
+        hasRateVariance,
+        status,
+        remarks,
+      };
+    });
+
+    const poBaselineTotal = totalPoContractedVal > 0 ? totalPoContractedVal : totalPoAgreedVal;
+    const billedGrandTotal = calculations.grandTotal > 0 ? calculations.grandTotal : totalBilledVal;
+
+    // Compute store fulfillment %
+    const grnPercent =
+      totalPoQty > 0
+        ? Math.min(100, Math.round((totalGrnQty / totalPoQty) * 100))
+        : (poBaselineTotal > 0 ? Math.min(100, Math.round((totalGrnFulfilledVal / poBaselineTotal) * 100)) : 100);
+
+    // Discrepancy checks
+    const hasGrnShortfall = totalShortfallUnits > 0 || totalShortfallVal > 0.01;
+    const hasRateDiscrepancy = reconciledLines.some((l) => l.hasRateVariance);
+    const hasOverbilling = poBaselineTotal > 0 && billedGrandTotal > poBaselineTotal * 1.02;
+
+    interface DiscrepancyAlert {
+      id: string;
+      icon: any;
+      title: string;
+      description: string;
+      badge?: string;
+      details?: { name: string; ordered: number; received: number; billed: number; shortfall: number; unitPrice: number; shortfallVal: number }[];
+    }
+
+    const discrepancyAlerts: DiscrepancyAlert[] = [];
+
+    if (hasGrnShortfall) {
+      const shortfallLines = reconciledLines.filter((l) => l.hasQtyShortfall);
+      const isPendingGrn = grnOptions.length === 0;
+      discrepancyAlerts.push({
+        id: 'grn_shortfall',
+        icon: isPendingGrn ? Clock : PackageX,
+        title: isPendingGrn ? 'Store GRN Receipt Pending' : 'Goods Received Note (GRN) Shortfall',
+        description: isPendingGrn
+          ? `Store warehouse has not yet recorded a Goods Received Note for PO #${displayPoNumber}. Billed items are pending physical store inspection.`
+          : `Received ${totalGrnQty} of ${totalPoQty || totalBilledQty} units in store (${totalShortfallUnits} units missing/unaccepted during store receiving inspection).`,
+        badge: isPendingGrn ? 'Pending GRN' : `${formatAmount(totalShortfallVal, currency)} Shortfall`,
+        details: shortfallLines.map((l) => ({
+          name: l.itemName || l.itemCode,
+          ordered: l.poQty,
+          received: l.grnQty,
+          billed: l.billedQty,
+          shortfall: l.shortfallUnits,
+          unitPrice: l.poUnitPrice || l.billedUnitPrice,
+          shortfallVal: l.shortfallVal,
+        })),
+      });
+    }
+
+    if (hasRateDiscrepancy) {
+      const rateLines = reconciledLines.filter((l) => l.hasRateVariance);
+      discrepancyAlerts.push({
+        id: 'rate_variance',
+        icon: Scale,
+        title: 'PO Agreed Rate Variance',
+        description: `Billed unit prices exceed agreed Purchase Order contracted rates for ${rateLines.map((l) => l.itemName || l.itemCode).join(', ')}.`,
+        badge: 'Rate Mismatch',
+      });
+    }
+
+    if (hasOverbilling) {
+      const excess = billedGrandTotal - poBaselineTotal;
+      discrepancyAlerts.push({
+        id: 'overbilling',
+        icon: TrendingDown,
+        title: 'PO Value Overbilled',
+        description: `Invoice grand total (${formatAmount(billedGrandTotal, currency)}) exceeds PO contracted value (${formatAmount(poBaselineTotal, currency)}) by ${formatAmount(excess, currency)}.`,
+        badge: `+${formatAmount(excess, currency)} Excess`,
+      });
+    }
+
+    const isDiscrepant = discrepancyAlerts.length > 0;
+    const matchStatus: 'MATCHED' | 'DISCREPANCY' = isDiscrepant ? 'DISCREPANCY' : 'MATCHED';
+
+    const matchNotes = isDiscrepant
+      ? discrepancyAlerts.map((d) => `${d.title}: ${d.description}`).join('; ')
+      : 'All 3 checks passed — PO, GRN and Invoice align 100%';
+
+    return {
+      isDiscrepant,
+      matchStatus,
+      matchNotes,
+      discrepancyAlerts,
+      reconciledLines,
+      totalPoQty,
+      totalGrnQty,
+      totalBilledQty,
+      poBaselineTotal,
+      totalGrnFulfilledVal,
+      billedGrandTotal,
+      grnPercent,
+      totalShortfallUnits,
+      totalShortfallVal,
+      activeGRN,
+    };
+  }, [lineItems, selectedPO, selectedGrnId, grnOptions, calculations.grandTotal, currency, formatAmount]);
+
   // File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -1399,12 +1597,6 @@ export default function CreatePurchaseInvoicePage() {
         setErrorMsg('Please select a linked Purchase Order (PO Selection).');
         return false;
       }
-      if (isGrnBlocked) {
-        setErrorMsg(
-          `Goods Received Note (GRN) Required: A verified Goods Received Note must be recorded in the system before an invoice can be created for Purchase Order #${displayPoNumber}.`
-        );
-        return false;
-      }
       const activeGrn =
         grnOptions.find(
           (g) =>
@@ -1494,6 +1686,12 @@ export default function CreatePurchaseInvoicePage() {
           isDraft,
           lineItems,
           attachments,
+          threeWayMatch: threeWayMatchData.matchStatus,
+          matchPoQty: !threeWayMatchData.discrepancyAlerts.some((a) => a.id === 'po_empty'),
+          matchGrnQty: !threeWayMatchData.discrepancyAlerts.some((a) => a.id === 'grn_shortfall'),
+          matchInvoiceValue: !threeWayMatchData.discrepancyAlerts.some((a) => a.id === 'overbilling' || a.id === 'rate_variance'),
+          matchVariance: threeWayMatchData.billedGrandTotal - threeWayMatchData.poBaselineTotal,
+          matchNotes: threeWayMatchData.matchNotes,
         }),
       });
 
@@ -1800,7 +1998,7 @@ export default function CreatePurchaseInvoicePage() {
               <>
                 <DataTableViewport label="Purchase invoices">
                   <table className="w-full min-w-[1244px] text-sm">
-                    <colgroup>{[44, 170, 230, 140, 100, 180, 220, 160].map((width, i) => <col key={i} style={{ width }} />)}</colgroup>
+                    <colgroup>{[44, 160, 200, 130, 90, 150, 140, 150, 140].map((width, i) => <col key={i} style={{ width }} />)}</colgroup>
                     <thead>
                       <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                         <th className="w-[42px] px-3 py-3 text-center">
@@ -1812,13 +2010,14 @@ export default function CreatePurchaseInvoicePage() {
                             title="Select all invoices"
                           />
                         </th>
-                        <th className="w-[160px] px-3 py-3">INVOICE NUMBER</th>
-                        <th className="w-[200px] px-3 py-3">VENDOR</th>
-                        <th className="w-[140px] px-3 py-3">INVOICE DATE</th>
-                        <th className="w-[110px] px-3 py-3">CURRENCY</th>
-                        <th className="w-[150px] px-3 py-3 text-right">GRAND TOTAL</th>
-                        <th className="w-[160px] px-3 py-3">STATUS</th>
-                        <th className="w-[130px] px-3 py-3 text-right">
+                        {invVisibleKeys.has('invoiceNumber') && <th className="w-[160px] px-3 py-3">INVOICE NUMBER</th>}
+                        {invVisibleKeys.has('vendor') && <th className="w-[200px] px-3 py-3">VENDOR</th>}
+                        {invVisibleKeys.has('invoiceDate') && <th className="w-[130px] px-3 py-3">INVOICE DATE</th>}
+                        {invVisibleKeys.has('currency') && <th className="w-[90px] px-3 py-3">CURRENCY</th>}
+                        {invVisibleKeys.has('grandTotal') && <th className="w-[150px] px-3 py-3 text-right">GRAND TOTAL</th>}
+                        {invVisibleKeys.has('threeWayMatch') && <th className="w-[150px] px-3 py-3 text-center">3-WAY MATCH</th>}
+                        {invVisibleKeys.has('status') && <th className="w-[150px] px-3 py-3">STATUS</th>}
+                        <th className="w-[140px] px-3 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <span>ACTIONS</span>
                             <div className="relative">
@@ -1907,26 +2106,65 @@ export default function CreatePurchaseInvoicePage() {
                                 className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
                               />
                             </td>
-                            <td className="px-3 py-3.5">
-                              <button
-                                className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline"
-                                onClick={() => openInvoiceEntry(inv, canEditInvoice ? 'edit' : 'view')}
-                              >
-                                {inv.invoiceNumber}
-                              </button>
-                            </td>
-                            <td className="px-3 py-3.5 font-medium text-foreground">{inv.vendorName || '—'}</td>
-                            <td className="px-3 py-3.5 text-muted-foreground">{inv.submittedAt || inv.dueDate || '—'}</td>
-                            <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
-                            <td className="px-3 py-3.5 text-right whitespace-nowrap font-semibold tabular-nums text-foreground">
-                              {formatAmount(inv.amount, companyDefaultCurrency)}
-                            </td>
-                            <td className="px-3 py-3.5">
-                              <Badge tone={tone} className="whitespace-nowrap [&>span]:shrink-0">
-                                <span className="size-1.5 rounded-full bg-current" />
-                                {statusLabel}
-                              </Badge>
-                            </td>
+                            {invVisibleKeys.has('invoiceNumber') && (
+                              <td className="px-3 py-3.5">
+                                <button
+                                  className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline"
+                                  onClick={() => openInvoiceEntry(inv, canEditInvoice ? 'edit' : 'view')}
+                                >
+                                  {inv.invoiceNumber}
+                                </button>
+                              </td>
+                            )}
+                            {invVisibleKeys.has('vendor') && (
+                              <td className="px-3 py-3.5 font-medium text-foreground">{inv.vendorName || '—'}</td>
+                            )}
+                            {invVisibleKeys.has('invoiceDate') && (
+                              <td className="px-3 py-3.5 text-muted-foreground">{inv.submittedAt || inv.dueDate || '—'}</td>
+                            )}
+                            {invVisibleKeys.has('currency') && (
+                              <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
+                            )}
+                            {invVisibleKeys.has('grandTotal') && (
+                              <td className="px-3 py-3.5 text-right whitespace-nowrap font-semibold tabular-nums text-foreground">
+                                {formatAmount(inv.amount, companyDefaultCurrency)}
+                              </td>
+                            )}
+                            {invVisibleKeys.has('threeWayMatch') && (
+                              <td className="px-3 py-3.5 text-center">
+                                {(() => {
+                                  const match = (inv as any).threeWayMatch || 'NOT_MATCHED';
+                                  const isMatched = match === 'MATCHED';
+                                  const isMismatch = match === 'MISMATCH' || match === 'DISCREPANCY';
+                                  const matchTone = isMatched ? 'success' : isMismatch ? 'danger' : 'neutral';
+                                  return (
+                                    <Badge tone={matchTone} className="whitespace-nowrap [&>span]:shrink-0">
+                                      {isMatched ? (
+                                        <>
+                                          <CheckCircle2 size={13.5} className="shrink-0" /> Matched
+                                        </>
+                                      ) : isMismatch ? (
+                                        <>
+                                          <AlertTriangle size={13.5} className="shrink-0" /> Discrepancy
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="size-1.5 rounded-full bg-current shrink-0" /> Pending
+                                        </>
+                                      )}
+                                    </Badge>
+                                  );
+                                })()}
+                              </td>
+                            )}
+                            {invVisibleKeys.has('status') && (
+                              <td className="px-3 py-3.5">
+                                <Badge tone={tone} className="whitespace-nowrap [&>span]:shrink-0">
+                                  <span className="size-1.5 rounded-full bg-current" />
+                                  {statusLabel}
+                                </Badge>
+                              </td>
+                            )}
                             <td className="px-3 py-3.5 text-center">
                               <div className="flex items-center justify-end gap-1">
                                 <Button
@@ -2238,11 +2476,9 @@ export default function CreatePurchaseInvoicePage() {
                     className="cpi-btn cpi-btn--outline"
                     onClick={() => submitInvoiceToAPI(true)}
                     onMouseDown={(e) => e.stopPropagation()}
-                    disabled={savingDraft || submitting || !canCreateInvoice || isGrnBlocked}
+                    disabled={savingDraft || submitting || !canCreateInvoice}
                     title={
-                      isGrnBlocked
-                        ? 'Goods Received Note (GRN) must be recorded before saving invoice.'
-                        : !canCreateInvoice
+                      !canCreateInvoice
                         ? 'Admin permission required to save draft purchase invoices.'
                         : undefined
                     }
@@ -2265,71 +2501,20 @@ export default function CreatePurchaseInvoicePage() {
 
       {/* Form Content */}
       <div className="cpi-form-body">
-        {/* GRN Required Warning Banner */}
-        {isGrnBlocked && (
-          <div style={{
-            marginBottom: 20,
-            padding: '16px 20px',
-            borderRadius: 12,
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            flexWrap: 'wrap',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <AlertCircle size={22} style={{ color: '#f59e0b', marginTop: 2, flexShrink: 0 }} />
-              <div>
-                <h4 style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 700, color: 'var(--foreground)' }}>
-                  Goods Received Note (GRN) Required for Invoicing
-                </h4>
-                <p style={{ margin: 0, fontSize: 13, color: 'var(--muted-foreground)', lineHeight: 1.5 }}>
-                  {hasVendorDispatched
-                    ? `The vendor has dispatched materials for PO #${displayPoNumber}, but a Goods Received Note (GRN) has not yet been verified. Please inspect and post the GRN first.`
-                    : `Purchase Invoice cannot be created yet. A Goods Received Note (GRN) must be recorded in the system after the vendor dispatches the materials.`}
-                </p>
-              </div>
-            </div>
-            {hasVendorDispatched && (
-              <button
-                type="button"
-                onClick={() => navigate(`/procurement/create-company-grn?poId=${encodeURIComponent(selectedPoId)}`)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 8,
-                  backgroundColor: '#f59e0b',
-                  color: '#000',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                <PackageCheck size={16} /> Record GRN Now
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Section 01: Supplier, PO & Dispatch Note Cascade Selection */}
+        {/* Section 01: Supplier & Purchase Order Selection */}
         {creationMode === 'linked' && (
           <div className="cpi-section">
             <div className="cpi-section-header">
               <div className="cpi-section-header-left">
                 <span className="cpi-section-badge">01</span>
                 <div>
-                  <h3 className="cpi-section-title">Supplier, PO & Dispatch Note Selection Cascade</h3>
-                  <span className="cpi-section-hint">Hierarchical reference selection</span>
+                  <h3 className="cpi-section-title">Supplier & Purchase Order Selection</h3>
+                  <span className="cpi-section-hint">Select supplier and linked purchase order</span>
                 </div>
               </div>
             </div>
 
-            <div className="cpi-form-grid">
+            <div className="cpi-form-grid cpi-form-grid--2">
               {/* 1. Supplier Selection */}
               <div className="cpi-field">
                 <label>
@@ -2374,48 +2559,6 @@ export default function CreatePurchaseInvoicePage() {
                     <option value={selectedPoId}>{displayPoNumber}</option>
                   )}
                 </select>
-              </div>
-
-              {/* 3. Verified Goods Received Note (GRN) */}
-              <div className="cpi-field">
-                <label>
-                  3. VERIFIED GOODS RECEIVED NOTE (GRN) <span className="required">*</span>
-                </label>
-                <div className="cpi-auto-linked-box">
-                  <div className="cpi-auto-linked-text">
-                    {grnOptions.length > 1 ? (
-                      <select
-                        value={selectedGrnId}
-                        disabled={isReadOnly}
-                        onChange={(e) => setSelectedGrnId(e.target.value)}
-                        className="cpi-table-input"
-                        style={{ fontWeight: 600, color: '#10b981', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-                      >
-                        {grnOptions.map((g) => (
-                          <option key={g.id} value={`grn_${g.id}`}>
-                            {g.grnNumber} ({g.items?.length || 0} items)
-                          </option>
-                        ))}
-                      </select>
-                    ) : grnOptions.length === 1 ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#10b981', fontWeight: 600 }}>
-                        <CheckCircle2 size={16} /> {grnOptions[0].grnNumber || 'Verified GRN'}
-                      </span>
-                    ) : selectedPoId ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#f59e0b', fontWeight: 500 }}>
-                        <Clock size={16} /> Awaiting Verified GRN
-                      </span>
-                    ) : (
-                      '— Select PO First —'
-                    )}
-                  </div>
-                  {grnOptions.length > 0 && (
-                    <span className="cpi-auto-linked-badge">
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                      3-Way Match Verified
-                    </span>
-                  )}
-                </div>
               </div>
             </div>
           </div>
@@ -2625,12 +2768,364 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
 
-        {/* Section 04 & 05: Remarks, Attachments & Totals Split Grid */}
+        {/* Section 04: Automated 3-Way Multi-Match Verification Engine (PO vs GRN vs Invoice) */}
+        {(creationMode === 'linked' || Boolean(selectedPoId)) && (
+          <div className={`cpi-section cpi-match-card ${threeWayMatchData.isDiscrepant ? 'cpi-match-card--discrepancy' : ''}`}>
+            <div className="cpi-section-header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span className="cpi-section-badge">04</span>
+                <div>
+                  <h3 className="cpi-section-title">
+                    3-Way Match Verification Engine (PO vs GRN vs Invoice)
+                  </h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    Automated Purchase Order Contract, Store Goods Receipt (GRN) &amp; Vendor Invoice Multi-Line Reconciliation
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className={`cpi-status-badge ${!threeWayMatchData.isDiscrepant ? 'cpi-status-badge--success' : 'cpi-status-badge--danger'}`}>
+                  {!threeWayMatchData.isDiscrepant ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                  <span>{!threeWayMatchData.isDiscrepant ? '100% 3-Way Match Verified' : 'Discrepancy Detected'}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Status Banner */}
+            <div className={`cpi-match-banner ${!threeWayMatchData.isDiscrepant ? 'cpi-match-banner--matched' : 'cpi-match-banner--discrepancy'}`}>
+              <div className="cpi-match-banner-header">
+                <div className={`cpi-match-banner-icon ${!threeWayMatchData.isDiscrepant ? 'cpi-match-banner-icon--matched' : 'cpi-match-banner-icon--discrepancy'}`}>
+                  {!threeWayMatchData.isDiscrepant ? <ShieldCheck size={22} /> : <ShieldAlert size={22} />}
+                </div>
+                <div>
+                  <div className={`cpi-match-banner-title ${!threeWayMatchData.isDiscrepant ? 'cpi-match-banner-title--matched' : 'cpi-match-banner-title--discrepancy'}`}>
+                    {!threeWayMatchData.isDiscrepant
+                      ? '3-Way Match Verified (PO = Store GRN = Billed Invoice)'
+                      : `3-Way Match Discrepancy Flagged (${threeWayMatchData.discrepancyAlerts.length} Issue${threeWayMatchData.discrepancyAlerts.length !== 1 ? 's' : ''} Detected)`}
+                  </div>
+                  <div className="cpi-match-banner-subtitle">
+                    {!threeWayMatchData.isDiscrepant
+                      ? `Quantities & unit rates across Purchase Order (${displayPoNumber}), Store Goods Received Note (${displayGrnNumber}), and Invoice align 100%. Verified by internal store inspection.`
+                      : 'Variance identified between contracted Purchase Order, store Goods Receipt quantities, and billed invoice line items.'}
+                  </div>
+                </div>
+              </div>
+
+              {/* If Discrepant: Structured Discrepancy Breakdown */}
+              {threeWayMatchData.isDiscrepant && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+                  <div className="cpi-discrepancy-grid">
+                    {threeWayMatchData.discrepancyAlerts.map((item) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <div key={item.id} className="cpi-discrepancy-item-card">
+                          <div className="cpi-discrepancy-item-icon">
+                            <ItemIcon size={16} />
+                          </div>
+                          <div className="cpi-discrepancy-item-content">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                              <div className="cpi-discrepancy-item-title">{item.title}</div>
+                              {item.badge && <span className="cpi-discrepancy-item-highlight">{item.badge}</span>}
+                            </div>
+                            <div className="cpi-discrepancy-item-desc">{item.description}</div>
+                            {item.details && item.details.length > 0 && (
+                              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {item.details.map((d, dIdx) => (
+                                  <div
+                                    key={dIdx}
+                                    style={{
+                                      fontSize: 11,
+                                      background: 'rgba(239, 68, 68, 0.05)',
+                                      padding: '4px 8px',
+                                      borderRadius: 4,
+                                      border: '1px solid rgba(239, 68, 68, 0.15)',
+                                      color: 'var(--text-secondary)',
+                                    }}
+                                  >
+                                    <strong style={{ color: 'var(--text-primary)' }}>{d.name}</strong>: Ordered {d.ordered}, Received {d.received}, Billed {d.billed} (
+                                    <span style={{ color: '#ef4444', fontWeight: 700 }}>
+                                      {d.shortfall} missing @ {formatAmount(d.unitPrice, currency)} = {formatAmount(d.shortfallVal, currency)}
+                                    </span>)
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="cpi-discrepancy-routing-strip">
+                    <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                    <span>
+                      <strong>Elevated Approval Routing:</strong> This invoice will require elevated Finance Manager audit review due to active 3-way reconciliation variance.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3 Overview Comparator Cards */}
+            <div className="cpi-match-comparator-grid">
+              {/* Box A: Purchase Order */}
+              <div className="cpi-match-box-pro">
+                <div>
+                  <div className="cpi-match-box-top">
+                    <span className="cpi-step-tag">Step A • Baseline</span>
+                    <span className="cpi-match-box-ref" title={displayPoNumber}>PO: {displayPoNumber}</span>
+                  </div>
+                  <div className="cpi-match-box-header-title">Purchase Order Total</div>
+                  <div className="cpi-match-box-main-value">{formatAmount(threeWayMatchData.poBaselineTotal, currency)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {threeWayMatchData.totalPoQty} Total Units Contracted
+                  </div>
+                </div>
+                <div className={`cpi-match-box-status-chip ${!threeWayMatchData.isDiscrepant ? 'cpi-match-box-status-chip--ok' : 'cpi-match-box-status-chip--warn'}`}>
+                  {!threeWayMatchData.isDiscrepant ? (
+                    <>
+                      <CheckCircle2 size={13} />
+                      <span>PO Agreed Baseline</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle size={13} />
+                      <span>PO Contract Baseline</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Box B: Goods Received Note (GRN) */}
+              <div className="cpi-match-box-pro">
+                <div>
+                  <div className="cpi-match-box-top">
+                    <span className="cpi-step-tag">Step B • Fulfilment</span>
+                    {grnOptions.length > 1 ? (
+                      <select
+                        value={selectedGrnId}
+                        disabled={isReadOnly}
+                        onChange={(e) => setSelectedGrnId(e.target.value)}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          background: 'rgba(16, 185, 129, 0.08)',
+                          color: '#10b981',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {grnOptions.map((g) => (
+                          <option key={g.id} value={`grn_${g.id}`}>
+                            {g.grnNumber}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="cpi-match-box-ref" title={displayGrnNumber}>
+                        {grnOptions.length > 0 ? (grnOptions[0].grnNumber || displayGrnNumber) : 'Pending GRN'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="cpi-match-box-header-title">Store Received Value</div>
+                  <div className="cpi-match-box-main-value" style={{ color: threeWayMatchData.totalShortfallUnits > 0 ? '#ef4444' : '#10b981' }}>
+                    {formatAmount(threeWayMatchData.totalGrnFulfilledVal, currency)}
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="cpi-match-progress-wrap">
+                    <div className="cpi-match-progress-bar">
+                      <div
+                        className="cpi-match-progress-fill"
+                        style={{
+                          width: `${threeWayMatchData.grnPercent}%`,
+                          background: threeWayMatchData.totalShortfallUnits > 0 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'linear-gradient(90deg, #10b981, #059669)',
+                        }}
+                      />
+                    </div>
+                    <div className="cpi-match-progress-label">
+                      <span>{threeWayMatchData.totalGrnQty} of {threeWayMatchData.totalPoQty || threeWayMatchData.totalBilledQty} units accepted</span>
+                      <span>{threeWayMatchData.grnPercent}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`cpi-match-box-status-chip ${!threeWayMatchData.totalShortfallUnits && !threeWayMatchData.isDiscrepant ? 'cpi-match-box-status-chip--ok' : 'cpi-match-box-status-chip--warn'}`}>
+                  {!threeWayMatchData.totalShortfallUnits && !threeWayMatchData.isDiscrepant ? (
+                    <>
+                      <CheckCircle2 size={13} />
+                      <span>100% Store Fulfilled</span>
+                    </>
+                  ) : grnOptions.length === 0 ? (
+                    <>
+                      <Clock size={13} />
+                      <span>Pending Store Inspection</span>
+                    </>
+                  ) : (
+                    <>
+                      <PackageX size={13} />
+                      <span>Shortfall: -{threeWayMatchData.totalShortfallUnits} units ({formatAmount(threeWayMatchData.totalShortfallVal, currency)})</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Box C: Billed Invoice */}
+              <div className="cpi-match-box-pro">
+                <div>
+                  <div className="cpi-match-box-top">
+                    <span className="cpi-step-tag">Step C • Settlement</span>
+                    <span className="cpi-match-box-ref">{invoiceNumber || 'Invoice'}</span>
+                  </div>
+                  <div className="cpi-match-box-header-title">Supplier Billed Total</div>
+                  <div className="cpi-match-box-main-value">{formatAmount(threeWayMatchData.billedGrandTotal, currency)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Net Verified:</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>
+                      {formatAmount(threeWayMatchData.totalGrnFulfilledVal > 0 ? Math.min(threeWayMatchData.billedGrandTotal, threeWayMatchData.totalGrnFulfilledVal) : threeWayMatchData.billedGrandTotal, currency)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={`cpi-match-box-status-chip ${!threeWayMatchData.isDiscrepant ? 'cpi-match-box-status-chip--ok' : 'cpi-match-box-status-chip--warn'}`}>
+                  {!threeWayMatchData.isDiscrepant ? (
+                    <>
+                      <ShieldCheck size={13} />
+                      <span>Invoice 100% Matched</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={13} />
+                      <span>Variance: {formatAmount(Math.max(0, threeWayMatchData.billedGrandTotal - threeWayMatchData.totalGrnFulfilledVal), currency)}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Itemized 3-Way Reconciliation Breakdown Table */}
+            {threeWayMatchData.reconciledLines.length > 0 && (
+              <div className="cpi-recon-container">
+                <div className="cpi-recon-header">
+                  <div className="cpi-recon-title-area">
+                    <div style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)',
+                      color: 'var(--primary-500, #0a6ed1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <PackageCheck size={16} />
+                    </div>
+                    <div>
+                      <div className="cpi-recon-title">
+                        Itemized 3-Way Reconciliation Breakdown
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                        Comparative audit: PO Contract vs Store GRN Receipt vs Vendor Invoice Line Items
+                      </div>
+                    </div>
+                  </div>
+                  {threeWayMatchData.totalShortfallVal > 0 && (
+                    <div className="cpi-recon-badge-alert">
+                      <AlertTriangle size={13} />
+                      <span>Shortfall Impact: {formatAmount(threeWayMatchData.totalShortfallVal, currency)} ({threeWayMatchData.totalShortfallUnits} units)</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="cpi-recon-table-wrap">
+                  <table className="cpi-recon-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 40, textAlign: 'center' }}>#</th>
+                        <th>Item Description &amp; Receiving Note</th>
+                        <th style={{ textAlign: 'right' }}>PO Ordered</th>
+                        <th style={{ textAlign: 'right' }}>Received (GRN)</th>
+                        <th style={{ textAlign: 'right' }}>Billed Qty</th>
+                        <th style={{ textAlign: 'right' }}>Variance</th>
+                        <th style={{ textAlign: 'right' }}>PO Rate</th>
+                        <th style={{ textAlign: 'right' }}>Billed Rate</th>
+                        <th style={{ textAlign: 'right' }}>Billed Line Total</th>
+                        <th style={{ textAlign: 'center', width: 140 }}>3-Way Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {threeWayMatchData.reconciledLines.map((item, idx) => {
+                        const isShortfall = item.hasQtyShortfall;
+                        const isRateVar = item.hasRateVariance;
+                        const isOk = !isShortfall && !isRateVar;
+                        return (
+                          <tr key={item.id} className={!isOk ? 'cpi-row--shortfall' : ''}>
+                            <td style={{ textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>{idx + 1}</td>
+                            <td>
+                              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.itemName || item.itemCode}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{item.remarks}</div>
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.poQty}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: isShortfall ? '#ef4444' : 'inherit' }}>
+                              {item.grnQty}
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 700 }}>{item.billedQty}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: isShortfall ? '#ef4444' : '#10b981' }}>
+                              {item.billedQty - item.grnQty === 0 ? '0' : item.billedQty - item.grnQty > 0 ? `+${item.billedQty - item.grnQty}` : `${item.billedQty - item.grnQty}`}
+                            </td>
+                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono, monospace)' }}>
+                              {formatAmount(item.poUnitPrice, currency)}
+                            </td>
+                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono, monospace)', color: isRateVar ? '#ef4444' : 'inherit', fontWeight: isRateVar ? 700 : 'normal' }}>
+                              {formatAmount(item.billedUnitPrice, currency)}
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
+                              {formatAmount(item.billedValue, currency)}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`cpi-match-tag cpi-match-tag--${isOk ? 'matched' : 'discrepancy'}`}>
+                                {isOk ? '✅ MATCHED' : isShortfall ? `⚠️ SHORTFALL (-${item.shortfallUnits})` : '⚠️ RATE VAR'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={2} style={{ textAlign: 'right' }}>Total Quantities &amp; Values:</td>
+                        <td style={{ textAlign: 'right' }}>{threeWayMatchData.totalPoQty}</td>
+                        <td style={{ textAlign: 'right' }}>{threeWayMatchData.totalGrnQty}</td>
+                        <td style={{ textAlign: 'right' }}>{threeWayMatchData.totalBilledQty}</td>
+                        <td style={{ textAlign: 'right', color: threeWayMatchData.totalShortfallUnits > 0 ? '#ef4444' : '#10b981' }}>
+                          {threeWayMatchData.totalShortfallUnits > 0 ? `-${threeWayMatchData.totalShortfallUnits}` : '0'}
+                        </td>
+                        <td colSpan={2} style={{ textAlign: 'right' }}>Grand Total Billed:</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono, monospace)' }}>
+                          {formatAmount(threeWayMatchData.billedGrandTotal, currency)}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className={`cpi-match-tag cpi-match-tag--${!threeWayMatchData.isDiscrepant ? 'matched' : 'discrepancy'}`}>
+                            {!threeWayMatchData.isDiscrepant ? '100% MATCH' : 'DISCREPANCY'}
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Section 05 & 06: Remarks, Attachments & Totals Split Grid */}
         <div className="cpi-split-grid">
           <div className="cpi-section">
             <div className="cpi-section-header">
               <div className="cpi-section-header-left">
-                <span className="cpi-section-badge">{creationMode === 'manual' ? '03' : '04'}</span>
+                <span className="cpi-section-badge">{creationMode === 'manual' ? '03' : '05'}</span>
                 <div>
                   <h3 className="cpi-section-title">Remarks & Attachments</h3>
                 </div>
@@ -2865,7 +3360,7 @@ export default function CreatePurchaseInvoicePage() {
           <div className="cpi-totals-card">
             <div className="cpi-section-header" style={{ paddingBottom: 10, marginBottom: 4 }}>
               <div className="cpi-section-header-left">
-                <span className="cpi-section-badge">{creationMode === 'manual' ? '04' : '05'}</span>
+                <span className="cpi-section-badge">{creationMode === 'manual' ? '04' : '06'}</span>
                 <div>
                   <h3 className="cpi-section-title">Final Value & Workflow</h3>
                 </div>
@@ -2901,12 +3396,7 @@ export default function CreatePurchaseInvoicePage() {
                   style={{ width: '100%', padding: '12px 20px', fontSize: 15 }}
                   onClick={() => submitInvoiceToAPI(false)}
                   onMouseDown={(e) => e.stopPropagation()}
-                  disabled={savingDraft || submitting || isGrnBlocked}
-                  title={
-                    isGrnBlocked
-                      ? 'Verified Goods Received Note (GRN) is required before submitting purchase invoice.'
-                      : undefined
-                  }
+                  disabled={savingDraft || submitting}
                 >
                   <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Purchase Invoice'}
                 </button>

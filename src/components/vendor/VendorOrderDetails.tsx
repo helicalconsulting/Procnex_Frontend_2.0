@@ -52,17 +52,54 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
   const poIdStr = String(order.id || '').toLowerCase().trim();
   const poNumStr = String(order.poNumber || '').toLowerCase().trim();
 
-  const isOrderDispatched = useMemo(() => {
-    const s = String(order.status || '').toUpperCase();
-    if (s === 'DISPATCHED' || s === 'IN_TRANSIT' || s === 'RECEIVED') return true;
-    const dns = Array.isArray(dnData) ? dnData : (dnData as any)?.dispatchNotes || [];
-    return dns.some((dn: any) => {
-      if (dn.status === 'CANCELLED') return false;
-      const dnPoId = String(dn.poId || dn.purchaseOrder?.id || '').toLowerCase().trim();
-      const dnPoNum = String(dn.poNumber || dn.purchaseOrder?.poNumber || '').toLowerCase().trim();
-      return (poIdStr && dnPoId === poIdStr) || (poNumStr && dnPoNum === poNumStr) || (poNumStr && dnPoId === poNumStr);
+  const dispatchSummary = useMemo(() => {
+    const dns = (Array.isArray(dnData) ? dnData : (dnData as any)?.dispatchNotes || [])
+      .filter((dn: any) => {
+        if (String(dn?.status || '').toUpperCase() === 'CANCELLED') return false;
+        const dnPoId = String(dn?.poId || dn?.purchaseOrder?.id || '').toLowerCase().trim();
+        const dnPoNum = String(dn?.poNumber || dn?.purchaseOrder?.poNumber || '').toLowerCase().trim();
+        return (poIdStr && (dnPoId === poIdStr || dnPoNum === poIdStr)) ||
+               (poNumStr && (dnPoId === poNumStr || dnPoNum === poNumStr));
+      });
+
+    const deliveredMap = new Map<string, number>();
+    dns.forEach((dn: any) => {
+      const itms = Array.isArray(dn.items) ? dn.items : [];
+      itms.forEach((it: any) => {
+        const qty = Number(it.dispatchedQty ?? it.quantityToBeDelivered ?? it.quantity ?? 0);
+        if (it.itemCode) deliveredMap.set(`code:${String(it.itemCode).toLowerCase().trim()}`, (deliveredMap.get(`code:${String(it.itemCode).toLowerCase().trim()}`) || 0) + qty);
+        if (it.itemName) deliveredMap.set(`name:${String(it.itemName).toLowerCase().trim()}`, (deliveredMap.get(`name:${String(it.itemName).toLowerCase().trim()}`) || 0) + qty);
+      });
     });
-  }, [order.status, dnData, poIdStr, poNumStr]);
+
+    const itemsList = order.items || [];
+    let totalOrdered = 0;
+    let totalDelivered = 0;
+    itemsList.forEach((it: any, idx: number) => {
+      const ord = Number(it.quantity || it.orderedQty || 0);
+      const codeKey = it.itemCode ? `code:${String(it.itemCode).toLowerCase().trim()}` : '';
+      const nameKey = `name:${String(it.name || it.itemName || `item ${idx + 1}`).toLowerCase().trim()}`;
+      const del = (codeKey && deliveredMap.has(codeKey)) ? (deliveredMap.get(codeKey) || 0) : (deliveredMap.get(nameKey) || 0);
+      totalOrdered += ord;
+      totalDelivered += del;
+    });
+
+    const orderStatus = String(order.status || '').toUpperCase();
+    const isClosedOrRecv = orderStatus === 'RECEIVED' || orderStatus === 'CLOSED';
+    const isFullyDispatched = isClosedOrRecv || (itemsList.length > 0 && totalOrdered > 0 && totalDelivered >= totalOrdered);
+    const isPartiallyDispatched = !isFullyDispatched && totalDelivered > 0;
+
+    return {
+      dnsCount: dns.length,
+      totalOrdered,
+      totalDelivered,
+      remainingQty: Math.max(0, totalOrdered - totalDelivered),
+      isFullyDispatched,
+      isPartiallyDispatched,
+    };
+  }, [order, dnData, poIdStr, poNumStr]);
+
+  const isOrderDispatched = dispatchSummary.isFullyDispatched;
 
   const isOrderInvoiced = useMemo(() => {
     const s = String(order.status || '').toUpperCase();
@@ -105,14 +142,31 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
         <RecordStatusBadge kind="order" status={order.status} />
         <Button size="sm" variant="outline" onClick={download} disabled={downloading}><Download className="size-3.5" />{downloading ? 'Downloading…' : 'Download PO'}</Button>
         {!state.cancelled && order.vendorFulfillmentAllowed !== 'INVOICE_ONLY' && (
-          isOrderDispatched ? (
+          dispatchSummary.isFullyDispatched ? (
             <Link
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
               to={getVendorPath('/vendor/invoices?tab=dispatches')}
-              title="Dispatch Note already created for this order"
+              title="All items for this order have been fully dispatched"
             >
-              <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />Dispatched
+              <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />Fully Dispatched
             </Link>
+          ) : dispatchSummary.isPartiallyDispatched ? (
+            <div className="flex items-center gap-1.5">
+              <Link
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                to={getVendorPath('/vendor/invoices?tab=dispatches')}
+                title="View existing dispatches for this order"
+              >
+                <Truck className="size-3.5 text-sky-600 dark:text-sky-400" />Partially Dispatched ({dispatchSummary.totalDelivered}/{dispatchSummary.totalOrdered})
+              </Link>
+              <Link
+                className={buttonVariants({ variant: 'default', size: 'sm' })}
+                to={getVendorPath(`/vendor/create-dispatch-note?poId=${encodeURIComponent(order.id || order.poNumber)}`)}
+                title="Create next dispatch note for remaining quantity"
+              >
+                <Plus className="size-3.5" />Dispatch Remaining
+              </Link>
+            </div>
           ) : (
             <Link
               className={buttonVariants({ variant: 'outline', size: 'sm' })}

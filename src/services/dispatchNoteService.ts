@@ -6,7 +6,11 @@ export interface DispatchNoteItem {
   itemCode?: string;
   itemName: string;
   description?: string;
-  poQty: number;
+  poQty?: number;
+  orderedQty?: number;
+  deliveredQty?: number;
+  quantityToBeDelivered?: number;
+  remainingQty?: number;
   dispatchedQty: number;
   unitPrice?: number;
   unit?: string;
