@@ -10,6 +10,7 @@ jobs:
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code
@@ -22,6 +23,8 @@ jobs:
           username: ${{ secrets.SERVER_USER || 'root' }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
+          command_timeout: 45m
+          timeout: 120s
           script: |
             set -e
             APP_DIR="/opt/heliflow-frontend"
@@ -29,6 +32,11 @@ jobs:
             echo "🚀 Starting frontend deployment on remote server..."
 
             git config --global --add safe.directory '*' || true
+
+            # Clean dangling images & containers to free up RAM & disk space
+            echo "🧹 Cleaning up unused Docker resources..."
+            docker container prune -f || true
+            docker image prune -f || true
 
             if [ ! -d "$APP_DIR/.git" ]; then
               echo "Initializing Git repository in $APP_DIR..."
@@ -44,35 +52,29 @@ jobs:
 
             cd "$APP_DIR"
 
-            # 1. Build & Run Main Container (Port 8081)
-            echo "📦 Building Main Frontend (procnexapi.procnex.com)..."
-            docker build \
-              --build-arg VITE_API_URL=https://procnexapi.procnex.com/api \
-              -t heliflow-frontend-main:latest .
+            # 1. Build unified Frontend Docker Image
+            echo "📦 Building Frontend image..."
+            docker build -t heliflow-frontend:latest .
 
-            echo "🔄 Restarting Main container..."
+            # 2. Deploy Main Container (Port 8081)
+            echo "🔄 Restarting Main container (Port 8081)..."
             docker rm -f heliflow-frontend-main || true
             docker run -d \
               --name heliflow-frontend-main \
               --restart unless-stopped \
               -p 8081:80 \
-              heliflow-frontend-main:latest
+              heliflow-frontend:latest
 
-            # 2. Build & Run Testing Container (Port 8082)
-            echo "📦 Building Testing Frontend (procnexapi-test.procnex.com)..."
-            docker build \
-              --build-arg VITE_API_URL=https://procnexapi-test.procnex.com/api \
-              -t heliflow-frontend-test:latest .
-
-            echo "🔄 Restarting Testing container..."
+            # 3. Deploy Testing Container (Port 8082)
+            echo "🔄 Restarting Testing container (Port 8082)..."
             docker rm -f heliflow-frontend-test || true
             docker run -d \
               --name heliflow-frontend-test \
               --restart unless-stopped \
               -p 8082:80 \
-              heliflow-frontend-test:latest
+              heliflow-frontend:latest
 
-            # 3. Reload Host Nginx
+            # 4. Reload Host Nginx
             if command -v nginx > /dev/null 2>&1; then
               sudo nginx -t && sudo systemctl reload nginx || true
             fi

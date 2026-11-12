@@ -19,6 +19,9 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY --from=deps /app/node_modules ./node_modules
 
+# Increase heap memory limit for Vite build to prevent GC pauses
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 # VITE_API_URL is injected at build time — default to relative path so Nginx
 # proxy works seamlessly (e.g. /api → backend container)
 ARG VITE_API_URL=/api
