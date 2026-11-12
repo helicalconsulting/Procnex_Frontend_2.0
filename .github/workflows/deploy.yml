@@ -7,56 +7,53 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy to Server
+  build-and-deploy:
+    name: Build & Deploy to Server
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to VPS via SSH
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies & Build static assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy build artifacts to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST || '165.227.82.221' }}
+          username: ${{ secrets.SERVER_USER || 'root' }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          source: "dist,nginx.conf,Dockerfile"
+          target: "/opt/heliflow-frontend"
+          overwrite: true
+
+      - name: Restart containers on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST || '165.227.82.221' }}
           username: ${{ secrets.SERVER_USER || 'root' }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
-          command_timeout: 45m
-          timeout: 120s
+          command_timeout: 5m
+          timeout: 60s
           script: |
             set -e
-            APP_DIR="/opt/heliflow-frontend"
+            cd /opt/heliflow-frontend
 
-            echo "🚀 Starting frontend deployment on remote server..."
-
-            git config --global --add safe.directory '*' || true
-
-            # Clean dangling images & containers to free up RAM & disk space
-            echo "🧹 Cleaning up unused Docker resources..."
-            docker container prune -f || true
-            docker image prune -f || true
-
-            if [ ! -d "$APP_DIR/.git" ]; then
-              echo "Initializing Git repository in $APP_DIR..."
-              rm -rf "$APP_DIR"
-              git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/helicalconsulting/Procnex_Frontend_2.0.git "$APP_DIR"
-            else
-              echo "Pulling latest code..."
-              cd "$APP_DIR"
-              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/helicalconsulting/Procnex_Frontend_2.0.git
-              git fetch --all
-              git reset --hard origin/master
-            fi
-
-            cd "$APP_DIR"
-
-            # 1. Build unified Frontend Docker Image
-            echo "📦 Building Frontend image..."
+            echo "📦 Building lightweight Nginx image..."
             docker build -t heliflow-frontend:latest .
 
-            # 2. Deploy Main Container (Port 8081)
             echo "🔄 Restarting Main container (Port 8081)..."
             docker rm -f heliflow-frontend-main || true
             docker run -d \
@@ -65,7 +62,6 @@ jobs:
               -p 8081:80 \
               heliflow-frontend:latest
 
-            # 3. Deploy Testing Container (Port 8082)
             echo "🔄 Restarting Testing container (Port 8082)..."
             docker rm -f heliflow-frontend-test || true
             docker run -d \
@@ -74,10 +70,13 @@ jobs:
               -p 8082:80 \
               heliflow-frontend:latest
 
-            # 4. Reload Host Nginx
+            # Clean dangling build cache
+            docker image prune -f || true
+
+            # Reload Host Nginx
             if command -v nginx > /dev/null 2>&1; then
               sudo nginx -t && sudo systemctl reload nginx || true
             fi
 
-            echo "✅ Both frontend containers deployed successfully!"
+            echo "✅ Frontend deployed in under 1 minute!"
             docker ps | grep heliflow-frontend
