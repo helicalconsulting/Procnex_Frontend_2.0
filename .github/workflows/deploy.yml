@@ -34,7 +34,7 @@ jobs:
           username: ${{ secrets.SERVER_USER || 'root' }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
-          source: "dist,nginx.conf,Dockerfile"
+          source: "dist,nginx.conf,Dockerfile,.dockerignore"
           target: "/opt/heliflow-frontend"
           overwrite: true
 
@@ -50,6 +50,9 @@ jobs:
           script: |
             set -e
             cd /opt/heliflow-frontend
+
+            # Ensure dist is never ignored by any legacy .dockerignore on the host
+            sed -i '/^dist$/d' .dockerignore 2>/dev/null || true
 
             echo "📦 Building lightweight Nginx image..."
             docker build -t heliflow-frontend:latest .
