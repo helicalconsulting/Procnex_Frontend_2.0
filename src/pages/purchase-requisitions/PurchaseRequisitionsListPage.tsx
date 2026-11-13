@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Clock3,
   Eye,
   FileText,
@@ -26,8 +27,12 @@ import {
   Check,
   UserCheck,
   GitMerge,
+  Loader2,
 } from 'lucide-react';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
+import { rfqService } from '../../services/rfqService';
+import RFQDetailModal from '../../components/rfq/RFQDetailModal';
+import type { RFQTableRow } from '../../types/viewModels';
 import { companySettingsService } from '../../services/companySettingsService';
 import { sseClient } from '../../services/sseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +56,7 @@ import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui
 import TablePagination from '../../components/shared/TablePagination';
 import { cn } from '../../lib/utils';
 import CreatePurchaseRequisitionModal from './CreatePurchaseRequisitionModal';
+import PriorityBadge, { getPriorityStyles, normalizePriority } from '../../components/shared/PriorityBadge';
 import '../../components/shared/ColumnCustomizer.css';
 
 type ListPurchaseRequisition = PurchaseRequisition & { isStandalone?: boolean };
@@ -114,6 +120,7 @@ function isStandaloneDocument(requisition: ListPurchaseRequisition): boolean {
 
 const ALL_COLUMNS: ColumnDef[] = [
   { key: 'prNumber', label: 'Requisition #', defaultVisible: true, required: true },
+  { key: 'priority', label: 'Priority', defaultVisible: true },
   { key: 'department', label: 'Department', defaultVisible: true },
   { key: 'submittedToName', label: 'Assigned To', defaultVisible: true },
   { key: 'requesterName', label: 'Requester', defaultVisible: true },
@@ -163,12 +170,37 @@ export default function PurchaseRequisitionsListPage() {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; link?: { text: string; url: string } } | null>(null);
 
+  // RFQ Detail View Modal (Read-only view of converted RFQ)
+  const [viewingRfq, setViewingRfq] = useState<RFQTableRow | null>(null);
+  const [viewingRfqLoading, setViewingRfqLoading] = useState(false);
+  const [loadingRfqId, setLoadingRfqId] = useState<string | null>(null);
+
+  const handleOpenRfqView = useCallback(async (rfqId: string) => {
+    if (!rfqId) return;
+    setLoadingRfqId(rfqId);
+    setViewingRfqLoading(true);
+    try {
+      const full = await rfqService.getById(rfqId);
+      if (full) {
+        setViewingRfq(full);
+      } else {
+        navigate(`/rfq/${encodeURIComponent(rfqId)}`);
+      }
+    } catch {
+      navigate(`/rfq/${encodeURIComponent(rfqId)}`);
+    } finally {
+      setViewingRfqLoading(false);
+      setLoadingRfqId(null);
+    }
+  }, [navigate]);
+
   // Conversion Modals
   const [showRfqModal, setShowRfqModal] = useState(false);
   const [rfqTitle, setRfqTitle] = useState('');
   const [rfqClosingDate, setRfqClosingDate] = useState(
     new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
   );
+  const [rfqDescription, setRfqDescription] = useState('');
   const [convertingRfq, setConvertingRfq] = useState(false);
 
   const [showPoModal, setShowPoModal] = useState(false);
@@ -190,6 +222,7 @@ export default function PurchaseRequisitionsListPage() {
   }, [isAdmin, canApprovePR, viewScopeTab]);
 
   const [selectedConversion, setSelectedConversion] = useState<string>('All');
+  const [priorityFilter, setPriorityFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     const s = searchParams.get('status')?.toUpperCase();
     if (s === 'DRAFT' || s === 'PENDING' || s === 'DRAFT_PENDING') return 'DRAFT_PENDING';
@@ -287,14 +320,24 @@ export default function PurchaseRequisitionsListPage() {
       }, 300);
     };
 
+    const unsubPrCreated = sseClient.on('pr_created', handleRefresh);
+    const unsubPrUpdated = sseClient.on('pr_updated', handleRefresh);
+    const unsubPrStatus = sseClient.on('pr_status_changed', handleRefresh);
+    const unsubPrDeleted = sseClient.on('pr_deleted', handleRefresh);
     const unsubStatus = sseClient.on('po_status_changed', handleRefresh);
     const unsubCreated = sseClient.on('po_created', handleRefresh);
     const unsubUpdated = sseClient.on('po_updated', handleRefresh);
+    const unsubPoDeleted = sseClient.on('po_deleted', handleRefresh);
     const unsubApprovalUpdated = sseClient.on('approval_updated', handleRefresh);
     const unsubApprovalChain = sseClient.on('approval_chain_complete', handleRefresh);
+    const unsubApprovalLevel = sseClient.on('approval_level_complete', handleRefresh);
+    const unsubApprovalInit = sseClient.on('approval_initiated', handleRefresh);
 
     window.addEventListener('heliflow:approval-updated', handleRefresh);
     window.addEventListener('heliflow:po-updated', handleRefresh);
+    window.addEventListener('heliflow:pr-created', handleRefresh);
+    window.addEventListener('heliflow:pr-updated', handleRefresh);
+    window.addEventListener('heliflow:pr-deleted', handleRefresh);
 
     let bc: BroadcastChannel | null = null;
     try {
@@ -304,13 +347,23 @@ export default function PurchaseRequisitionsListPage() {
 
     return () => {
       if (refreshTimer) clearTimeout(refreshTimer);
+      unsubPrCreated();
+      unsubPrUpdated();
+      unsubPrStatus();
+      unsubPrDeleted();
       unsubStatus();
       unsubCreated();
       unsubUpdated();
+      unsubPoDeleted();
       unsubApprovalUpdated();
       unsubApprovalChain();
+      unsubApprovalLevel();
+      unsubApprovalInit();
       window.removeEventListener('heliflow:approval-updated', handleRefresh);
       window.removeEventListener('heliflow:po-updated', handleRefresh);
+      window.removeEventListener('heliflow:pr-created', handleRefresh);
+      window.removeEventListener('heliflow:pr-updated', handleRefresh);
+      window.removeEventListener('heliflow:pr-deleted', handleRefresh);
       if (bc) bc.close();
     };
   }, [fetchRequisitions]);
@@ -395,6 +448,12 @@ export default function PurchaseRequisitionsListPage() {
         }
       }
 
+      // Priority Filter
+      if (priorityFilter !== 'All') {
+        const pNorm = normalizePriority(r.priority);
+        if (pNorm !== priorityFilter) return false;
+      }
+
       // Search Filter
       if (!searchTerm.trim()) return true;
       const term = searchTerm.toLowerCase();
@@ -413,7 +472,7 @@ export default function PurchaseRequisitionsListPage() {
         itemsText.includes(term)
       );
     });
-  }, [baseRequisitionsForUser, selectedDept, viewScopeTab, selectedConversion, statusFilter, searchTerm, user]);
+  }, [baseRequisitionsForUser, selectedDept, viewScopeTab, selectedConversion, statusFilter, priorityFilter, searchTerm, user]);
 
   // Selected Requisitions Objects
   const selectedRequisitionItems = useMemo(() => {
@@ -486,7 +545,14 @@ export default function PurchaseRequisitionsListPage() {
 
   // Conversion Authority Check: Requesters cannot self-convert PRs; only assigned purchase user or Admin can convert
   const canConvertSelected = useMemo(() => {
-    const itemsToCheck = pendingConversionItems.length > 0 ? pendingConversionItems : selectedRequisitionItems;
+    const itemsToCheck = pendingConversionItems.length > 0
+      ? pendingConversionItems
+      : selectedRequisitionItems.filter(
+          (r) =>
+            r.conversionStatus !== 'CONVERTED_TO_PO' &&
+            !r.convertedToPoId &&
+            r.status !== 'PO_CREATED'
+        );
     if (itemsToCheck.length === 0) return false;
 
     // Separation of Duties: Requester cannot convert their own PR unless Super Admin
@@ -498,7 +564,9 @@ export default function PurchaseRequisitionsListPage() {
       isAdmin ||
       hasPermission('Purchase Requisitions', 'canApprove') ||
       hasPermission('PO Creation', 'canApprove') ||
-      hasPermission('Purchase Orders', 'canApprove')
+      hasPermission('Purchase Orders', 'canApprove') ||
+      hasPermission('PO Creation', 'canCreate') ||
+      hasPermission('Purchase Orders', 'canCreate')
     ) {
       return true;
     }
@@ -508,12 +576,59 @@ export default function PurchaseRequisitionsListPage() {
     );
   }, [pendingConversionItems, selectedRequisitionItems, isAdmin, hasPermission, user, isOwnPr]);
 
+  const canApproveForRfq = useMemo(() => {
+    return (
+      isAdmin ||
+      hasPermission('Purchase Requisitions', 'canApprove') ||
+      hasPermission('RFQ Management', 'canApprove')
+    );
+  }, [isAdmin, hasPermission]);
+
+  const canConvertPrToRfq = useCallback(
+    (pr: ListPurchaseRequisition) => {
+      const isRfq = pr.conversionStatus === 'CONVERTED_TO_RFQ' || Boolean(pr.convertedToRfqId) || pr.status === 'IN_RFQ';
+      const isPo = pr.conversionStatus === 'CONVERTED_TO_PO' || Boolean(pr.convertedToPoId) || pr.status === 'PO_CREATED';
+      if (isRfq || isPo) return false;
+
+      // Separation of Duties: Requester cannot convert their own PR unless Super Admin
+      if (!isAdmin && isOwnPr(pr)) return false;
+
+      return canApproveForRfq;
+    },
+    [isAdmin, isOwnPr, canApproveForRfq]
+  );
+
+  const canConvertPr = useCallback(
+    (pr: ListPurchaseRequisition) => {
+      const isRfq = pr.conversionStatus === 'CONVERTED_TO_RFQ' || Boolean(pr.convertedToRfqId) || pr.status === 'IN_RFQ';
+      const isPo = pr.conversionStatus === 'CONVERTED_TO_PO' || Boolean(pr.convertedToPoId) || pr.status === 'PO_CREATED';
+      if (isRfq || isPo) return false;
+
+      // Separation of Duties: Requester cannot convert their own PR unless Super Admin
+      if (!isAdmin && isOwnPr(pr)) return false;
+
+      if (
+        isAdmin ||
+        hasPermission('Purchase Requisitions', 'canApprove') ||
+        hasPermission('PO Creation', 'canApprove') ||
+        hasPermission('Purchase Orders', 'canApprove') ||
+        hasPermission('PO Creation', 'canCreate') ||
+        hasPermission('Purchase Orders', 'canCreate')
+      ) {
+        return true;
+      }
+      const currentUserId = user?.id || (user as any)?._id;
+      return Boolean(pr.submittedToUserId && String(pr.submittedToUserId) === String(currentUserId));
+    },
+    [isAdmin, isOwnPr, hasPermission, user]
+  );
+
   const [currentPage, setCurrentPage] = useState(1);
   const perPage = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, selectedDept, viewScopeTab, selectedConversion]);
+  }, [searchTerm, statusFilter, selectedDept, viewScopeTab, selectedConversion, priorityFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRequisitions.length / perPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -551,18 +666,34 @@ export default function PurchaseRequisitionsListPage() {
       .join(', ')}`;
     const rfqDepartment = targetItems[0]?.department || '';
 
+    // Automatically fetch Description from selected PRs (leave blank if none)
+    const prDescriptions = targetItems
+      .map((r) => (r.description || r.internalNotes || r.specialInstructions || (r as any).justification || '').trim())
+      .filter(Boolean);
+    const resolvedDescription = prDescriptions.length > 0 ? Array.from(new Set(prDescriptions)).join('\n\n') : '';
+
+    // Automatically fetch Date from selected PRs (deliveryDate, poDate, or createdAt)
+    const prDate = targetItems.find((r) => r.deliveryDate)?.deliveryDate || targetItems[0]?.deliveryDate || targetItems[0]?.poDate || targetItems[0]?.createdAt;
+    const resolvedDate = prDate ? new Date(prDate).toISOString().slice(0, 10) : '';
+
+    const firstPriority = targetItems[0]?.priority ? (
+      targetItems[0].priority === 'LOW' ? 'Low' :
+      targetItems[0].priority === 'URGENT' || targetItems[0].priority === 'HIGH' ? 'High' : 'Medium'
+    ) : undefined;
+
     const rawItems: any[] = [];
     targetItems.forEach((pr) => {
       const pItems = Array.isArray(pr.items) ? pr.items : [];
+      const itemDate = pr.deliveryDate ? new Date(pr.deliveryDate).toISOString().slice(0, 10) : resolvedDate;
       pItems.forEach((it) => {
         rawItems.push({
           id: `item-${Date.now()}-${rawItems.length + 1}`,
           itemCode: it.itemCode || `ITEM-${String(rawItems.length + 1).padStart(3, '0')}`,
           itemName: it.itemName || it.description || 'Item',
-          description: `From PR ${pr.prNumber || ''} (${it.description || ''})`.trim(),
+          description: '',
           quantity: String(it.quantity || 1),
           unit: it.unit || 'pcs',
-          expectedDate: '',
+          expectedDate: it.expectedDate || itemDate || '',
         });
       });
     });
@@ -573,6 +704,11 @@ export default function PurchaseRequisitionsListPage() {
       prNumbers: targetItems.map((r) => r.prNumber || r.id).filter(Boolean),
       title: defaultTitle,
       department: rfqDepartment,
+      description: '',
+      closingDate: resolvedDate,
+      date: resolvedDate,
+      deliveryDate: resolvedDate,
+      priority: firstPriority,
       items: rawItems,
     };
 
@@ -584,7 +720,14 @@ export default function PurchaseRequisitionsListPage() {
   };
 
   const handleNavigateToCreatePo = () => {
-    const targetItems = pendingConversionItems.length > 0 ? pendingConversionItems : selectedRequisitionItems;
+    const targetItems = pendingConversionItems.length > 0
+      ? pendingConversionItems
+      : selectedRequisitionItems.filter(
+          (r) =>
+            r.conversionStatus !== 'CONVERTED_TO_PO' &&
+            !r.convertedToPoId &&
+            r.status !== 'PO_CREATED'
+        );
     if (targetItems.length === 0) return;
     const prNumbersString = targetItems
       .map((r) => r.prNumber || r.id)
@@ -600,7 +743,7 @@ export default function PurchaseRequisitionsListPage() {
           id: String(rawItems.length + 1),
           itemCode: it.itemCode || `ITEM-${String(rawItems.length + 1).padStart(3, '0')}`,
           itemName: it.itemName || it.description || 'Item',
-          description: `From PR ${pr.prNumber || ''} (${it.description || ''})`.trim(),
+          description: it.description?.trim() || '',
           quantity: Number(it.quantity) || 1,
           unit: it.unit || 'pcs',
           unitPrice: Number(it.unitPrice || it.estimatedPrice) || 0,
@@ -621,8 +764,102 @@ export default function PurchaseRequisitionsListPage() {
       sessionStorage.setItem('heliflow_consolidation_po', JSON.stringify(prefillData));
     } catch {}
 
-    navigate('/procurement/create-purchase-order', { state: prefillData });
+    const rfqId = targetItems.find((r) => r.convertedToRfqId)?.convertedToRfqId;
+    const rfqParam = rfqId ? `?rfqId=${encodeURIComponent(rfqId)}` : '';
+    navigate(`/procurement/create-purchase-order${rfqParam}`, { state: prefillData });
   };
+
+  const handleCreateRfqForRequisition = (pr: ListPurchaseRequisition) => {
+    const defaultTitle = `Consolidated RFQ for Requisitions: ${pr.prNumber || pr.id?.slice(-6) || ''}`;
+    const rfqDepartment = pr.department || '';
+
+    const prDate = pr.deliveryDate || pr.poDate || pr.createdAt;
+    const resolvedDate = prDate ? new Date(prDate).toISOString().slice(0, 10) : '';
+
+    const firstPriority = pr.priority ? (
+      pr.priority === 'LOW' ? 'Low' :
+      pr.priority === 'URGENT' || pr.priority === 'HIGH' ? 'High' : 'Medium'
+    ) : undefined;
+
+    const rawItems: any[] = [];
+    const pItems = Array.isArray(pr.items) ? pr.items : [];
+    const itemDate = pr.deliveryDate ? new Date(pr.deliveryDate).toISOString().slice(0, 10) : resolvedDate;
+    pItems.forEach((it, idx) => {
+      rawItems.push({
+        id: `item-${Date.now()}-${idx + 1}`,
+        itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
+        itemName: it.itemName || it.description || 'Item',
+        description: '',
+        quantity: String(it.quantity || 1),
+        unit: it.unit || 'pcs',
+        expectedDate: it.expectedDate || itemDate || '',
+      });
+    });
+
+    const prefillData = {
+      fromConsolidation: true,
+      requisitionIds: [String(pr.id || pr.rfqId)],
+      prNumbers: [pr.prNumber || pr.id].filter(Boolean),
+      title: defaultTitle,
+      department: rfqDepartment,
+      description: '',
+      closingDate: resolvedDate,
+      date: resolvedDate,
+      deliveryDate: resolvedDate,
+      priority: firstPriority,
+      items: rawItems,
+    };
+
+    try {
+      sessionStorage.setItem('heliflow_consolidation_rfq', JSON.stringify(prefillData));
+    } catch {}
+
+    navigate('/rfq/create', { state: prefillData });
+  };
+
+  const handleCreatePoForRequisition = (pr: ListPurchaseRequisition) => {
+    const pItems = Array.isArray(pr.items) ? pr.items : [];
+    const rawItems: any[] = pItems.map((it: any, idx: number) => ({
+      id: String(idx + 1),
+      itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
+      itemName: it.itemName || it.description || 'Item',
+      description: it.description?.trim() || '',
+      quantity: Number(it.quantity) || 1,
+      unit: it.unit || 'pcs',
+      unitPrice: Number(it.unitPrice || it.estimatedPrice) || 0,
+      taxPercent: 0,
+    }));
+
+    const prefillData = {
+      fromConsolidation: true,
+      requisitionIds: [String(pr.id || pr.rfqId)],
+      prNumbers: pr.prNumber || pr.id || '',
+      supplierType: (pr.items as any)?.[0]?.itemClass || 'General',
+      items: rawItems,
+    };
+
+    try {
+      sessionStorage.setItem('heliflow_consolidation_po', JSON.stringify(prefillData));
+    } catch {}
+
+    const rfqParam = pr.convertedToRfqId ? `?rfqId=${encodeURIComponent(pr.convertedToRfqId)}` : '';
+    navigate(`/procurement/create-purchase-order${rfqParam}`, { state: prefillData });
+  };
+
+  // Auto-fetch Date and Description from selected PRs when RFQ modal opens
+  useEffect(() => {
+    if (showRfqModal) {
+      const targetItems = pendingConversionItems.length > 0 ? pendingConversionItems : selectedRequisitionItems;
+      if (targetItems.length > 0) {
+        setRfqDescription('');
+
+        const prDate = targetItems.find((r) => r.deliveryDate)?.deliveryDate || targetItems[0]?.deliveryDate || targetItems[0]?.poDate || targetItems[0]?.createdAt;
+        if (prDate) {
+          setRfqClosingDate(new Date(prDate).toISOString().slice(0, 10));
+        }
+      }
+    }
+  }, [showRfqModal, pendingConversionItems, selectedRequisitionItems]);
 
   const handleOpenRfqModal = () => {
     handleNavigateToCreateRfq();
@@ -638,6 +875,7 @@ export default function PurchaseRequisitionsListPage() {
         requisitionIds: idsToConvert,
         title: rfqTitle,
         closingDate: rfqClosingDate,
+        description: rfqDescription,
       });
 
       const rfqNumber = res.rfqNumber || res.rfq?.rfqNumber || 'New RFQ';
@@ -646,7 +884,7 @@ export default function PurchaseRequisitionsListPage() {
       setToast({
         message: `Successfully floated RFQ #${rfqNumber} from ${idsToConvert.length} requisition(s)!`,
         type: 'success',
-        link: rfqId ? { text: `Open RFQ #${rfqNumber}`, url: `/rfq/edit/${rfqId}` } : undefined,
+        link: rfqId ? { text: `View RFQ #${rfqNumber}`, url: `/rfq/${rfqId}` } : undefined,
       });
 
       setSelectedPrIds([]);
@@ -940,8 +1178,8 @@ export default function PurchaseRequisitionsListPage() {
                   <>
                     <span>
                       {selectedRequisitionItems.length === 1
-                        ? `RFQ Already Floated for ${selectedRequisitionItems[0].prNumber || 'Requisition'}`
-                        : `${selectedRequisitionItems.length} Requisitions Selected (All In RFQ)`}
+                        ? `RFQ Floated for ${selectedRequisitionItems[0].prNumber || 'Requisition'}`
+                        : `${selectedRequisitionItems.length} Requisitions Selected (In RFQ)`}
                     </span>
                     <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[11px]">
                       IN RFQ
@@ -970,7 +1208,7 @@ export default function PurchaseRequisitionsListPage() {
                   )
                 ) : allSelectedConvertedToRfq ? (
                   <span>
-                    This requisition has already been converted into an active RFQ. Cannot be converted again.
+                    Active RFQ floated. You can review the RFQ or proceed to generate a Purchase Order.
                   </span>
                 ) : hasMixedSelection ? (
                   <span className="text-amber-700 dark:text-amber-400 font-medium">
@@ -1017,10 +1255,17 @@ export default function PurchaseRequisitionsListPage() {
                 {selectedRequisitionItems.length === 1 && selectedRequisitionItems[0].convertedToRfqId && (
                   <Button
                     size="sm"
-                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
-                    onClick={() => navigate(`/rfq/edit/${selectedRequisitionItems[0].convertedToRfqId}`)}
+                    variant="outline"
+                    disabled={loadingRfqId === selectedRequisitionItems[0].convertedToRfqId}
+                    className="gap-1.5 border-emerald-600/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 font-semibold"
+                    onClick={() => handleOpenRfqView(selectedRequisitionItems[0].convertedToRfqId!)}
                   >
-                    <Send className="size-4" /> Open RFQ <ExternalLink className="size-3.5 ml-0.5" />
+                    {loadingRfqId === selectedRequisitionItems[0].convertedToRfqId ? (
+                      <Loader2 className="size-4 animate-spin text-emerald-600" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                    View RFQ <ExternalLink className="size-3.5 ml-0.5" />
                   </Button>
                 )}
                 {selectedRequisitionItems.length === 1 && (
@@ -1183,6 +1428,24 @@ export default function PurchaseRequisitionsListPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+              <div className="relative min-w-[155px]">
+                <Clock size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <select
+                  className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                  value={priorityFilter}
+                  onChange={(e) => {
+                    setPriorityFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  aria-label="Filter by priority"
+                >
+                  <option value="All">All Priorities</option>
+                  <option value="URGENT">Urgent</option>
+                  <option value="MODERATE">Moderate</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </div>
+
               <div className="relative min-w-[190px]">
                 <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <select
@@ -1201,7 +1464,7 @@ export default function PurchaseRequisitionsListPage() {
                 </select>
               </div>
 
-              {(selectedDept !== 'All' || viewScopeTab !== 'ALL' || selectedConversion !== 'All' || searchTerm || statusFilter) && (
+              {(selectedDept !== 'All' || viewScopeTab !== 'ALL' || selectedConversion !== 'All' || priorityFilter !== 'All' || searchTerm || statusFilter) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1209,6 +1472,7 @@ export default function PurchaseRequisitionsListPage() {
                     setSelectedDept('All');
                     setViewScopeTab((isAdmin || canApprovePR) ? 'ALL' : 'MY_REQUESTS');
                     setSelectedConversion('All');
+                    setPriorityFilter('All');
                     setStatusFilter(null);
                     setSearchTerm('');
                     setCurrentPage(1);
@@ -1322,12 +1586,22 @@ export default function PurchaseRequisitionsListPage() {
                       const itemsList = Array.isArray(requisition.items) ? (requisition.items as any[]) : [];
                       const primaryItem = itemsList[0]?.itemName || itemsList[0]?.description || 'Items';
                       const itemsCount = itemsList.length;
+                      const pStyles = getPriorityStyles(requisition.priority);
+                      const isPoDone =
+                        requisition.conversionStatus === 'CONVERTED_TO_PO' ||
+                        Boolean(requisition.convertedToPoId) ||
+                        (requisition.status === 'PO_CREATED' && Boolean(requisition.poNumber));
+                      const isRfqDone =
+                        requisition.conversionStatus === 'CONVERTED_TO_RFQ' ||
+                        Boolean(requisition.convertedToRfqId) ||
+                        requisition.status === 'IN_RFQ';
 
                       return (
                         <tr
                           key={idStr}
                           className={cn(
                             'group cursor-pointer border-b border-border/55 transition-colors last:border-0 hover:bg-accent/35',
+                            pStyles.borderLeft,
                             isSelected && 'bg-primary/[0.04]'
                           )}
                           onClick={() => handleRowClick(requisition)}
@@ -1350,14 +1624,14 @@ export default function PurchaseRequisitionsListPage() {
                           </td>
 
                           {visibleColumns.map((col) => {
-                            const isPoDone =
-                              requisition.conversionStatus === 'CONVERTED_TO_PO' ||
-                              Boolean(requisition.convertedToPoId) ||
-                              (requisition.status === 'PO_CREATED' && Boolean(requisition.poNumber));
-                            const isRfqDone =
-                              requisition.conversionStatus === 'CONVERTED_TO_RFQ' ||
-                              Boolean(requisition.convertedToRfqId) ||
-                              requisition.status === 'IN_RFQ';
+
+                            if (col.key === 'priority') {
+                              return (
+                                <td key="priority" className="px-4 py-4 whitespace-nowrap">
+                                  <PriorityBadge priority={requisition.priority} size="md" />
+                                </td>
+                              );
+                            }
 
                             if (col.key === 'prNumber') {
                               return (
@@ -1376,8 +1650,21 @@ export default function PurchaseRequisitionsListPage() {
                                     )}
                                     {isRfqDone && (
                                       <div className="flex items-center gap-1">
-                                        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
-                                          <Send className="size-2.5" />
+                                        <span
+                                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 cursor-pointer hover:bg-emerald-500/20"
+                                          onClick={(e) => {
+                                            if (requisition.convertedToRfqId) {
+                                              e.stopPropagation();
+                                              handleOpenRfqView(requisition.convertedToRfqId);
+                                            }
+                                          }}
+                                          title="Click to view RFQ"
+                                        >
+                                          {loadingRfqId === requisition.convertedToRfqId ? (
+                                            <Loader2 className="size-2.5 animate-spin" />
+                                          ) : (
+                                            <Send className="size-2.5" />
+                                          )}
                                           In RFQ
                                         </span>
                                       </div>
@@ -1427,32 +1714,55 @@ export default function PurchaseRequisitionsListPage() {
                               );
                             }
                             if (col.key === 'conversionStatus') {
-                              if (isRfqDone) {
-                                return (
-                                  <td key="conversionStatus" className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                                    <Badge
-                                      className="cursor-pointer gap-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 text-xs font-semibold px-2.5 py-1"
-                                      onClick={() => requisition.convertedToRfqId && navigate(`/rfq/edit/${requisition.convertedToRfqId}`)}
-                                      title="Requisition converted to RFQ. Click to open RFQ."
-                                    >
-                                      <Send className="size-3.5" /> In RFQ <ExternalLink className="size-3 ml-0.5 opacity-70" />
-                                    </Badge>
-                                  </td>
-                                );
-                              }
                               if (isPoDone) {
                                 const docId = requisition.convertedToPoId || requisition.poNumber;
                                 return (
                                   <td key="conversionStatus" className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                                    <Badge
-                                      className="cursor-pointer gap-1.5 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 text-xs font-semibold px-2.5 py-1"
-                                      onClick={() => docId && navigate(`/procurement/create-purchase-order?id=${encodeURIComponent(docId)}`)}
-                                      title={`Purchase Order ${requisition.poNumber || ''} created. Click to open PO.`}
-                                    >
-                                      <ShoppingCart className="size-3.5 text-indigo-500" />
-                                      <span>{requisition.poNumber ? `PO: ${requisition.poNumber}` : 'PO Created'}</span>
-                                      <ExternalLink className="size-3 ml-0.5 opacity-70" />
-                                    </Badge>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {isRfqDone && (
+                                        <Badge
+                                          className="cursor-pointer gap-1 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 text-xs font-semibold px-2 py-0.5"
+                                          onClick={() => requisition.convertedToRfqId && handleOpenRfqView(requisition.convertedToRfqId)}
+                                          title="View linked RFQ"
+                                        >
+                                          {loadingRfqId === requisition.convertedToRfqId ? (
+                                            <Loader2 className="size-3 animate-spin" />
+                                          ) : (
+                                            <Send className="size-3" />
+                                          )}
+                                          RFQ <ExternalLink className="size-2.5 ml-0.5 opacity-70" />
+                                        </Badge>
+                                      )}
+                                      <Badge
+                                        className="cursor-pointer gap-1.5 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 text-xs font-semibold px-2.5 py-1"
+                                        onClick={() => docId && navigate(`/procurement/create-purchase-order?id=${encodeURIComponent(docId)}`)}
+                                        title={`Purchase Order ${requisition.poNumber || ''} created. Click to open PO.`}
+                                      >
+                                        <ShoppingCart className="size-3.5 text-indigo-500" />
+                                        <span>{requisition.poNumber ? `PO: ${requisition.poNumber}` : 'PO Created'}</span>
+                                        <ExternalLink className="size-3 ml-0.5 opacity-70" />
+                                      </Badge>
+                                    </div>
+                                  </td>
+                                );
+                              }
+                              if (isRfqDone) {
+                                return (
+                                  <td key="conversionStatus" className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <Badge
+                                        className="cursor-pointer gap-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 text-xs font-semibold px-2.5 py-1"
+                                        onClick={() => requisition.convertedToRfqId && handleOpenRfqView(requisition.convertedToRfqId)}
+                                        title="Requisition converted to RFQ. Click to view RFQ."
+                                      >
+                                        {loadingRfqId === requisition.convertedToRfqId ? (
+                                          <Loader2 className="size-3.5 animate-spin" />
+                                        ) : (
+                                          <Send className="size-3.5" />
+                                        )}
+                                        In RFQ <ExternalLink className="size-3 ml-0.5 opacity-70" />
+                                      </Badge>
+                                    </div>
                                   </td>
                                 );
                               }
@@ -1501,6 +1811,31 @@ export default function PurchaseRequisitionsListPage() {
                               >
                                 <Eye className="size-4" />
                               </Button>
+
+                              {!isRfqDone && !isPoDone && canConvertPrToRfq(requisition) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-400"
+                                  onClick={() => handleCreateRfqForRequisition(requisition)}
+                                  title="Create RFQ from Requisition"
+                                >
+                                  <Send className="size-4" />
+                                </Button>
+                              )}
+
+                              {!isRfqDone && !isPoDone && canConvertPr(requisition) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-indigo-600 hover:bg-indigo-500/10 hover:text-indigo-700 dark:text-indigo-400"
+                                  onClick={() => handleCreatePoForRequisition(requisition)}
+                                  title="Create Direct Purchase Order"
+                                >
+                                  <ShoppingCart className="size-4" />
+                                </Button>
+                              )}
+
                               {isPOEditable(requisition.status) && (
                                 <Button
                                   variant="ghost"
@@ -1537,6 +1872,14 @@ export default function PurchaseRequisitionsListPage() {
                 {paginated.map((requisition) => {
                   const itemsList = Array.isArray(requisition.items) ? (requisition.items as any[]) : [];
                   const primaryItem = itemsList[0]?.itemName || itemsList[0]?.description || 'Requisition items';
+                  const isPoDone =
+                    requisition.conversionStatus === 'CONVERTED_TO_PO' ||
+                    Boolean(requisition.convertedToPoId) ||
+                    (requisition.status === 'PO_CREATED' && Boolean(requisition.poNumber));
+                  const isRfqDone =
+                    requisition.conversionStatus === 'CONVERTED_TO_RFQ' ||
+                    Boolean(requisition.convertedToRfqId) ||
+                    requisition.status === 'IN_RFQ';
 
                   return (
                     <article key={requisition.id || requisition.rfqId} className="p-4 sm:p-5">
@@ -1578,6 +1921,31 @@ export default function PurchaseRequisitionsListPage() {
                         <Button variant="outline" size="sm" className="flex-1" onClick={() => handleRowClick(requisition)}>
                           <Eye className="size-4" /> View
                         </Button>
+                        {!isRfqDone && !isPoDone && canConvertPrToRfq(requisition) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 gap-1.5 border-emerald-600/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 font-semibold"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateRfqForRequisition(requisition);
+                            }}
+                          >
+                            <Send className="size-4" /> Create RFQ
+                          </Button>
+                        )}
+                        {!isRfqDone && !isPoDone && canConvertPr(requisition) && (
+                          <Button
+                            size="sm"
+                            className="flex-1 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreatePoForRequisition(requisition);
+                            }}
+                          >
+                            <ShoppingCart className="size-4" /> Create PO
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -1663,7 +2031,9 @@ export default function PurchaseRequisitionsListPage() {
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-xs">Urgency / Priority</span>
-                    <span className="font-semibold text-foreground mt-0.5 block text-sm">{viewingPr.priority || 'MEDIUM'}</span>
+                    <div className="mt-1">
+                      <PriorityBadge priority={viewingPr.priority} size="md" />
+                    </div>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-xs">Required By</span>
@@ -1688,19 +2058,22 @@ export default function PurchaseRequisitionsListPage() {
                         <Send className="size-4 text-emerald-600" />
                         <span className="text-sm font-medium">This requisition has been floated into an RFQ for vendor quotations.</span>
                       </div>
-                      {viewingPr.convertedToRfqId && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs font-semibold border-emerald-600 text-emerald-700 dark:text-emerald-300"
-                          onClick={() => {
-                            setViewingPr(null);
-                            navigate(`/rfq/edit/${viewingPr.convertedToRfqId}`);
-                          }}
-                        >
-                          Open RFQ <ArrowRight className="size-3.5 ml-1" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {viewingPr.convertedToRfqId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs font-semibold border-emerald-600 text-emerald-700 dark:text-emerald-300"
+                            onClick={() => {
+                              const rfqId = viewingPr.convertedToRfqId!;
+                              setViewingPr(null);
+                              handleOpenRfqView(rfqId);
+                            }}
+                          >
+                            <Eye className="size-3.5 mr-1" /> View RFQ
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ) : viewingPr.conversionStatus === 'CONVERTED_TO_PO' ? (
                     <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3 text-indigo-800 dark:text-indigo-300">
@@ -1816,13 +2189,15 @@ export default function PurchaseRequisitionsListPage() {
                   </div>
                 </div>
 
-                {/* Justification */}
-                {viewingPr.specialInstructions && (
+                {/* Justification / Description */}
+                {(viewingPr.description || viewingPr.specialInstructions || viewingPr.internalNotes) && (
                   <div className="rounded-lg bg-muted/30 p-3 border border-border/50">
                     <span className="text-xs font-semibold text-muted-foreground block mb-0.5">
-                      Business Justification / Purpose:
+                      Business Justification / Description:
                     </span>
-                    <p className="text-sm text-foreground italic">{viewingPr.specialInstructions}</p>
+                    <p className="text-sm text-foreground italic">
+                      {viewingPr.description || viewingPr.specialInstructions || viewingPr.internalNotes}
+                    </p>
                   </div>
                 )}
               </div>
@@ -1878,6 +2253,17 @@ export default function PurchaseRequisitionsListPage() {
                 className="text-xs"
                 value={rfqClosingDate}
                 onChange={(e) => setRfqClosingDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1 block">RFQ Description</label>
+              <textarea
+                rows={2}
+                className="w-full rounded-md border border-input bg-background p-2 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden"
+                placeholder="Enter RFQ description (optional)..."
+                value={rfqDescription}
+                onChange={(e) => setRfqDescription(e.target.value)}
               />
             </div>
 
@@ -2016,6 +2402,16 @@ export default function PurchaseRequisitionsListPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* RFQ Detail View Modal (Read-only inspection of converted RFQ) */}
+      {viewingRfq && (
+        <RFQDetailModal
+          rfq={viewingRfq}
+          onClose={() => setViewingRfq(null)}
+          loading={viewingRfqLoading}
+          readOnly={true}
+        />
+      )}
     </PageFrame>
   );
 }

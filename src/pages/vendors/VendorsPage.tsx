@@ -471,13 +471,25 @@ export default function VendorsPage() {
   const [fMobileAccess, setFMobileAccess] = useState(false);
 
   const displayVendors = useMemo(() => {
-    return vendors.map((v) => {
-      const override = pendingMobileStatus.get(String(v.id));
-      return {
-        ...v,
-        isMobileAccessEnabled: override !== undefined ? override : Boolean(v.isMobileAccessEnabled),
-      };
-    });
+    return vendors
+      .filter((v) => {
+        const st = (v.status || '').toUpperCase();
+        // Unapproved / pending vendors belong in Onboarding Queue, not in the approved Vendors Directory
+        return (
+          st !== 'PENDING_APPROVAL' &&
+          st !== 'INVITED' &&
+          st !== 'INVITATION_ACCEPTED' &&
+          st !== 'DOCUMENTS_SUBMITTED' &&
+          st !== 'REJECTED'
+        );
+      })
+      .map((v) => {
+        const override = pendingMobileStatus.get(String(v.id));
+        return {
+          ...v,
+          isMobileAccessEnabled: override !== undefined ? override : Boolean(v.isMobileAccessEnabled),
+        };
+      });
   }, [vendors, pendingMobileStatus]);
 
   // Summary

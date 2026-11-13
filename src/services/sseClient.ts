@@ -72,6 +72,12 @@ class SSEClient {
     // Vendor onboarding events
     'vendor_onboarding_accepted',
     'vendor_onboarding_documents_submitted',
+    'vendor_registered',
+    'vendor_rejected',
+    'vendor_document_verified',
+    'vendor_document_rejected',
+    'vendor_updated',
+    'vendor_queue_updated',
     'evaluation_scores_updated',
     'contract_signed',
     'contract_created',
@@ -79,6 +85,11 @@ class SSEClient {
     'contract_deleted',
     'po_status_changed',
     'task_updated',
+    // Purchase Requisition events
+    'pr_created',
+    'pr_updated',
+    'pr_status_changed',
+    'pr_deleted',
   ];
 
   /**

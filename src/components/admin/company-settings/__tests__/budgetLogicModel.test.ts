@@ -6,6 +6,7 @@ import {
   saveBudgetLogicSettings,
   resetBudgetLogicSettings,
   simulateSpendEvaluation,
+  calculateRolloverAmount,
   STORAGE_KEY_BUDGET_LOGIC,
   type BudgetLogicConfig,
 } from '../budgetLogicModel';
@@ -116,6 +117,68 @@ describe('budgetLogicModel', () => {
       expect(BUDGET_LOGIC_PRESETS.BALANCED).toBeDefined();
       expect(BUDGET_LOGIC_PRESETS.STRICT_ENTERPRISE).toBeDefined();
       expect(BUDGET_LOGIC_PRESETS.FLEXIBLE_ADVISORY).toBeDefined();
+      expect(BUDGET_LOGIC_PRESETS.STRICT_ENTERPRISE.config.phasing.rolloverPercent).toBe(0);
+      expect(BUDGET_LOGIC_PRESETS.FLEXIBLE_ADVISORY.config.phasing.rolloverPercent).toBe(100);
+    });
+  });
+
+  describe('calculateRolloverAmount and phasing rules', () => {
+    it('returns 0 when rollover is disabled', () => {
+      const phasing = {
+        ...DEFAULT_BUDGET_LOGIC.phasing,
+        allowRollover: false,
+        rolloverPercent: 100,
+      };
+      expect(calculateRolloverAmount(100000, phasing)).toBe(0);
+    });
+
+    it('returns 0 when unspent balance is 0 or negative', () => {
+      const phasing = {
+        ...DEFAULT_BUDGET_LOGIC.phasing,
+        allowRollover: true,
+        rolloverPercent: 50,
+      };
+      expect(calculateRolloverAmount(0, phasing)).toBe(0);
+      expect(calculateRolloverAmount(-5000, phasing)).toBe(0);
+    });
+
+    it('calculates the exact percentage of unspent balance when rollover is enabled', () => {
+      const phasing50 = {
+        ...DEFAULT_BUDGET_LOGIC.phasing,
+        allowRollover: true,
+        rolloverPercent: 50,
+      };
+      expect(calculateRolloverAmount(100000, phasing50)).toBe(50000);
+
+      const phasing25 = {
+        ...DEFAULT_BUDGET_LOGIC.phasing,
+        allowRollover: true,
+        rolloverPercent: 25,
+      };
+      expect(calculateRolloverAmount(80000, phasing25)).toBe(20000);
+
+      const phasing100 = {
+        ...DEFAULT_BUDGET_LOGIC.phasing,
+        allowRollover: true,
+        rolloverPercent: 100,
+      };
+      expect(calculateRolloverAmount(125000, phasing100)).toBe(125000);
+    });
+
+    it('persists and restores custom rolloverPercent in localStorage', () => {
+      const custom: BudgetLogicConfig = {
+        ...DEFAULT_BUDGET_LOGIC,
+        phasing: {
+          ...DEFAULT_BUDGET_LOGIC.phasing,
+          allowRollover: true,
+          rolloverPercent: 65,
+        },
+      };
+
+      saveBudgetLogicSettings(custom);
+      const loaded = loadBudgetLogicSettings();
+      expect(loaded.phasing.allowRollover).toBe(true);
+      expect(loaded.phasing.rolloverPercent).toBe(65);
     });
   });
 });

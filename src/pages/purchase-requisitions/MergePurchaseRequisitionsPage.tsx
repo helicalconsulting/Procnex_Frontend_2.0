@@ -131,6 +131,7 @@ export default function MergePurchaseRequisitionsPage() {
   const [rfqClosingDate, setRfqClosingDate] = useState(
     new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
   );
+  const [rfqDescription, setRfqDescription] = useState('');
   const [convertingRfq, setConvertingRfq] = useState(false);
 
   const [showPoModal, setShowPoModal] = useState(false);
@@ -425,14 +426,30 @@ export default function MergePurchaseRequisitionsPage() {
       .filter(Boolean)
       .join(', ')}`;
     const rfqDepartment = selectedRequisitionItems[0]?.department || '';
+
+    // Automatically fetch Description from selected PRs (leave blank if none)
+    const prDescriptions = selectedRequisitionItems
+      .map((r) => (r.description || r.internalNotes || r.specialInstructions || (r as any).justification || '').trim())
+      .filter(Boolean);
+    const resolvedDescription = prDescriptions.length > 0 ? Array.from(new Set(prDescriptions)).join('\n\n') : '';
+
+    // Automatically fetch Date from selected PRs (deliveryDate, poDate, or createdAt)
+    const prDate = selectedRequisitionItems.find((r) => r.deliveryDate)?.deliveryDate || selectedRequisitionItems[0]?.deliveryDate || selectedRequisitionItems[0]?.poDate || selectedRequisitionItems[0]?.createdAt;
+    const resolvedDate = prDate ? new Date(prDate).toISOString().slice(0, 10) : '';
+
+    const firstPriority = selectedRequisitionItems[0]?.priority ? (
+      selectedRequisitionItems[0].priority === 'LOW' ? 'Low' :
+      selectedRequisitionItems[0].priority === 'URGENT' || selectedRequisitionItems[0].priority === 'HIGH' ? 'High' : 'Medium'
+    ) : undefined;
+
     const consolidatedItems = consolidatedSummary.items.map((it, idx) => ({
       id: `item-${Date.now()}-${idx + 1}`,
       itemCode: `ITEM-${String(idx + 1).padStart(3, '0')}`,
       itemName: it.itemName,
-      description: `Consolidated from ${it.prNumbers.join(', ')} (Requested by: ${it.requestedByUsers.join('; ')})`,
+      description: '',
       quantity: String(it.totalQuantity),
       unit: it.unit || 'pcs',
-      expectedDate: '',
+      expectedDate: resolvedDate || '',
     }));
 
     const prefillData = {
@@ -441,6 +458,11 @@ export default function MergePurchaseRequisitionsPage() {
       prNumbers: selectedRequisitionItems.map((r) => r.prNumber || r.id).filter(Boolean),
       title: defaultTitle,
       department: rfqDepartment,
+      description: '',
+      closingDate: resolvedDate,
+      date: resolvedDate,
+      deliveryDate: resolvedDate,
+      priority: firstPriority,
       items: consolidatedItems,
     };
 
@@ -462,7 +484,7 @@ export default function MergePurchaseRequisitionsPage() {
       id: String(idx + 1),
       itemCode: `ITEM-${String(idx + 1).padStart(3, '0')}`,
       itemName: it.itemName,
-      description: `Consolidated from ${it.prNumbers.join(', ')} (Requested by: ${it.requestedByUsers.join('; ')})`,
+      description: '',
       quantity: it.totalQuantity,
       unit: it.unit || 'pcs',
       unitPrice: it.avgEstimatedPrice,
@@ -484,6 +506,18 @@ export default function MergePurchaseRequisitionsPage() {
     navigate('/procurement/create-purchase-order', { state: prefillData });
   };
 
+  // Auto-fetch Date and Description from selected PRs when RFQ modal opens
+  useEffect(() => {
+    if (showRfqModal && selectedRequisitionItems.length > 0) {
+      setRfqDescription('');
+
+      const prDate = selectedRequisitionItems.find((r) => r.deliveryDate)?.deliveryDate || selectedRequisitionItems[0]?.deliveryDate || selectedRequisitionItems[0]?.poDate || selectedRequisitionItems[0]?.createdAt;
+      if (prDate) {
+        setRfqClosingDate(new Date(prDate).toISOString().slice(0, 10));
+      }
+    }
+  }, [showRfqModal, selectedRequisitionItems]);
+
   const handleOpenRfqModal = () => {
     handleNavigateToCreateRfq();
   };
@@ -496,6 +530,7 @@ export default function MergePurchaseRequisitionsPage() {
         requisitionIds: selectedPrIds,
         title: rfqTitle,
         closingDate: rfqClosingDate,
+        description: rfqDescription,
       });
 
       const rfqNumber = res.rfqNumber || res.rfq?.rfqNumber || 'New RFQ';
@@ -504,7 +539,7 @@ export default function MergePurchaseRequisitionsPage() {
       setToast({
         message: `Successfully floated consolidated RFQ #${rfqNumber} from ${selectedPrIds.length} requisition(s)!`,
         type: 'success',
-        link: rfqId ? { text: `Open RFQ #${rfqNumber}`, url: `/rfq/edit/${rfqId}` } : undefined,
+        link: rfqId ? { text: `View RFQ #${rfqNumber}`, url: `/rfq/${rfqId}` } : undefined,
       });
 
       setSelectedPrIds([]);
@@ -1023,9 +1058,7 @@ export default function MergePurchaseRequisitionsPage() {
                             <th className="w-11 px-4 py-3 text-center">Select</th>
                             <th className="px-4 py-3">Requester & Dept</th>
                             <th className="px-4 py-3">Requisition #</th>
-                            <th className="px-4 py-3 text-center">Demanded Qty</th>
-                            <th className="px-4 py-3 text-right">Est. Unit Price</th>
-                            <th className="px-4 py-3 text-right pr-5">Est. Total</th>
+                            <th className="px-4 py-3 text-right pr-6">Demanded Qty</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/50">
@@ -1033,8 +1066,6 @@ export default function MergePurchaseRequisitionsPage() {
                             const idStr = String(pr.id || pr.rfqId);
                             const isSelected = selectedPrIds.includes(idStr);
                             const qty = Number(item.quantity) || 1;
-                            const unitPrice = Number(item.unitPrice || item.estimatedPrice) || 0;
-                            const lineTotal = qty * unitPrice;
                             const canProcess = canUserProcessPr(pr);
                             const isOwn = isOwnPr(pr);
 
@@ -1102,14 +1133,8 @@ export default function MergePurchaseRequisitionsPage() {
                                 <td className="px-4 py-3.5 font-semibold text-primary">
                                   {pr.prNumber || pr.poNumber}
                                 </td>
-                                <td className="px-4 py-3.5 text-center font-bold text-foreground">
+                                <td className="px-4 py-3.5 text-right pr-6 font-bold text-foreground">
                                   {qty} {item.unit || 'pcs'}
-                                </td>
-                                <td className="px-4 py-3.5 text-right font-medium tabular-nums text-muted-foreground">
-                                  {formatAmount(unitPrice, pr.currency || companyDefaultCurrency)}
-                                </td>
-                                <td className="px-4 py-3.5 text-right pr-5 font-bold tabular-nums text-foreground">
-                                  {formatAmount(lineTotal, pr.currency || companyDefaultCurrency)}
                                 </td>
                               </tr>
                             );
@@ -1237,6 +1262,17 @@ export default function MergePurchaseRequisitionsPage() {
                 className="text-xs"
                 value={rfqClosingDate}
                 onChange={(e) => setRfqClosingDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1 block">RFQ Description</label>
+              <textarea
+                rows={2}
+                className="w-full rounded-md border border-input bg-background p-2 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden"
+                placeholder="Enter RFQ description (optional)..."
+                value={rfqDescription}
+                onChange={(e) => setRfqDescription(e.target.value)}
               />
             </div>
 

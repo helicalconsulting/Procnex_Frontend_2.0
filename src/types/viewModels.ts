@@ -109,6 +109,7 @@ export interface VendorTableRow {
   location: string;
   website: string;
   isActive: boolean;
+  status?: string;
   isMobileAccessEnabled?: boolean;
   initials: string;
   avatarMod: string;

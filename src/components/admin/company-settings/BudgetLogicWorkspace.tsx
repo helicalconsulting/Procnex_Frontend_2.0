@@ -451,10 +451,98 @@ export function BudgetLogicWorkspace({
                   },
                 })
               }
-              className="size-4 rounded text-primary focus:ring-primary ml-3"
+              className="size-4 rounded text-primary focus:ring-primary ml-3 cursor-pointer"
             />
           </div>
         </div>
+
+        {/* ── Rollover Percentage Configuration ── */}
+        {config.phasing.allowRollover ? (
+          <div className="p-4 rounded-xl bg-primary/[0.03] border border-primary/20 space-y-3 transition-all animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Percent size={14} className="text-primary" /> Allowed Unspent Rollover Percentage
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Remaining unspent budget ka kitna percentage aage wale period mein carry forward hoke use ho sakta hai.
+                </p>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1.5">
+                {[25, 50, 75, 100].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() =>
+                      setConfig({
+                        ...config,
+                        phasing: {
+                          ...config.phasing,
+                          rolloverPercent: pct,
+                        },
+                      })
+                    }
+                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                      (config.phasing.rolloverPercent ?? 100) === pct
+                        ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                        : 'bg-card text-muted-foreground border-border hover:bg-accent/40'
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+              <div className="sm:col-span-4 relative">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="100"
+                  value={config.phasing.rolloverPercent ?? 100}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const num = raw === '' ? 0 : Math.min(100, Math.max(0, Number(raw)));
+                    setConfig({
+                      ...config,
+                      phasing: {
+                        ...config.phasing,
+                        rolloverPercent: num,
+                      },
+                    });
+                  }}
+                  className="h-9 text-xs font-bold pr-8"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground pointer-events-none">
+                  %
+                </span>
+              </div>
+
+              <div className="sm:col-span-8 flex items-center gap-2 text-xs text-muted-foreground bg-card/70 p-2.5 rounded-lg border border-border/50">
+                <span className="font-semibold text-primary shrink-0">Rule Preview:</span>
+                <span>
+                  Unspent balance ka <strong>{config.phasing.rolloverPercent ?? 100}%</strong> next period allocation mein carry forward hoga.
+                  {(config.phasing.rolloverPercent ?? 100) < 100 && (
+                    <span className="text-amber-600 dark:text-amber-400 ml-1">
+                      (Remaining {100 - (config.phasing.rolloverPercent ?? 100)}% unused expire ho jayega).
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 rounded-xl bg-muted/20 border border-border/40 text-xs text-muted-foreground flex items-center gap-2">
+            <span className="size-2 rounded-full bg-muted-foreground/40 shrink-0" />
+            <span>
+              Unspent rollover is disabled. Period end par remaining funds lapse ho jayenge (0% carry-forward).
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── CARD 4: BUDGET CLASSIFICATION & SOURCES OPTIONS ── */}

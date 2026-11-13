@@ -103,16 +103,34 @@ async function apiListDepartments(): Promise<Department[]> {
   return data.departments || [];
 }
 
-async function mockListCategories(departmentId?: string): Promise<Category[]> {
+async function mockListCategories(departmentId?: string, _companyCode?: string): Promise<Category[]> {
   await new Promise((r) => setTimeout(r, 200));
   if (departmentId) return MOCK_CATEGORIES.filter((c) => c.departmentId === departmentId);
   return MOCK_CATEGORIES;
 }
 
-async function apiListCategories(departmentId?: string): Promise<Category[]> {
-  const query = departmentId ? `?departmentId=${departmentId}` : '';
-  const data = await apiRequest<{ categories: Category[] }>(`/company-settings/categories${query}`, { cacheTtlMs: 60000 });
-  return data.categories || [];
+async function apiListCategories(departmentId?: string, companyCode?: string): Promise<Category[]> {
+  const params = new URLSearchParams();
+  if (departmentId) params.append('departmentId', departmentId);
+  if (companyCode) params.append('companyCode', companyCode);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  try {
+    const data = await apiRequest<{ categories: Category[] }>(`/company-settings/categories${query}`, {
+      cacheTtlMs: 0,
+      headers: companyCode ? { 'x-company-code': companyCode } : undefined,
+    });
+    return data.categories || [];
+  } catch (err) {
+    try {
+      const publicData = await apiRequest<{ categories: Category[] }>(`/public/categories${query}`, {
+        cacheTtlMs: 0,
+        headers: companyCode ? { 'x-company-code': companyCode } : undefined,
+      });
+      return publicData.categories || [];
+    } catch {
+      throw err;
+    }
+  }
 }
 
 // ─── Create/Update/Delete ─────────────────────────────────

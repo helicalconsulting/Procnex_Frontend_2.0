@@ -229,6 +229,7 @@ export function mapVendorToTableRow(v: Vendor & Record<string, unknown>): Vendor
     location,
     website,
     isActive: Boolean(raw.isActive),
+    status: safeString(raw.status, undefined as any),
     isMobileAccessEnabled: Boolean(raw.isMobileAccessEnabled),
     initials: initials(name),
     avgQuality: perf?.avgQuality ?? (typeof raw.avgQuality === 'number' ? raw.avgQuality : 0),

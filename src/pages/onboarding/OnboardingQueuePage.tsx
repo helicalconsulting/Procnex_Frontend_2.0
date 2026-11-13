@@ -1,5 +1,6 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { createPortal } from 'react-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -97,7 +98,23 @@ function mapOnboardingVendor(v: OnboardingVendor): QueueRow {
     ? v.isSubmitted
     : (st === 'PENDING_APPROVAL' || st === 'DOCUMENTS_SUBMITTED' || st.includes('APPROVE') || st.includes('REJECT'));
   const idStr = String(v.id || '');
-  const vendorNo = (v as any).vendorNo || (idStr.startsWith('VND-') ? idStr : (idStr.startsWith('reg_') ? `VND-${idStr.slice(-4)}` : `VND-${idStr.padStart(4, '0')}`));
+  const rawVendorNo = (v as any).vendorNo || (v as any).supplierCode;
+  let vendorNo: string;
+  if (rawVendorNo && typeof rawVendorNo === 'string' && rawVendorNo.trim()) {
+    vendorNo = rawVendorNo.startsWith('VND-') ? rawVendorNo.trim() : `VND-${rawVendorNo.trim()}`;
+  } else if (idStr.startsWith('VND-')) {
+    vendorNo = idStr;
+  } else if (idStr.startsWith('reg_')) {
+    vendorNo = `VND-${idStr.slice(-4)}`;
+  } else if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
+    vendorNo = `VND-${idStr.slice(-4).toUpperCase()}`;
+  } else if (/^\d+$/.test(idStr)) {
+    vendorNo = `VND-${idStr.padStart(4, '0')}`;
+  } else if (idStr) {
+    vendorNo = `VND-${idStr.slice(-4).toUpperCase()}`;
+  } else {
+    vendorNo = 'VND-0000';
+  }
 
   return {
     id: v.id,
@@ -385,27 +402,107 @@ export default function OnboardingQueuePage() {
     };
   }, [signedPreviewDoc]);
 
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [searchParams] = useSearchParams();
+  const initialSearch = searchParams.get('search') || searchParams.get('q') || '';
+  const [search, setSearch] = useState(initialSearch);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(() => {
+    return (searchParams.get('filter') as any) || (initialSearch ? 'all' : 'pending');
+  });
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('q');
+    if (q !== null && q !== undefined) {
+      setSearch(q);
+      setActiveFilter('all');
+    }
+  }, [searchParams]);
   const [currentPage, setCurrentPage] = useState(1);
   const perPage = 10;
+
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedReload = useCallback(() => {
+    if (reloadTimerRef.current) {
+      clearTimeout(reloadTimerRef.current);
+    }
+    reloadTimerRef.current = setTimeout(() => {
+      reload();
+    }, 250);
+  }, [reload]);
 
   useEffect(() => {
     sseClient.connect();
 
-    const unsub1 = sseClient.on('notification', () => reload());
-    const unsub2 = sseClient.on('vendor_onboarding_accepted', () => reload());
-    const unsub3 = sseClient.on('vendor_onboarding_documents_submitted', () => reload());
+    // Specific vendor onboarding and lifecycle SSE events
+    const unsubNotification = sseClient.on('notification', debouncedReload);
+    const unsubAccepted = sseClient.on('vendor_onboarding_accepted', debouncedReload);
+    const unsubDocs = sseClient.on('vendor_onboarding_documents_submitted', debouncedReload);
+    const unsubRegistered = sseClient.on('vendor_registered', debouncedReload);
+    const unsubApproved = sseClient.on('vendor_approved', debouncedReload);
+    const unsubRejected = sseClient.on('vendor_rejected', debouncedReload);
+    const unsubDocVerified = sseClient.on('vendor_document_verified', debouncedReload);
+    const unsubDocRejected = sseClient.on('vendor_document_rejected', debouncedReload);
+    const unsubUpdated = sseClient.on('vendor_updated', debouncedReload);
+    const unsubQueueUpdated = sseClient.on('vendor_queue_updated', debouncedReload);
+
+    // Catch-all for any vendor or onboarding related SSE broadcast
+    const unsubAny = sseClient.onAny((data: any) => {
+      if (!data) return;
+      const type = String(data?.type || data?.event || '').toLowerCase();
+      const mod = String(data?.module || data?.entityType || '').toLowerCase();
+      const title = String(data?.title || '').toLowerCase();
+      const msg = String(data?.message || '').toLowerCase();
+      if (
+        type.includes('vendor') ||
+        type.includes('onboarding') ||
+        mod.includes('vendor') ||
+        mod.includes('onboarding') ||
+        title.includes('vendor') ||
+        msg.includes('vendor') ||
+        Boolean(data?.vendorId || data?.vendorNo)
+      ) {
+        debouncedReload();
+      }
+    });
+
+    // Cross-tab and window event synchronization
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'heliflow_vendor_registrations') {
+        debouncedReload();
+      }
+    };
+    const handleWindowVendorEvent = () => debouncedReload();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('vendor_registered', handleWindowVendorEvent);
+    window.addEventListener('vendor_queue_updated', handleWindowVendorEvent);
+    window.addEventListener('heliflow:vendor-updated', handleWindowVendorEvent);
+    window.addEventListener('heliflow:sse-event', handleWindowVendorEvent);
 
     const pollTimer = setInterval(() => reload(), 30_000);
 
     return () => {
-      unsub1();
-      unsub2();
-      unsub3();
+      if (reloadTimerRef.current) {
+        clearTimeout(reloadTimerRef.current);
+      }
+      unsubNotification();
+      unsubAccepted();
+      unsubDocs();
+      unsubRegistered();
+      unsubApproved();
+      unsubRejected();
+      unsubDocVerified();
+      unsubDocRejected();
+      unsubUpdated();
+      unsubQueueUpdated();
+      unsubAny();
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('vendor_registered', handleWindowVendorEvent);
+      window.removeEventListener('vendor_queue_updated', handleWindowVendorEvent);
+      window.removeEventListener('heliflow:vendor-updated', handleWindowVendorEvent);
+      window.removeEventListener('heliflow:sse-event', handleWindowVendorEvent);
       clearInterval(pollTimer);
     };
-  }, [reload]);
+  }, [debouncedReload, reload]);
 
   const counts = useMemo(() => {
     const c = { pending: 0, approved: 0, rejected: 0 };
@@ -421,6 +518,7 @@ export default function OnboardingQueuePage() {
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((r) =>
+        (r.vendorNo || '').toLowerCase().includes(q) ||
         r.name.toLowerCase().includes(q) ||
         r.email.toLowerCase().includes(q) ||
         (r.contactPerson || '').toLowerCase().includes(q) ||

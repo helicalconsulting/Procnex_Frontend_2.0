@@ -1,5 +1,5 @@
 import { USE_MOCK } from '../config/mock';
-import { apiRequest, authHeaders, API_BASE } from '../api/client';
+import { apiRequest, authHeaders, API_BASE, ApiError } from '../api/client';
 import { pickList } from '../api/normalize';
 import { MOCK_VENDORS } from '../api/mappers';
 import type { Vendor } from '../types';
@@ -167,7 +167,17 @@ export function getSelfRegisteredVendors(): SelfRegisteredVendorRecord[] {
 }
 
 export function saveSelfRegisteredVendor(payload: VendorSelfRegistrationPayload): SelfRegisteredVendorRecord {
+  const cleanEmail = payload.contactEmail.trim().toLowerCase();
   const existing = getSelfRegisteredVendors();
+  const alreadyExists = existing.find((r) => (r.email || '').trim().toLowerCase() === cleanEmail);
+  if (alreadyExists) {
+    throw new ApiError(
+      'A vendor registration with this email address has already been submitted.',
+      'VENDOR_ALREADY_EXISTS',
+      409
+    );
+  }
+
   const index = existing.length + 1;
   const vendorNo = `VND-${String(index).padStart(4, '0')}`;
   const id = `reg_${Date.now()}`;
@@ -178,7 +188,7 @@ export function saveSelfRegisteredVendor(payload: VendorSelfRegistrationPayload)
     id,
     vendorNo,
     name: payload.companyName.trim(),
-    email: payload.contactEmail.trim().toLowerCase(),
+    email: cleanEmail,
     phone: fullPhone,
     contactPerson: payload.contactPerson?.trim() || undefined,
     category: payload.category || undefined,
@@ -273,7 +283,10 @@ async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
   const selfReg = getSelfRegisteredVendors().map(mapSelfRegisteredToOnboarding);
   let apiVendors: OnboardingVendor[] = [];
   try {
-    const data = await apiRequest<{ vendors: Vendor[] }>('/procurement/vendor-approval-queue');
+    const data = await apiRequest<{ vendors: Vendor[] }>('/procurement/vendor-approval-queue', {
+      cacheTtlMs: 0,
+      skipCacheBust: false,
+    });
     const vendors = pickList<Vendor>(data, ['vendors']);
     apiVendors = vendors.map((v) => {
     const extended = v as Vendor & {
@@ -301,38 +314,47 @@ async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
     // Normalize ACTIVE to APPROVED so both show under the Approved tab
     const rawStatus = extended.status || 'PENDING_APPROVAL';
     const normalizedStatus = rawStatus === 'ACTIVE' ? 'APPROVED' : rawStatus;
-    return {
-      id: v.id,
-      name: v.name,
-      email: v.email,
-      status: normalizedStatus,
-      submittedAt: extended.updatedAt
-        ? new Date(extended.updatedAt).toISOString().slice(0, 10)
-        : new Date(extended.createdAt || Date.now()).toISOString().slice(0, 10),
-      phone: extended.phone ?? null,
-      contactPerson: extended.contactPerson ?? null,
-      website: extended.website ?? null,
-      address: extended.address ?? null,
-      gstNumber: extended.gstNumber ?? null,
-      panNumber: extended.panNumber ?? null,
-      bankName: extended.bankName ?? null,
-      bankAccountNumber: extended.bankAccountNumber ?? null,
-      bankIfscCode: extended.bankIfscCode ?? null,
-      bankBranch: extended.bankBranch ?? null,
-      onboardingNotes: extended.onboardingNotes ?? null,
-      category: extended.category ?? null,
-      supplierType: extended.supplierType ?? null,
-      location: extended.location ?? null,
-      isSubmitted: extended.isSubmitted,
-      documentSummary: extended.documentSummary,
-      rejectionReason: extended.rejectionReason ?? null,
-      documents: extended.documents || [],
-    };
+      return {
+        id: v.id,
+        vendorNo: (v as any).vendorNo || (v as any).supplierCode || undefined,
+        name: v.name,
+        email: v.email,
+        status: normalizedStatus,
+        submittedAt: extended.updatedAt
+          ? new Date(extended.updatedAt).toISOString().slice(0, 10)
+          : new Date(extended.createdAt || Date.now()).toISOString().slice(0, 10),
+        phone: extended.phone ?? null,
+        contactPerson: extended.contactPerson ?? null,
+        website: extended.website ?? null,
+        address: extended.address ?? null,
+        gstNumber: extended.gstNumber ?? null,
+        panNumber: extended.panNumber ?? null,
+        bankName: extended.bankName ?? null,
+        bankAccountNumber: extended.bankAccountNumber ?? null,
+        bankIfscCode: extended.bankIfscCode ?? null,
+        bankBranch: extended.bankBranch ?? null,
+        onboardingNotes: extended.onboardingNotes ?? null,
+        category: extended.category ?? null,
+        supplierType: extended.supplierType ?? null,
+        location: extended.location ?? null,
+        isSubmitted: extended.isSubmitted,
+        documentSummary: extended.documentSummary,
+        rejectionReason: extended.rejectionReason ?? null,
+        documents: extended.documents || [],
+      };
     });
   } catch {
     apiVendors = [];
   }
-  return [...selfReg, ...apiVendors];
+  if (apiVendors.length > 0) {
+    const apiEmails = new Set(apiVendors.map((v) => (v.email || '').trim().toLowerCase()).filter(Boolean));
+    const apiIds = new Set(apiVendors.map((v) => String(v.id)).filter(Boolean));
+    const filteredSelfReg = selfReg.filter(
+      (s) => !apiEmails.has((s.email || '').trim().toLowerCase()) && !apiIds.has(String(s.id))
+    );
+    return [...filteredSelfReg, ...apiVendors];
+  }
+  return selfReg;
 }
 
 async function mockVendors(): Promise<Vendor[]> {
@@ -695,33 +717,123 @@ export const procurementService = {
   listPendingDocuments: USE_MOCK ? mockListPendingDocuments : apiListPendingDocuments,
   searchVendors: USE_MOCK ? mockSearchVendors : apiSearchVendors,
   registerVendor: async (payload: VendorSelfRegistrationPayload) => {
-    const record = saveSelfRegisteredVendor(payload);
-    try {
-      if (!USE_MOCK) {
-        const res = await apiRequest<{ success?: boolean; data?: { vendorNo?: string; id?: string } }>(
-          '/public/vendor-register',
-          {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          }
+    const cleanEmail = payload.contactEmail.trim().toLowerCase();
+
+    // 1. Check local storage vendors first
+    const existing = getSelfRegisteredVendors();
+    if (existing.some((r) => (r.email || '').trim().toLowerCase() === cleanEmail)) {
+      throw new ApiError(
+        'A vendor application with this email address is already submitted and pending review.',
+        'VENDOR_APPLICATION_PENDING',
+        409
+      );
+    }
+
+    if (!USE_MOCK) {
+      // 2. Pre-check email with backend
+      const checkRes = await procurementService.checkVendorEmail(cleanEmail, payload.companyCode);
+      if (checkRes.exists) {
+        throw new ApiError(
+          checkRes.message || 'A vendor with this email is already registered. Please sign in or use another email.',
+          'VENDOR_ALREADY_EXISTS',
+          409
         );
-        if (res?.data) {
-          const nextId = res.data.id || record.id;
-          const nextVendorNo = res.data.vendorNo || record.vendorNo;
-          record.id = nextId;
-          record.vendorNo = nextVendorNo;
-          const existing = getSelfRegisteredVendors();
-          const next = existing.map((r) =>
-            r.email === record.email ? { ...r, id: nextId, vendorNo: nextVendorNo } : r
-          );
-          if (typeof window !== 'undefined') {
-            window.localStorage.setItem(STORAGE_KEY_REGISTRATIONS, JSON.stringify(next));
-          }
+      }
+
+      // 3. Post registration to backend
+      const res = await apiRequest<any>(
+        '/public/vendor-register',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          cacheTtlMs: 0,
+        }
+      );
+      if (res && res.success === false) {
+        throw new ApiError(
+          res.error || res.message || 'Vendor registration failed',
+          res.code || 'REGISTRATION_FAILED',
+          400
+        );
+      }
+      const resData = (res && typeof res === 'object' && 'data' in res && (res as any).data) ? (res as any).data : res;
+      const record = saveSelfRegisteredVendor(payload);
+      if (resData && (resData.vendorNo || resData.id)) {
+        const nextId = resData.id || record.id;
+        const nextVendorNo = resData.vendorNo || record.vendorNo;
+        record.id = nextId;
+        record.vendorNo = nextVendorNo;
+        const currentList = getSelfRegisteredVendors();
+        const next = currentList.map((r) =>
+          r.email === record.email ? { ...r, id: nextId, vendorNo: nextVendorNo } : r
+        );
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(STORAGE_KEY_REGISTRATIONS, JSON.stringify(next));
         }
       }
-    } catch {
-      // Local/offline fallback already stored in localStorage
+      return record;
     }
-    return record;
+    return saveSelfRegisteredVendor(payload);
+  },
+  checkVendorEmail: async (email: string, companyCode?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      return { available: true, exists: false, message: '' };
+    }
+
+    // 1. Immediately check local storage vendors
+    const localVendors = getSelfRegisteredVendors();
+    const localMatch = localVendors.find((v) => (v.email || '').trim().toLowerCase() === cleanEmail);
+    if (localMatch) {
+      return {
+        available: false,
+        exists: true,
+        type: 'VENDOR' as const,
+        status: localMatch.status || 'PENDING_APPROVAL',
+        isActive: localMatch.status === 'APPROVED',
+        vendorName: localMatch.name,
+        message: 'A vendor application with this email has already been submitted and is pending review.',
+      };
+    }
+
+    if (!USE_MOCK) {
+      try {
+        const queryParams = new URLSearchParams({ email: cleanEmail });
+        if (companyCode) queryParams.set('companyCode', companyCode);
+        const res = await apiRequest<any>(`/public/vendors/check-email?${queryParams.toString()}`, {
+          cacheTtlMs: 0,
+        });
+        const data = (res && typeof res === 'object' && 'data' in res && (res as any).data) ? (res as any).data : res;
+        if (data && typeof data.exists === 'boolean') {
+          return {
+            available: !!data.available,
+            exists: !!data.exists,
+            type: data.type as 'VENDOR' | 'USER' | undefined,
+            status: data.status,
+            isActive: data.isActive,
+            vendorName: data.vendorName,
+            message: data.message || (data.exists ? 'A vendor with this email is already registered.' : 'Email is available'),
+          };
+        }
+        return { available: true, exists: false, message: 'Email is available' };
+      } catch (err: any) {
+        if (
+          err?.code === 'VENDOR_ALREADY_EXISTS' ||
+          err?.code === 'VENDOR_APPLICATION_PENDING' ||
+          err?.code === 'USER_ALREADY_EXISTS' ||
+          err?.status === 409
+        ) {
+          return { available: false, exists: true, message: err?.message || 'A vendor with this email already exists.' };
+        }
+        // If server failed (e.g. 404 or connection issue), do not mark as available without confirming
+        return { available: false, exists: false, message: err?.message || '' };
+      }
+    }
+    return {
+      available: true,
+      exists: false,
+      message: 'Email is available for registration',
+    };
   },
 };
+

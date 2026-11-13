@@ -1,35 +1,39 @@
 import { USE_MOCK } from '../config/mock';
 
 function getApiBase(): string {
-  if (
-    typeof window !== 'undefined' &&
-    !window.location.hostname.includes('localhost') &&
-    !window.location.hostname.includes('127.0.0.1')
-  ) {
+  if (typeof window !== 'undefined') {
     const host = window.location.hostname.toLowerCase();
-    // 1. Testing frontend (srm-test.procnex.com) -> Testing backend
+
+    // Check if it's localhost or local network IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x, 127.0.0.1)
+    const isLocalOrLan =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.local') ||
+      /^192\.168\.\d+\.\d+$/.test(host) ||
+      /^10\.\d+\.\d+\.\d+$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host);
+
+    if (isLocalOrLan) {
+      const envUrl = import.meta.env.VITE_API_URL;
+      if (envUrl) {
+        let url = envUrl.trim().replace(/\/+$/, '');
+        return url.endsWith('/api') ? url : `${url}/api`;
+      }
+      return `${window.location.protocol}//${window.location.hostname}:3000/api`;
+    }
+
+    // Remote Procnex domains
     if (host.includes('test')) {
       return 'https://procnexapi-test.procnex.com/api';
     }
-    // 2. Main production frontend (srm.procnex.com) -> Main backend
-    return 'https://procnexapi.procnex.com/api';
+    if (host.includes('procnex.com')) {
+      return 'https://procnexapi.procnex.com/api';
+    }
   }
 
   let envUrl = import.meta.env.VITE_API_URL;
-  if (
-    !envUrl &&
-    typeof window !== 'undefined' &&
-    !window.location.hostname.includes('localhost') &&
-    !window.location.hostname.includes('127.0.0.1')
-  ) {
-    envUrl = `${window.location.origin}/api`;
-  }
-  let url = (envUrl || 'http://localhost:3000/api').trim();
-  url = url.replace(/\/+$/, '');
-  if (!url.endsWith('/api')) {
-    url = `${url}/api`;
-  }
-  return url;
+  let url = (envUrl || 'http://localhost:3000/api').trim().replace(/\/+$/, '');
+  return url.endsWith('/api') ? url : `${url}/api`;
 }
 
 export const API_BASE = getApiBase();

@@ -26,10 +26,11 @@ export interface PurchaseRequisition {
   requisitionType?: 'SINGLE' | 'MULTI';
   department?: string;
   departmentId?: string;
+  description?: string;
   requesterId?: string;
   requesterName?: string;
   requesterEmail?: string;
-  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  priority?: 'LOW' | 'MODERATE' | 'URGENT' | 'MEDIUM' | 'HIGH' | string;
   submittedToUserId?: string;
   submittedToName?: string;
   submittedToEmail?: string;
@@ -235,6 +236,7 @@ async function apiConvertToRFQ(payload: {
   closingDate?: string;
   currency?: string;
   department?: string;
+  description?: string;
 }): Promise<any> {
   return apiRequest<any>('/purchase-requisitions/convert-to-rfq', {
     method: 'POST',

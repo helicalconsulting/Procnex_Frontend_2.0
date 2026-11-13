@@ -17,6 +17,7 @@ import {
   File,
   Sun,
   Moon,
+  Loader2,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { motionTransition } from '../../lib/motion';
@@ -32,16 +33,7 @@ import { Card } from '../../components/ui/card';
 import { Input, Select, Textarea } from '../../components/ui/input';
 import { Button, buttonVariants } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
-
-const DEFAULT_CATEGORIES: Array<{ id: string; name: string }> = [
-  { id: 'cat_materials', name: 'Raw Materials & Construction' },
-  { id: 'cat_it', name: 'IT Hardware, Software & Telecommunications' },
-  { id: 'cat_maint', name: 'Facilities Management & Maintenance' },
-  { id: 'cat_logistics', name: 'Logistics, Freight & Transportation' },
-  { id: 'cat_consulting', name: 'Professional Services & Consulting' },
-  { id: 'cat_office', name: 'Office Supplies & Equipment' },
-  { id: 'cat_hospitality', name: 'Hospitality, Catering & Events' },
-];
+import { API_BASE } from '../../api/client';
 
 interface UploadedFileItem {
   type: 'trade_license' | 'vat_certificate' | 'emirates_id';
@@ -112,32 +104,136 @@ export default function VendorSelfRegistrationPage() {
   const emiratesIdRef = useRef<HTMLInputElement>(null);
 
   // Dropdown data
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   // Validation & Submission State
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [registeredRecord, setRegisteredRecord] = useState<SelfRegisteredVendorRecord | null>(null);
 
-  // Load Categories on mount
+  // Email Availability Check State
+  const [emailCheckLoading, setEmailCheckLoading] = useState(false);
+  const [emailExistsWarning, setEmailExistsWarning] = useState<string | null>(null);
+  const [emailAvailableSuccess, setEmailAvailableSuccess] = useState(false);
+
+  // Load Categories on mount (dynamically fetched from Company Settings)
   useEffect(() => {
     let mounted = true;
-    companySettingsService
-      .listCategories()
-      .then((cats) => {
+    setCategoriesLoading(true);
+
+    const loadCategories = async () => {
+      try {
+        const cats = await companySettingsService.listCategories(undefined, activeCompany);
         if (!mounted) return;
-        const activeCats = cats.filter((c: Category) => c.isActive !== false);
+        const activeCats = (cats || []).filter((c: Category) => c.isActive !== false);
         if (activeCats.length > 0) {
           setCategories(activeCats.map((c: Category) => ({ id: c.id, name: c.name })));
+          return;
         }
-      })
-      .catch(() => {
-        // Fallback to DEFAULT_CATEGORIES
-      });
+      } catch (err) {
+        console.warn('companySettingsService.listCategories failed, trying direct public endpoint:', err);
+      }
+
+      // Direct fallback to public API endpoint without any middleware hurdles
+      try {
+        const res = await fetch(`${API_BASE}/public/categories?companyCode=${encodeURIComponent(activeCompany)}`, {
+          cache: 'no-store',
+          headers: { 'X-Company-Code': activeCompany },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const apiCats = json.data?.categories || [];
+          const active = apiCats.filter((c: any) => c.isActive !== false);
+          if (mounted && active.length > 0) {
+            setCategories(active.map((c: any) => ({ id: c.id, name: c.name })));
+            return;
+          }
+        }
+      } catch (directErr) {
+        console.error('Direct categories fetch failed:', directErr);
+      }
+    };
+
+    loadCategories().finally(() => {
+      if (mounted) {
+        setCategoriesLoading(false);
+      }
+    });
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [activeCompany]);
+
+  // Email check helper
+  const checkEmailAvailability = async (emailToCheck: string) => {
+    const trimmed = emailToCheck.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmed || !emailRegex.test(trimmed)) {
+      setEmailCheckLoading(false);
+      setEmailExistsWarning(null);
+      setEmailAvailableSuccess(false);
+      return;
+    }
+
+    setEmailCheckLoading(true);
+    try {
+      const res = await procurementService.checkVendorEmail(trimmed, companyCode || 'HFL');
+      if (res.exists || !res.available) {
+        const msg = res.message || 'A vendor with this email is already registered. Please sign in or use another email.';
+        setEmailExistsWarning(msg);
+        setEmailAvailableSuccess(false);
+        setErrors((prev) => ({ ...prev, contactEmail: msg, form: msg }));
+      } else {
+        setEmailExistsWarning(null);
+        setEmailAvailableSuccess(true);
+        setErrors((prev) => {
+          const next = { ...prev };
+          if (next.contactEmail && next.contactEmail.toLowerCase().includes('already')) {
+            delete next.contactEmail;
+          }
+          if (next.form && next.form.toLowerCase().includes('already')) {
+            delete next.form;
+          }
+          return next;
+        });
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'A vendor with this email already exists.';
+      setEmailExistsWarning(msg);
+      setEmailAvailableSuccess(false);
+      setErrors((prev) => ({ ...prev, contactEmail: msg, form: msg }));
+    } finally {
+      setEmailCheckLoading(false);
+    }
+  };
+
+  // Real-time debounced check as user types
+  useEffect(() => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const trimmed = contactEmail.trim().toLowerCase();
+
+    if (!trimmed) {
+      setEmailCheckLoading(false);
+      setEmailExistsWarning(null);
+      setEmailAvailableSuccess(false);
+      return;
+    }
+
+    if (!emailRegex.test(trimmed)) {
+      setEmailCheckLoading(false);
+      setEmailExistsWarning(null);
+      setEmailAvailableSuccess(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      checkEmailAvailability(trimmed);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [contactEmail, companyCode]);
 
   const handleFileChange = (
     docType: 'trade_license' | 'vat_certificate' | 'emirates_id',
@@ -151,33 +247,47 @@ export default function VendorSelfRegistrationPage() {
       return;
     }
 
+    const label =
+      docType === 'trade_license'
+        ? 'Trade License'
+        : docType === 'vat_certificate'
+        ? 'VAT Certificate'
+        : 'Emirates ID';
+
+    // Synchronously set initial doc item so fileName is instantly available for validation
+    const docItem: UploadedFileItem = {
+      type: docType,
+      label,
+      file,
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type || 'application/octet-stream',
+      dataUrl: '',
+    };
+
+    if (docType === 'trade_license') setTradeLicense(docItem);
+    else if (docType === 'vat_certificate') setVatCertificate(docItem);
+    else if (docType === 'emirates_id') setEmiratesId(docItem);
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[docType];
+      if (next.form && !next.trade_license && !next.vat_certificate && !next.emirates_id) {
+        delete next.form;
+      }
+      return next;
+    });
+
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      const docItem: UploadedFileItem = {
-        type: docType,
-        label:
-          docType === 'trade_license'
-            ? 'Trade License'
-            : docType === 'vat_certificate'
-            ? 'VAT Certificate'
-            : 'Emirates ID',
-        file,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type || 'application/octet-stream',
+      const fullItem: UploadedFileItem = {
+        ...docItem,
         dataUrl,
       };
-
-      if (docType === 'trade_license') setTradeLicense(docItem);
-      else if (docType === 'vat_certificate') setVatCertificate(docItem);
-      else if (docType === 'emirates_id') setEmiratesId(docItem);
-
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[docType];
-        return next;
-      });
+      if (docType === 'trade_license') setTradeLicense(fullItem);
+      else if (docType === 'vat_certificate') setVatCertificate(fullItem);
+      else if (docType === 'emirates_id') setEmiratesId(fullItem);
     };
     reader.readAsDataURL(file);
   };
@@ -197,73 +307,172 @@ export default function VendorSelfRegistrationPage() {
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
+
+    // 1. Company Name (Mandatory)
     if (!companyName.trim()) {
       errs.companyName = 'Company name is required';
     }
+
+    // 2. Vendor Email (Mandatory)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!contactEmail.trim()) {
       errs.contactEmail = 'Vendor email is required';
     } else if (!emailRegex.test(contactEmail.trim())) {
       errs.contactEmail = 'Please enter a valid email address';
+    } else if (emailExistsWarning) {
+      errs.contactEmail = emailExistsWarning;
     }
-    if (contactPhone.trim()) {
+
+    // 3. Contact Person (Mandatory)
+    if (!contactPerson.trim()) {
+      errs.contactPerson = 'Contact person is required';
+    }
+
+    // 4. Phone Number (Mandatory)
+    if (!contactPhone.trim()) {
+      errs.contactPhone = 'Phone number is required';
+    } else {
       const cleanDigits = contactPhone.replace(/\D/g, '');
       if (cleanDigits.length < 7 || cleanDigits.length > 15) {
         errs.contactPhone = 'Please enter a valid phone number (7 to 15 digits)';
       }
     }
+
+    // 5. Vendor Category (Mandatory)
+    if (!categoryId && !category.trim()) {
+      errs.category = 'Vendor category is required';
+    }
+
+    // 6. Supplier Type (Mandatory)
+    if (!supplierType.trim()) {
+      errs.supplierType = 'Supplier type is required';
+    }
+
+    // 7. Notes / Business Address (Mandatory)
+    if (!notes.trim()) {
+      errs.notes = 'Business address is required';
+    }
+
+    // 8. Documents (Mandatory) - Trade License, VAT Certificate, Emirates ID
+    if (!tradeLicense.fileName || !tradeLicense.fileName.trim()) {
+      errs.trade_license = 'Trade License document is mandatory. Please upload a file.';
+    }
+    if (!vatCertificate.fileName || !vatCertificate.fileName.trim()) {
+      errs.vat_certificate = 'VAT Certificate document is mandatory. Please upload a file.';
+    }
+    if (!emiratesId.fileName || !emiratesId.fileName.trim()) {
+      errs.emirates_id = 'Emirates ID document is mandatory. Please upload a file.';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
 
+    const cleanEmail = contactEmail.trim().toLowerCase();
+
+    // 1. Guard against pre-flagged duplicate email
+    if (emailExistsWarning) {
+      setErrors((prev) => ({
+        ...prev,
+        contactEmail: emailExistsWarning,
+        form: emailExistsWarning,
+      }));
+      return;
+    }
+
+    // 2. Validate mandatory form inputs and document uploads
+    const isValid = validate();
+    if (!isValid) {
+      setErrors((prev) => ({
+        ...prev,
+        form: 'Please complete all required fields and upload all 3 mandatory documents (Trade License, VAT Certificate, Emirates ID).',
+      }));
+      const firstError = document.querySelector('.border-destructive');
+      if (firstError) {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
+    // 3. Strict Document Existence Check
+    if (!tradeLicense.fileName || !vatCertificate.fileName || !emiratesId.fileName) {
+      setErrors((prev) => ({
+        ...prev,
+        trade_license: !tradeLicense.fileName ? 'Trade License document is mandatory' : prev.trade_license,
+        vat_certificate: !vatCertificate.fileName ? 'VAT Certificate document is mandatory' : prev.vat_certificate,
+        emirates_id: !emiratesId.fileName ? 'Emirates ID document is mandatory' : prev.emirates_id,
+        form: 'Submission blocked: All 3 documents (Trade License, VAT Certificate, Emirates ID) are required.',
+      }));
+      return;
+    }
+
+    // 4. Pre-flight backend email verification directly before submission
     setSubmitting(true);
     try {
-      const documents: UploadedRegistrationDoc[] = [];
-      const now = new Date().toISOString();
+      const emailCheck = await procurementService.checkVendorEmail(cleanEmail, companyCode || 'HFL');
+      if (emailCheck.exists || !emailCheck.available) {
+        const msg = emailCheck.message || 'A vendor with this email is already registered. Please sign in or use another email.';
+        setEmailExistsWarning(msg);
+        setEmailAvailableSuccess(false);
+        setErrors((prev) => ({
+          ...prev,
+          contactEmail: msg,
+          form: msg,
+        }));
+        setSubmitting(false);
+        return;
+      }
+    } catch (checkErr: any) {
+      const msg = checkErr?.message || 'Email verification failed. Unable to verify duplicate status.';
+      setEmailExistsWarning(msg);
+      setEmailAvailableSuccess(false);
+      setErrors((prev) => ({
+        ...prev,
+        contactEmail: msg,
+        form: msg,
+      }));
+      setSubmitting(false);
+      return;
+    }
 
-      if (tradeLicense.fileName) {
-        documents.push({
+    // 5. Submit Registration
+    try {
+      const documents: UploadedRegistrationDoc[] = [
+        {
           type: 'trade_license',
           label: 'Trade License',
           fileName: tradeLicense.fileName,
           fileSize: tradeLicense.fileSize,
           mimeType: tradeLicense.mimeType,
           dataUrl: tradeLicense.dataUrl,
-          uploadedAt: now,
-        });
-      }
-
-      if (vatCertificate.fileName) {
-        documents.push({
+          uploadedAt: new Date().toISOString(),
+        },
+        {
           type: 'vat_certificate',
           label: 'VAT Certificate',
           fileName: vatCertificate.fileName,
           fileSize: vatCertificate.fileSize,
           mimeType: vatCertificate.mimeType,
           dataUrl: vatCertificate.dataUrl,
-          uploadedAt: now,
-        });
-      }
-
-      if (emiratesId.fileName) {
-        documents.push({
+          uploadedAt: new Date().toISOString(),
+        },
+        {
           type: 'emirates_id',
           label: 'Emirates ID',
           fileName: emiratesId.fileName,
           fileSize: emiratesId.fileSize,
           mimeType: emiratesId.mimeType,
           dataUrl: emiratesId.dataUrl,
-          uploadedAt: now,
-        });
-      }
+          uploadedAt: new Date().toISOString(),
+        },
+      ];
 
       const record = await procurementService.registerVendor({
         companyName,
-        contactEmail,
+        contactEmail: cleanEmail,
         contactPerson,
         countryCode: contactCountryCode,
         phone: contactPhone,
@@ -275,8 +484,28 @@ export default function VendorSelfRegistrationPage() {
         documents,
       });
       setRegisteredRecord(record);
-    } catch (err) {
-      setErrors({ form: 'An error occurred while submitting. Please try again.' });
+    } catch (err: any) {
+      const msg = err?.message || err?.error || 'An error occurred while submitting. Please try again.';
+      const isAlreadyRegistered =
+        msg.toLowerCase().includes('already registered') ||
+        msg.toLowerCase().includes('already exists') ||
+        msg.toLowerCase().includes('already submitted') ||
+        msg.toLowerCase().includes('pending review') ||
+        err?.code === 'VENDOR_ALREADY_EXISTS' ||
+        err?.code === 'VENDOR_APPLICATION_PENDING' ||
+        err?.code === 'USER_ALREADY_EXISTS' ||
+        err?.status === 409;
+
+      if (isAlreadyRegistered) {
+        setEmailExistsWarning(msg);
+        setEmailAvailableSuccess(false);
+        setErrors({
+          form: msg,
+          contactEmail: msg,
+        });
+      } else {
+        setErrors({ form: msg });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -295,6 +524,9 @@ export default function VendorSelfRegistrationPage() {
     handleFileRemove('vat_certificate');
     handleFileRemove('emirates_id');
     setErrors({});
+    setEmailCheckLoading(false);
+    setEmailExistsWarning(null);
+    setEmailAvailableSuccess(false);
     setRegisteredRecord(null);
   };
 
@@ -399,7 +631,7 @@ export default function VendorSelfRegistrationPage() {
                 <div className="text-xs sm:text-sm text-foreground/90 leading-relaxed space-y-3">
                   <p className="font-medium">Dear {registeredRecord.contactPerson || registeredRecord.name},</p>
                   <p className="p-3.5 rounded-lg bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-200 font-medium">
-                    Thank you for your interest in becoming a vendor with &apos;Al Zorah&apos; Group. You will be
+                    Thank you for your interest in becoming a vendor with {companyDisplayName}. You will be
                     notified after evaluation is completed by our team via email with login details.
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -449,11 +681,22 @@ export default function VendorSelfRegistrationPage() {
           </Card>
         ) : (
           /* Self-Registration Form */
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} noValidate className="space-y-6">
             {errors.form && (
-              <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
-                <AlertCircle className="size-4 shrink-0" />
-                <span>{errors.form}</span>
+              <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="size-5 shrink-0" />
+                  <span className="font-medium">{errors.form}</span>
+                </div>
+                {errors.contactEmail && (
+                  <Link
+                    to="/vendor/login"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-semibold shrink-0 transition-colors w-fit"
+                  >
+                    Go to Sign In
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                )}
               </div>
             )}
 
@@ -498,6 +741,16 @@ export default function VendorSelfRegistrationPage() {
                     <span>
                       Vendor Email <span className="text-rose-500">*</span>
                     </span>
+                    {emailCheckLoading && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground animate-pulse">
+                        <Loader2 className="size-3 animate-spin" /> Checking availability…
+                      </span>
+                    )}
+                    {!emailCheckLoading && emailAvailableSuccess && !errors.contactEmail && !emailExistsWarning && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3" /> Email available
+                      </span>
+                    )}
                   </label>
                   <div className="relative">
                     <Mail className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -506,23 +759,65 @@ export default function VendorSelfRegistrationPage() {
                       type="email"
                       value={contactEmail}
                       onChange={(e) => {
-                        setContactEmail(e.target.value);
+                        const val = e.target.value;
+                        setContactEmail(val);
+                        if (emailExistsWarning) setEmailExistsWarning(null);
+                        if (emailAvailableSuccess) setEmailAvailableSuccess(false);
                         if (errors.contactEmail) setErrors((prev) => ({ ...prev, contactEmail: '' }));
                       }}
+                      onBlur={() => checkEmailAvailability(contactEmail)}
                       placeholder="vendor@company.com"
                       required
-                      className={`pl-9 ${errors.contactEmail ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                      className={`pl-9 pr-9 ${
+                        emailExistsWarning || errors.contactEmail
+                          ? 'border-destructive focus-visible:ring-destructive'
+                          : emailAvailableSuccess
+                          ? 'border-emerald-500/50 focus-visible:ring-emerald-500'
+                          : ''
+                      }`}
                     />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      {emailCheckLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+                      {!emailCheckLoading && emailExistsWarning && <AlertCircle className="size-4 text-rose-500" />}
+                      {!emailCheckLoading && emailAvailableSuccess && !errors.contactEmail && !emailExistsWarning && (
+                        <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      )}
+                    </div>
                   </div>
-                  {errors.contactEmail && (
+
+                  {/* Immediate inline warning when email already exists */}
+                  {emailExistsWarning ? (
+                    <div className="rounded-lg bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-600 dark:text-rose-400 flex items-start gap-2.5 animate-in fade-in duration-200">
+                      <AlertCircle className="size-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                      <div className="flex-1 space-y-1.5">
+                        <p className="font-semibold text-rose-700 dark:text-rose-300">
+                          {emailExistsWarning}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          An account or vendor application with this email address already exists. Duplicate submissions are not permitted.
+                        </p>
+                        <div className="pt-0.5">
+                          <Link
+                            to="/vendor/login"
+                            className="inline-flex items-center gap-1 font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:underline"
+                          >
+                            Go to Vendor Portal Sign In
+                            <ArrowRight className="size-3" />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  ) : errors.contactEmail ? (
                     <p className="text-xs text-destructive">{errors.contactEmail}</p>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Contact Person */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground" htmlFor="reg-contact">
-                    Contact Person
+                  <label className="text-xs font-semibold text-foreground flex items-center justify-between" htmlFor="reg-contact">
+                    <span>
+                      Contact Person <span className="text-rose-500">*</span>
+                    </span>
                   </label>
                   <div className="relative">
                     <Users className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -530,17 +825,26 @@ export default function VendorSelfRegistrationPage() {
                       id="reg-contact"
                       type="text"
                       value={contactPerson}
-                      onChange={(e) => setContactPerson(e.target.value)}
+                      onChange={(e) => {
+                        setContactPerson(e.target.value);
+                        if (errors.contactPerson) setErrors((prev) => ({ ...prev, contactPerson: '' }));
+                      }}
                       placeholder="Full name"
-                      className="pl-9"
+                      required
+                      className={`pl-9 ${errors.contactPerson ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                     />
                   </div>
+                  {errors.contactPerson && (
+                    <p className="text-xs text-destructive">{errors.contactPerson}</p>
+                  )}
                 </div>
 
                 {/* Phone Number with Country Code */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground" htmlFor="reg-phone">
-                    Phone Number
+                  <label className="text-xs font-semibold text-foreground flex items-center justify-between" htmlFor="reg-phone">
+                    <span>
+                      Phone Number <span className="text-rose-500">*</span>
+                    </span>
                   </label>
                   <PhoneInput
                     id="reg-phone"
@@ -572,8 +876,10 @@ export default function VendorSelfRegistrationPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {/* Vendor Category */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground" htmlFor="reg-category">
-                      Vendor Category
+                    <label className="text-xs font-semibold text-foreground flex items-center justify-between" htmlFor="reg-category">
+                      <span>
+                        Vendor Category <span className="text-rose-500">*</span>
+                      </span>
                     </label>
                     <div className="relative">
                       <Tag className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -585,10 +891,11 @@ export default function VendorSelfRegistrationPage() {
                           setCategoryId(val);
                           const found = categories.find((c) => c.id === val);
                           setCategory(found ? found.name : '');
+                          if (errors.category) setErrors((prev) => ({ ...prev, category: '' }));
                         }}
-                        className="pl-9 cursor-pointer"
+                        className={`pl-9 cursor-pointer ${errors.category ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                       >
-                        <option value="">Select Vendor Category (optional)</option>
+                        <option value="">{categoriesLoading ? 'Loading categories...' : 'Select Vendor Category *'}</option>
                         {categories.map((cat) => (
                           <option key={cat.id} value={cat.id}>
                             {cat.name}
@@ -596,42 +903,63 @@ export default function VendorSelfRegistrationPage() {
                         ))}
                       </Select>
                     </div>
+                    {errors.category && (
+                      <p className="text-xs text-destructive">{errors.category}</p>
+                    )}
                   </div>
 
                   {/* Supplier Type */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground" htmlFor="reg-supplier-type">
-                      Supplier Type
+                    <label className="text-xs font-semibold text-foreground flex items-center justify-between" htmlFor="reg-supplier-type">
+                      <span>
+                        Supplier Type <span className="text-rose-500">*</span>
+                      </span>
                     </label>
                     <div className="relative">
                       <Globe className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <Select
                         id="reg-supplier-type"
                         value={supplierType}
-                        onChange={(e) => setSupplierType(e.target.value)}
-                        className="pl-9 cursor-pointer"
+                        onChange={(e) => {
+                          setSupplierType(e.target.value);
+                          if (errors.supplierType) setErrors((prev) => ({ ...prev, supplierType: '' }));
+                        }}
+                        className={`pl-9 cursor-pointer ${errors.supplierType ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                       >
-                        <option value="">Select Supplier Type (optional)</option>
+                        <option value="">Select Supplier Type *</option>
                         <option value="Domestic Supplier">Domestic Supplier</option>
                         <option value="Overseas Supplier">Overseas Supplier</option>
                         <option value="International Supplier">International Supplier</option>
                       </Select>
                     </div>
+                    {errors.supplierType && (
+                      <p className="text-xs text-destructive">{errors.supplierType}</p>
+                    )}
                   </div>
                 </div>
 
                 {/* Notes / Address */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground" htmlFor="reg-notes">
-                    Notes / Business Address
+                  <label className="text-xs font-semibold text-foreground flex items-center justify-between" htmlFor="reg-notes">
+                    <span>
+                      Notes / Business Address <span className="text-rose-500">*</span>
+                    </span>
                   </label>
                   <Textarea
                     id="reg-notes"
                     value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      if (errors.notes) setErrors((prev) => ({ ...prev, notes: '' }));
+                    }}
                     rows={3}
                     placeholder="Provide your registered office address or summary of products/services..."
+                    required
+                    className={errors.notes ? 'border-destructive focus-visible:ring-destructive' : ''}
                   />
+                  {errors.notes && (
+                    <p className="text-xs text-destructive">{errors.notes}</p>
+                  )}
                 </div>
               </div>
             </Card>
@@ -648,10 +976,16 @@ export default function VendorSelfRegistrationPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* 1. Trade License */}
-                <div className="p-4 rounded-xl border border-dashed border-border/80 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col justify-between space-y-3">
+                <div className={`p-4 rounded-xl border border-dashed flex flex-col justify-between space-y-3 transition-colors ${
+                  errors.trade_license
+                    ? 'border-destructive/80 bg-destructive/5'
+                    : 'border-border/80 bg-slate-50/50 dark:bg-slate-900/40'
+                }`}>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-foreground">Trade License</span>
+                      <span className="text-xs font-bold text-foreground">
+                        Trade License <span className="text-rose-500">*</span>
+                      </span>
                       {tradeLicense.fileName && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="size-3" /> Ready
@@ -701,15 +1035,24 @@ export default function VendorSelfRegistrationPage() {
                     </Button>
                   )}
                   {errors.trade_license && (
-                    <p className="text-[11px] text-destructive">{errors.trade_license}</p>
+                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      {errors.trade_license}
+                    </p>
                   )}
                 </div>
 
                 {/* 2. VAT Certificate */}
-                <div className="p-4 rounded-xl border border-dashed border-border/80 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col justify-between space-y-3">
+                <div className={`p-4 rounded-xl border border-dashed flex flex-col justify-between space-y-3 transition-colors ${
+                  errors.vat_certificate
+                    ? 'border-destructive/80 bg-destructive/5'
+                    : 'border-border/80 bg-slate-50/50 dark:bg-slate-900/40'
+                }`}>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-foreground">VAT Certificate</span>
+                      <span className="text-xs font-bold text-foreground">
+                        VAT Certificate <span className="text-rose-500">*</span>
+                      </span>
                       {vatCertificate.fileName && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="size-3" /> Ready
@@ -759,15 +1102,24 @@ export default function VendorSelfRegistrationPage() {
                     </Button>
                   )}
                   {errors.vat_certificate && (
-                    <p className="text-[11px] text-destructive">{errors.vat_certificate}</p>
+                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      {errors.vat_certificate}
+                    </p>
                   )}
                 </div>
 
                 {/* 3. Emirates ID */}
-                <div className="p-4 rounded-xl border border-dashed border-border/80 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col justify-between space-y-3">
+                <div className={`p-4 rounded-xl border border-dashed flex flex-col justify-between space-y-3 transition-colors ${
+                  errors.emirates_id
+                    ? 'border-destructive/80 bg-destructive/5'
+                    : 'border-border/80 bg-slate-50/50 dark:bg-slate-900/40'
+                }`}>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-foreground">Emirates ID</span>
+                      <span className="text-xs font-bold text-foreground">
+                        Emirates ID <span className="text-rose-500">*</span>
+                      </span>
                       {emiratesId.fileName && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="size-3" /> Ready
@@ -817,7 +1169,10 @@ export default function VendorSelfRegistrationPage() {
                     </Button>
                   )}
                   {errors.emirates_id && (
-                    <p className="text-[11px] text-destructive">{errors.emirates_id}</p>
+                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      {errors.emirates_id}
+                    </p>
                   )}
                 </div>
               </div>
@@ -831,8 +1186,15 @@ export default function VendorSelfRegistrationPage() {
               <Button
                 type="submit"
                 size="lg"
-                disabled={submitting}
-                className="w-full sm:w-auto px-8 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md"
+                disabled={submitting || emailCheckLoading || !!emailExistsWarning}
+                title={
+                  emailExistsWarning
+                    ? 'Vendor email already exists. Please sign in or use another email.'
+                    : emailCheckLoading
+                    ? 'Checking email availability…'
+                    : undefined
+                }
+                className="w-full sm:w-auto px-8 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <>

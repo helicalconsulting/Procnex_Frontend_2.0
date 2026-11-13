@@ -88,6 +88,13 @@ export default function AppLayout() {
       sseClient.on('quotation_received', (d) => dispatchTargetedEvent('quotation', d)),
       sseClient.on('quotation_status_changed', (d) => dispatchTargetedEvent('quotation', d)),
       sseClient.on('vendor_approved', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('vendor_registered', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('vendor_rejected', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('vendor_onboarding_accepted', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('vendor_onboarding_documents_submitted', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('vendor_document_verified', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('vendor_document_rejected', (d) => dispatchTargetedEvent('vendor', d)),
+      sseClient.on('vendor_updated', (d) => dispatchTargetedEvent('vendor', d)),
       sseClient.on('grn_created', (d) => dispatchTargetedEvent('grn', d)),
     ];
 

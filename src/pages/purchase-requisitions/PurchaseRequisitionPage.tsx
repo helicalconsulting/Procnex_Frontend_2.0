@@ -20,6 +20,7 @@ import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentP
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
 import '../../components/vendor/vendor-rfq-workspace.css';
 import { useBranding } from '../../context/BrandingContext';
+import PriorityBadge from '../../components/shared/PriorityBadge';
 import PurchaseOrderDocument from '../../components/purchase-orders/PurchaseOrderDocument';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -398,7 +399,7 @@ export default function PurchaseRequisitionPage() {
         // Try fetching existing PR first (only for non-contract PR view/edit)
         if (!contractId) {
           const existing = await purchaseRequisitionService.getByRfqId(rfqId);
-          if (existing) {
+          if (existing && existing.poNumber) {
             const items = sanitizePrItems(existing.items);
             const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
             if ((existing as any).paymentPlanId) setSelectedPaymentPlanId((existing as any).paymentPlanId);
@@ -714,31 +715,107 @@ export default function PurchaseRequisitionPage() {
     fetchData();
   }, [rfqId, contractId]);
 
-  // SSE real-time status updates — when PO is approved/rejected, refresh PR status
+  // SSE real-time updates — live sync when PR or linked PO is updated, approved, rejected, or deleted
   useEffect(() => {
     if (!rfqId) return;
 
-    const unsubStatus = sseClient.on('po_status_changed', () => {
-      // Re-fetch the PR to get latest status from backend
-      purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
-        if (existing) setPr({ ...existing, vendorFulfillmentAllowed: (existing as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE', items: sanitizePrItems(existing.items) });
-      }).catch(() => {});
-    });
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        purchaseRequisitionService.getByRfqId(rfqId).then((existing) => {
+          if (existing && existing.poNumber) {
+            setPr((prev) => ({
+              ...existing,
+              vendorFulfillmentAllowed: (existing as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE',
+              items: sanitizePrItems(existing.items),
+            }));
+          }
+        }).catch(() => {});
+      }, 200);
+    };
 
-    const unsubPO = sseClient.on('po_created', (payload: unknown) => {
-      const event = payload as { poNumber?: string; rfqId?: string };
-      // Only refresh if the PO's rfqId matches our PR's rfqId
-      if (event?.rfqId && event.rfqId !== rfqId) return;
-      purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
-        if (existing) setPr({ ...existing, vendorFulfillmentAllowed: (existing as any)?.vendorFulfillmentAllowed || 'DISPATCH_AND_INVOICE', items: sanitizePrItems(existing.items) });
-      }).catch(() => {});
-    });
+    const isMatchingEvent = (payload: unknown): boolean => {
+      if (!payload || typeof payload !== 'object') return true;
+      const data = payload as Record<string, any>;
+      const currId = pr?.id;
+      const currRfq = rfqId || pr?.rfqId;
+      const currPoNum = pr?.poNumber;
+      const currPrNum = pr?.prNumber;
+
+      if (data.prId && (data.prId === currId || data.prId === currRfq)) return true;
+      if (Array.isArray(data.prIds) && (data.prIds.includes(currId) || data.prIds.includes(currRfq))) return true;
+      if (Array.isArray(data.requisitionIds) && (data.requisitionIds.includes(currId) || data.requisitionIds.includes(currRfq))) return true;
+      if (data.poNumber && (data.poNumber === currPoNum || data.poNumber === currRfq)) return true;
+      if (Array.isArray(data.poNumbers) && (data.poNumbers.includes(currPoNum) || data.poNumbers.includes(currRfq))) return true;
+      if (data.prNumber && (data.prNumber === currPrNum || data.prNumber === currPoNum || data.prNumber === currRfq)) return true;
+      if (data.rfqId && (data.rfqId === currRfq || data.rfqId === currId)) return true;
+      if (Array.isArray(data.rfqIds) && (data.rfqIds.includes(currRfq) || data.rfqIds.includes(currId))) return true;
+      if (data.poId && (data.poId === currId || data.poId === (pr as any)?.convertedToPoId)) return true;
+      if (Array.isArray(data.poIds) && (data.poIds.includes(currId) || data.poIds.includes((pr as any)?.convertedToPoId))) return true;
+      if (data.referenceId && (data.referenceId === currId || data.referenceId === currPoNum || data.referenceId === currRfq)) return true;
+
+      const hasSpecificId = Boolean(data.prId || data.prIds || data.poNumber || data.poNumbers || data.prNumber || data.rfqId || data.rfqIds || data.poId || data.poIds || data.referenceId || data.requisitionIds);
+      return !hasSpecificId;
+    };
+
+    const handleUpdate = (payload: unknown) => {
+      if (!isMatchingEvent(payload)) return;
+      debouncedRefresh();
+    };
+
+    const handleDelete = (payload: unknown) => {
+      if (!isMatchingEvent(payload)) return;
+      setToast({
+        message: 'This purchase requisition has been deleted.',
+        type: 'error',
+      });
+      setTimeout(() => {
+        navigate('/procurement/purchase-requisitions');
+      }, 1500);
+    };
+
+    const unsubPrUpdated = sseClient.on('pr_updated', handleUpdate);
+    const unsubPrStatus = sseClient.on('pr_status_changed', handleUpdate);
+    const unsubPrDeleted = sseClient.on('pr_deleted', handleDelete);
+    const unsubPoDeleted = sseClient.on('po_deleted', handleDelete);
+    const unsubPoStatus = sseClient.on('po_status_changed', handleUpdate);
+    const unsubPoCreated = sseClient.on('po_created', handleUpdate);
+    const unsubPoUpdated = sseClient.on('po_updated', handleUpdate);
+    const unsubApprovalUpdated = sseClient.on('approval_updated', handleUpdate);
+    const unsubApprovalChain = sseClient.on('approval_chain_complete', handleUpdate);
+    const unsubApprovalLevel = sseClient.on('approval_level_complete', handleUpdate);
+    const unsubApprovalInit = sseClient.on('approval_initiated', handleUpdate);
+
+    window.addEventListener('heliflow:pr-updated', debouncedRefresh);
+    window.addEventListener('heliflow:approval-updated', debouncedRefresh);
+    window.addEventListener('heliflow:po-updated', debouncedRefresh);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = () => debouncedRefresh();
+    } catch {}
 
     return () => {
-      unsubStatus();
-      unsubPO();
+      if (refreshTimer) clearTimeout(refreshTimer);
+      unsubPrUpdated();
+      unsubPrStatus();
+      unsubPrDeleted();
+      unsubPoDeleted();
+      unsubPoStatus();
+      unsubPoCreated();
+      unsubPoUpdated();
+      unsubApprovalUpdated();
+      unsubApprovalChain();
+      unsubApprovalLevel();
+      unsubApprovalInit();
+      window.removeEventListener('heliflow:pr-updated', debouncedRefresh);
+      window.removeEventListener('heliflow:approval-updated', debouncedRefresh);
+      window.removeEventListener('heliflow:po-updated', debouncedRefresh);
+      if (bc) bc.close();
     };
-  }, [rfqId]);
+  }, [rfqId, pr?.id, pr?.poNumber, pr?.prNumber, pr?.rfqId, navigate]);
 
   // Recalculate totals whenever items change
   const recalc = useCallback(
@@ -1588,6 +1665,7 @@ export default function PurchaseRequisitionPage() {
           <span className="pr-toolbar__title-text">PO Creation</span>
           {pr.poNumber && <span className="pr-toolbar__po-num">#{pr.poNumber}</span>}
           <span className={`pr-badge pr-badge--${pr.status}`}>{getStatusLabel(pr.status)}</span>
+          {pr.priority && <PriorityBadge priority={pr.priority} size="md" />}
           {isReadOnly && (
             <span className="pr-badge pr-badge--view-only">
               <Eye size={13} /> VIEW ONLY

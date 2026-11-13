@@ -25,13 +25,14 @@ import { purchaseRequisitionService } from '../../services/purchaseRequisitionSe
 import { adminService, type UserWithRoles } from '../../services/adminService';
 import { companySettingsService } from '../../services/companySettingsService';
 import { useAuth } from '../../context/AuthContext';
+import PriorityBadge from '../../components/shared/PriorityBadge';
 
 interface RequisitionItemRow {
   itemName: string;
   itemClass?: string;
   preferredSupplier?: string;
   description: string;
-  quantity: number;
+  quantity: number | string;
   unit: string;
   estimatedPrice?: number;
 }
@@ -67,7 +68,7 @@ export default function CreatePurchaseRequisitionModal({
   const [department, setDepartment] = useState(user?.department || 'Information Technology');
   const [customDepartment, setCustomDepartment] = useState('');
   const [requesterName, setRequesterName] = useState(user?.fullName || user?.username || 'Requester');
-  const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'>('MEDIUM');
+  const [priority, setPriority] = useState<'LOW' | 'MODERATE' | 'URGENT'>('MODERATE');
   const [deliveryDate, setDeliveryDate] = useState(
     new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
   );
@@ -236,8 +237,10 @@ export default function CreatePurchaseRequisitionModal({
         submittedToName,
         submittedToEmail,
         justification,
+        description: justification,
         items: validItems.map((it) => ({
           ...it,
+          quantity: Math.max(1, Number(it.quantity) || 1),
           requestedBy: requesterName,
           department: effectiveDepartment,
         })),
@@ -372,17 +375,19 @@ export default function CreatePurchaseRequisitionModal({
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-1.5">
-                <Clock className="size-3.5 text-muted-foreground" /> Urgency / Priority
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Clock className="size-3.5 text-muted-foreground" /> Urgency / Priority
+                </label>
+                <PriorityBadge priority={priority} size="sm" />
+              </div>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden"
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden font-medium cursor-pointer"
               >
                 <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium (Standard)</option>
-                <option value="HIGH">High</option>
+                <option value="MODERATE">Moderate</option>
                 <option value="URGENT">Urgent</option>
               </select>
             </div>
@@ -440,7 +445,13 @@ export default function CreatePurchaseRequisitionModal({
                         placeholder="Qty"
                         className="text-xs text-center"
                         value={item.quantity}
-                        onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value) || 1)}
+                        onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                        onBlur={() => {
+                          if (item.quantity === '' || Number(item.quantity) < 1) {
+                            handleItemChange(idx, 'quantity', 1);
+                          }
+                        }}
+                        onFocus={(e) => e.target.select()}
                         required
                       />
                     </div>

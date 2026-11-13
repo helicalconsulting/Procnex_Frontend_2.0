@@ -93,7 +93,10 @@ export default function TaskInboxPopover({
 
   const hasAssignedByMeUpdates = useMemo(() => {
     return tasks.some(
-      (t) => t.creatorHasUnseenUpdate && t.assignedById === currentUserId
+      (t) =>
+        t.creatorHasUnseenUpdate &&
+        (t.assignedById === currentUserId ||
+          (t.assignedToId === currentUserId && Boolean(t.currentAssigneeId) && t.currentAssigneeId !== currentUserId))
     );
   }, [tasks, currentUserId]);
 
@@ -420,7 +423,7 @@ export default function TaskInboxPopover({
                     <div className="task-card__left" onClick={() => toggleExpand(task.id)}>
                       <div className="task-card__title-row">
                         <span className="task-card__title">{task.title}</span>
-                        {task.creatorHasUnseenUpdate && isCreator && (
+                        {task.creatorHasUnseenUpdate && (isCreator || (task.assignedToId === currentUserId && Boolean(task.currentAssigneeId) && task.currentAssigneeId !== currentUserId)) && (
                           <span className="task-badge task-badge--new-update animate-pulse">
                             <span className="inline-block size-1.5 rounded-full bg-emerald-500 mr-1" />
                             {task.status === 'completed' ? 'Newly Completed' : 'Newly Reassigned'}
@@ -433,9 +436,16 @@ export default function TaskInboxPopover({
                           </span>
                         )}
                         {task.status === 'completed' ? (
-                          <span className="task-badge task-badge--completed">
-                            <CheckCircle2 size={11} /> Completed
-                          </span>
+                          <>
+                            <span className="task-badge task-badge--completed">
+                              <CheckCircle2 size={11} /> Completed
+                            </span>
+                            {task.currentAssigneeId && task.assignedToId && task.currentAssigneeId !== task.assignedToId && (
+                              <span className="task-badge task-badge--reassigned">
+                                <ArrowRight size={11} /> {isCurrentAssignee ? 'Delegated to you' : 'Reassigned'}
+                              </span>
+                            )}
+                          </>
                         ) : overdue ? (
                           <span className="task-badge task-badge--overdue">
                             <Clock size={11} /> Overdue
@@ -498,7 +508,7 @@ export default function TaskInboxPopover({
                               ? 'assigned_to_someone_else'
                               : 'pending'
                           }
-                          disabled={isUpdatingStatus === task.id || (!isCurrentAssignee && !isCreator)}
+                          disabled={isUpdatingStatus === task.id || (!isCurrentAssignee && !isCreator && task.assignedToId !== currentUserId)}
                           onChange={(e) => handleStatusChange(task, e.target.value)}
                           className={`task-status-select task-status-select--${task.status === 'completed' ? 'completed' : isReassigning || (!isCurrentAssignee || (task.currentAssigneeId && task.assignedToId && task.currentAssigneeId !== task.assignedToId)) ? 'reassigned' : 'pending'}`}
                         >

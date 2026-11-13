@@ -158,7 +158,7 @@ async function mockGetById(id: string): Promise<RFQTableRow | null> {
 
 async function apiGetById(id: string): Promise<RFQTableRow | null> {
   try {
-    const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`);
+    const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`, { cacheTtlMs: 30000 });
     const mapped = mapApiRfqToTableRow(rfq);
     if (!mapped || isRfqDeleted(mapped.id, mapped.rfqNumber)) return null;
     return {

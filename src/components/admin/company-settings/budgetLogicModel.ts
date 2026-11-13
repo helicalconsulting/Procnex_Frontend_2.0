@@ -38,6 +38,7 @@ export interface PhasingRulesConfig {
   periodGranularity: PeriodGranularity;
   enforceStrictPeriod: boolean;
   allowRollover: boolean;
+  rolloverPercent: number; // 0 - 100% of remaining unspent funds allowed to roll over
   allowFutureQuarterBorrowing: boolean;
 }
 
@@ -88,6 +89,7 @@ export const DEFAULT_BUDGET_LOGIC: BudgetLogicConfig = {
     periodGranularity: 'QUARTERLY',
     enforceStrictPeriod: true,
     allowRollover: true,
+    rolloverPercent: 100,
     allowFutureQuarterBorrowing: false,
   },
   alerts: {
@@ -176,6 +178,7 @@ export const BUDGET_LOGIC_PRESETS: Record<string, { label: string; tag: string; 
         periodGranularity: 'QUARTERLY',
         enforceStrictPeriod: true,
         allowRollover: false,
+        rolloverPercent: 0,
         allowFutureQuarterBorrowing: false,
       },
       allowVirementBetweenLines: true,
@@ -208,6 +211,7 @@ export const BUDGET_LOGIC_PRESETS: Record<string, { label: string; tag: string; 
         periodGranularity: 'ANNUAL',
         enforceStrictPeriod: false,
         allowRollover: true,
+        rolloverPercent: 100,
         allowFutureQuarterBorrowing: true,
       },
       allowVirementBetweenLines: true,
@@ -229,7 +233,13 @@ export function loadBudgetLogicSettings(): BudgetLogicConfig {
       ...parsed,
       tolerance: { ...DEFAULT_BUDGET_LOGIC.tolerance, ...(parsed.tolerance || {}) },
       checkPoints: { ...DEFAULT_BUDGET_LOGIC.checkPoints, ...(parsed.checkPoints || {}) },
-      phasing: { ...DEFAULT_BUDGET_LOGIC.phasing, ...(parsed.phasing || {}) },
+      phasing: {
+        ...DEFAULT_BUDGET_LOGIC.phasing,
+        ...(parsed.phasing || {}),
+        rolloverPercent: typeof parsed.phasing?.rolloverPercent === 'number'
+          ? Math.max(0, Math.min(100, parsed.phasing.rolloverPercent))
+          : (parsed.phasing?.allowRollover === false ? 0 : 100),
+      },
       alerts: { ...DEFAULT_BUDGET_LOGIC.alerts, ...(parsed.alerts || {}) },
       budgetTypes: parsed.budgetTypes && parsed.budgetTypes.length > 0 ? parsed.budgetTypes : DEFAULT_BUDGET_LOGIC.budgetTypes,
       fundingSources: parsed.fundingSources && parsed.fundingSources.length > 0 ? parsed.fundingSources : DEFAULT_BUDGET_LOGIC.fundingSources,
@@ -386,4 +396,12 @@ export function simulateSpendEvaluation(
       ? `Triggers Budget Exception Approval Modal directed to: ${config.tolerance.exceptionApproverRole}.`
       : 'Submission strictly blocked. Line balance must be increased via Budget Virement or Budget Revision.',
   };
+}
+
+export function calculateRolloverAmount(unspentBalance: number, phasing: PhasingRulesConfig): number {
+  if (!phasing.allowRollover || unspentBalance <= 0) return 0;
+  const pct = typeof phasing.rolloverPercent === 'number'
+    ? Math.max(0, Math.min(100, phasing.rolloverPercent))
+    : 100;
+  return (unspentBalance * pct) / 100;
 }

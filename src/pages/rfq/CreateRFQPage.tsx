@@ -610,7 +610,14 @@ export default function CreateRFQPage() {
     if (prefill?.fromConsolidation) {
       if (prefill.title) setTitle(prefill.title);
       if (prefill.department) setDepartment(prefill.department);
-      if (prefill.description) setDescription(prefill.description);
+      setDescription(prefill.description ? String(prefill.description).trim() : '');
+      if (prefill.closingDate || prefill.deliveryDate || prefill.date) {
+        const dStr = String(prefill.closingDate || prefill.deliveryDate || prefill.date).slice(0, 10);
+        setClosingDate(dStr);
+      }
+      if (prefill.priority) {
+        setPriority(prefill.priority);
+      }
       if (Array.isArray(prefill.requisitionIds)) {
         setSourceRequisitionIds(prefill.requisitionIds);
       }

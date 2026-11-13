@@ -167,6 +167,29 @@ describe('notificationRouter', () => {
         )
       ).toBe('/procurement/create-purchase-invoice');
     });
+
+    it('should route "New Vendor Registered" notifications to /onboarding/queue', () => {
+      expect(
+        getNotificationTargetUrl(
+          'New Vendor Registered: ghghhhh',
+          'Vendor "ghghhhh" (VND-0014) has registered and submitted details for verification.'
+        )
+      ).toBe('/onboarding/queue?search=VND-0014');
+
+      expect(
+        getNotificationTargetUrl(
+          'New Vendor Registered: Acme Corp',
+          'Vendor has registered and submitted details.'
+        )
+      ).toBe('/onboarding/queue?search=Acme%20Corp');
+
+      expect(
+        getNotificationTargetUrl(
+          'Vendor Onboarding Application',
+          'New vendor onboarding submitted'
+        )
+      ).toBe('/onboarding/queue');
+    });
   });
 
   describe('Vendor notification routing (getVendorNotificationTargetUrl)', () => {

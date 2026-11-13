@@ -18,6 +18,7 @@ export function getNotificationTargetUrl(
   const payMatch = combined.match(/\b(?:pay|pv)-[a-z0-9_-]+\b/i) || combined.match(/\b(?:pay|pv)[0-9_-]+\b/i);
   const contractMatch = combined.match(/\b(?:cnt|ctr|cont)-[a-z0-9_-]+\b/i);
   const qtnMatch = combined.match(/\bqtn-[a-z0-9_-]+\b/i);
+  const vndMatch = combined.match(/\b(?:vnd|ven)-[a-z0-9_-]+\b/i);
 
   // Special: Returned for Revision (Direct to Creator edit page)
   if (lower.includes('returned for revision') || (lower.includes('returned') && !lower.includes('re-review'))) {
@@ -235,15 +236,29 @@ export function getNotificationTargetUrl(
     return '/contracts';
   }
 
-  // 9. Onboarding & Vendor Compliance
-  if (
+  // 9. Onboarding & Vendor Compliance / Self-Registration
+  const isOnboardingNotification =
     lower.includes('onboarding') ||
+    lower.includes('registered') ||
+    lower.includes('registration') ||
+    lower.includes('register') ||
+    lower.includes('verification') ||
     lower.includes('uploaded') ||
     lower.includes('compliance') ||
     lower.includes('document') ||
     lower.includes('banking information') ||
-    lower.includes('bank details')
-  ) {
+    lower.includes('bank details') ||
+    lower.includes('vendor approval') ||
+    (lower.includes('vendor') && (lower.includes('queue') || lower.includes('submitted') || lower.includes('pending') || lower.includes('new vendor')));
+
+  if (isOnboardingNotification) {
+    if (vndMatch) {
+      return `/onboarding/queue?search=${encodeURIComponent(vndMatch[0])}`;
+    }
+    const nameMatch = title.match(/new vendor registered:\s*([^(\n\r]+)/i);
+    if (nameMatch && nameMatch[1]?.trim()) {
+      return `/onboarding/queue?search=${encodeURIComponent(nameMatch[1].trim())}`;
+    }
     return '/onboarding/queue';
   }
 

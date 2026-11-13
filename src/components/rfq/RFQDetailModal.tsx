@@ -13,6 +13,7 @@ import {
   Package, FileText, Minus, Maximize2, Minimize2, ChevronUp,
   Trophy, Eye, ArrowRightLeft, Shield, ShieldCheck, TrendingUp, CheckCircle2,
   XCircle, Undo2, Clock, ArrowLeft, Send, ChevronRight, PenLine, RotateCcw,
+  ShoppingCart,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import ActionSendingOverlay from '../shared/ActionSendingOverlay';
@@ -35,7 +36,8 @@ function getStatusTone(status: string): 'neutral' | 'primary' | 'success' | 'war
     case 'APPROVED':
     case 'SENT':
     case 'IN_PROGRESS':
-    case 'CLOSED': return 'success';
+    case 'CLOSED':
+    case 'AWARDED': return 'success';
     case 'CANCELLED':
     case 'REJECTED': return 'danger';
     default: return 'neutral';
@@ -103,6 +105,7 @@ const STATUS_LABELS: Record<string, string> = {
   SENT: 'Approved',
   IN_PROGRESS: 'Accepted',
   CLOSED: 'Closed',
+  AWARDED: 'Awarded',
   CANCELLED: 'Cancelled',
   REJECTED: 'Rejected',
   RETURNED: 'Returned for Revision',
@@ -119,10 +122,9 @@ const QUOT_STATUS_LABELS: Record<string, string> = {
   RETURNED: 'Returned',
 };
 
-
-
 const PRIORITY_CLASS: Record<string, string> = {
   Low: 'low', Medium: 'medium', High: 'high', Critical: 'critical',
+  low: 'low', medium: 'medium', high: 'high', critical: 'critical',
 };
 
 const ALL_ITEM_COLUMNS: ItemColumnDef[] = [
@@ -202,6 +204,8 @@ export interface RFQDetailModalProps {
   onDismissSendError?: () => void;
   /** When set, compare link calls this instead of navigating away */
   onCompareQuotations?: (rfqNumber: string) => void;
+  /** When true, only view the RFQ without edit/send/action buttons */
+  readOnly?: boolean;
 }
 
 export default function RFQDetailModal({
@@ -217,9 +221,10 @@ export default function RFQDetailModal({
   onDismissSendSuccess,
   onDismissSendError,
   onCompareQuotations,
+  readOnly = false,
 }: RFQDetailModalProps) {
   const navigate = useNavigate();
-  const { user, roles = [] } = useAuth();
+  const { user, roles = [], hasPermission } = useAuth();
   const isUserAdmin = Boolean(
     roles.some((r) => typeof r === 'string' && ['super admin', 'administrator', 'admin'].includes(r.trim().toLowerCase())) ||
     (user as any)?.roles?.some((r: any) => {
@@ -229,6 +234,17 @@ export default function RFQDetailModal({
     (user as any)?.roleName?.toLowerCase()?.includes('admin') ||
     String(user?.id) === '1'
   );
+  const canCreatePO =
+    isUserAdmin ||
+    Boolean(
+      hasPermission &&
+        (hasPermission('PO Creation', 'canCreate') ||
+          hasPermission('PO Creation', 'canEdit') ||
+          hasPermission('PO Creation', 'canApprove') ||
+          hasPermission('Purchase Orders', 'canCreate') ||
+          hasPermission('Purchase Orders', 'canEdit') ||
+          hasPermission('Purchase Orders', 'canApprove'))
+    );
   const currentUserId = String(user?.id || (user as any)?._id || '');
   const creatorId = String((rfq as any)?.createdBy || (rfq as any)?.creatorId || (rfq as any)?.creator?.id || '');
   const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
@@ -270,7 +286,7 @@ export default function RFQDetailModal({
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
 
   const fetchApprovalChain = useCallback(() => {
-    if (!rfq?.id) return;
+    if (!rfq?.id || rfq.title === 'Loading RFQ...') return;
     setApprovalChainLoading(true);
     approvalService.getChain('RFQ', String(rfq.id))
       .then((res) => {
@@ -278,7 +294,7 @@ export default function RFQDetailModal({
       })
       .catch(() => {})
       .finally(() => setApprovalChainLoading(false));
-  }, [rfq?.id]);
+  }, [rfq?.id, rfq?.title]);
 
   useEffect(() => {
     fetchApprovalChain();
@@ -286,8 +302,13 @@ export default function RFQDetailModal({
 
   // Fetch pending approval for this RFQ when user has not yet acted in session
   useEffect(() => {
-    const isDocReReview = rfq?.status === 'RE_REVIEW' || rfq?.status === 'RETURN_FOR_RE_REVIEW' || Boolean((rfq as any)?._isReturnedForReReview);
-    if (!rfq || (rfq as any)._isReturnedByMe || (!isDocReReview && (rfq as any)._isApprovedByMe) || (rfq as any)._isRejectedByMe || rfq.status === 'RETURNED') {
+    if (readOnly || !rfq || !rfq.id || rfq.title === 'Loading RFQ...' || rfq.status === 'AWARDED' || rfq.status === 'CLOSED' || rfq.status === 'CANCELLED' || rfq.status === 'DRAFT' || rfq.status === 'APPROVED') {
+      setPendingApproval(null);
+      return;
+    }
+
+    const isDocReReview = rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || Boolean((rfq as any)?._isReturnedForReReview);
+    if ((rfq as any)._isReturnedByMe || (!isDocReReview && (rfq as any)._isApprovedByMe) || (rfq as any)._isRejectedByMe || rfq.status === 'RETURNED') {
       setPendingApproval(null);
       return;
     }
@@ -857,15 +878,27 @@ export default function RFQDetailModal({
               )}
             </div>
 
-            {(rfq.status === 'DRAFT' || rfq.status === 'APPROVED') && onSend && (
+            {(rfq.status === 'DRAFT' || rfq.status === 'APPROVED') && onSend && !readOnly && (
               <Button onClick={onSend} loading={sending}>
                 <Send className="size-4 mr-1.5" /> Send to Vendors
               </Button>
             )}
 
-            {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || rfq.status === 'PENDING_APPROVAL') && (
+            {!readOnly && canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || rfq.status === 'PENDING_APPROVAL') && (
               <Button variant="outline" onClick={() => navigate(`/rfq/edit/${rfq.id}`)}>
                 <PenLine className="size-4 mr-1.5" /> {rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
+              </Button>
+            )}
+
+            {canCreatePO && (rfq.status === 'IN_PROGRESS' || rfq.status === 'APPROVED' || rfq.status === 'SENT' || rfq.status === 'CLOSED') && (
+              <Button
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-xs"
+                onClick={() => {
+                  onClose?.();
+                  navigate(`/procurement/create-purchase-order?rfqId=${encodeURIComponent(rfq.id)}`);
+                }}
+              >
+                <ShoppingCart className="size-4 mr-1.5" /> Create Purchase Order
               </Button>
             )}
           </div>
@@ -924,7 +957,7 @@ export default function RFQDetailModal({
                     )}
                   </div>
                 </div>
-                {canEditThisRFQ && (
+                {!readOnly && canEditThisRFQ && (
                   <div className="flex items-center gap-2 shrink-0 sm:self-center">
                     <Button
                       size="sm"
@@ -941,7 +974,7 @@ export default function RFQDetailModal({
         })()}
 
         {/* ── 3. PENDING APPROVAL INTERACTIVE CARD (If user can act on pending level / re-review) ── */}
-        {Boolean((rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && pendingApproval && pendingApproval.canAct && !(rfq as any)._isReturnedByMe && !(rfq as any)._isApprovedByMe && !(rfq as any)._isRejectedByMe) && (() => {
+        {!readOnly && Boolean((rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && pendingApproval && pendingApproval.canAct && !(rfq as any)._isReturnedByMe && !(rfq as any)._isApprovedByMe && !(rfq as any)._isRejectedByMe) && (() => {
           const currentPendingLevel = pendingApproval.currentLevel || pendingApproval.levelNumber || approvalChain?.currentLevel || 1;
           const historyItems = approvalChain?.history || [];
           const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
@@ -1630,18 +1663,40 @@ export default function RFQDetailModal({
           style={isMinimized ? { cursor: 'pointer' } : undefined}
         >
           <div className="rfq-modal__header-left">
-            <div className="rfq-modal__page-heading">
-              <span className="rfq-modal__rfq-num">{isPage ? rfq.rfqNumber : rfq.title}</span>
-              {isPage && <span className="rfq-modal__page-title">{rfq.title}</span>}
-            </div>
-            {!isMinimized && (
-              <span className={`rfq-badge rfq-badge--${rfq.status}`}>
-                <span className="rfq-badge__dot" />
-                {STATUS_LABELS[rfq.status] || rfq.status}
+            {!isMinimized ? (
+              <div className="rfq-modal__page-heading">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0 }}>
+                  <span className="rfq-modal__rfq-num" title={rfq.rfqNumber || rfq.title}>
+                    {rfq.rfqNumber || rfq.title}
+                  </span>
+                  <span className={`rfq-badge rfq-badge--${rfq.status}`}>
+                    <span className="rfq-badge__dot" />
+                    {STATUS_LABELS[rfq.status] || rfq.status}
+                  </span>
+                </div>
+                {rfq.title && rfq.title !== rfq.rfqNumber && (
+                  <span
+                    className="rfq-modal__page-title"
+                    title={rfq.title}
+                    style={{
+                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '520px',
+                      fontSize: 12,
+                      color: 'var(--text-secondary)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {rfq.title}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="rfq-modal__minimized-title" title={rfq.title || rfq.rfqNumber}>
+                {rfq.rfqNumber ? `${rfq.rfqNumber}: ` : ''}{rfq.title || 'RFQ Details'}
               </span>
-            )}
-            {isMinimized && (
-              <span className="rfq-modal__minimized-title">{rfq.title}</span>
             )}
           </div>
 
@@ -1877,10 +1932,12 @@ export default function RFQDetailModal({
                     </div>
                   )}
 
-                  <div className="rfq-modal__estimate-bar">
-                    <span className="rfq-modal__estimate-label">Total Estimate</span>
-                    <span className="rfq-modal__estimate-value">{rfq.totalEstimate}</span>
-                  </div>
+                  {rfq.totalEstimate && rfq.totalEstimate !== '—' && rfq.totalEstimate !== '-' && rfq.totalEstimate !== '$0.00' && (
+                    <div className="rfq-modal__estimate-bar">
+                      <span className="rfq-modal__estimate-label">Total Estimate</span>
+                      <span className="rfq-modal__estimate-value">{rfq.totalEstimate}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2334,15 +2391,32 @@ export default function RFQDetailModal({
                   {sendError}
                 </MessageStrip>
               )}
-              <button type="button" className="rfq-modal__btn rfq-modal__btn--secondary" onClick={onClose}>{isPage ? 'Back to RFQs' : 'Close'}</button>
-              {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || rfq.status === 'PENDING_APPROVAL') && (
-                <button
-                  type="button"
-                  className="rfq-modal__btn rfq-modal__btn--primary"
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+              >
+                {isPage ? 'Back to RFQs' : 'Close'}
+              </Button>
+              {!readOnly && canCreatePO && (rfq.status === 'IN_PROGRESS' || rfq.status === 'APPROVED' || rfq.status === 'SENT' || rfq.status === 'CLOSED' || rfq.status === 'AWARDED') && (
+                <Button
+                  size="sm"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-xs"
+                  onClick={() => {
+                    onClose?.();
+                    navigate(`/procurement/create-purchase-order?rfqId=${encodeURIComponent(rfq.id)}`);
+                  }}
+                >
+                  <ShoppingCart className="size-3.5 mr-1.5" /> Create Purchase Order
+                </Button>
+              )}
+              {!readOnly && canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || rfq.status === 'PENDING_APPROVAL') && (
+                <Button
+                  size="sm"
                   onClick={() => navigate(`/rfq/edit/${rfq.id}`)}
                 >
-                  <FileText size={15} /> {rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
-                </button>
+                  <PenLine className="size-3.5 mr-1.5" /> {rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
+                </Button>
               )}
             </div>
           </>
