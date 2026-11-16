@@ -565,7 +565,11 @@ export default function TaskInboxPopover({
                                 -- Choose Company Colleague --
                               </option>
                               {companyUsers
-                                .filter((u) => u.id !== currentUserId)
+                                .filter(
+                                  (u) =>
+                                    u.id !== currentUserId &&
+                                    (!user?.email || u.email?.toLowerCase().trim() !== user.email.toLowerCase().trim())
+                                )
                                 .map((u) => (
                                   <option key={u.id} value={u.id}>
                                     {u.fullName} {u.department ? `(${u.department})` : ''} - {u.email}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -50,6 +50,21 @@ export default function AssignTaskModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Filter out the assigning (logged-in) user from the dropdown list
+  const filteredAssignees = useMemo(() => {
+    const currentId = user?.id ? String(user.id) : '';
+    const currentEmail = user?.email?.trim().toLowerCase() || '';
+    const currentUsername = user?.username?.trim().toLowerCase() || '';
+
+    return assigneesList.filter((u) => {
+      if (!u.isActive) return false;
+      if (currentId && String(u.id) === currentId) return false;
+      if (currentEmail && u.email && u.email.trim().toLowerCase() === currentEmail) return false;
+      if (currentUsername && u.username && u.username.trim().toLowerCase() === currentUsername) return false;
+      return true;
+    });
+  }, [assigneesList, user]);
+
   // Sync deadline if defaultDeadline changes
   useEffect(() => {
     if (defaultDeadline) {
@@ -95,6 +110,13 @@ export default function AssignTaskModal({
       setTaskErrorMsg('Please select an assignee.');
       return;
     }
+    if (
+      (user?.id && String(taskAssigneeId) === String(user.id)) ||
+      (filteredAssignees.length > 0 && !filteredAssignees.some((u) => String(u.id) === String(taskAssigneeId)))
+    ) {
+      setTaskErrorMsg('You cannot assign a task to yourself.');
+      return;
+    }
     if (!taskDeadline) {
       setTaskErrorMsg('Please specify a task deadline.');
       return;
@@ -117,7 +139,7 @@ export default function AssignTaskModal({
       const created = await taskService.createTask(formData);
 
       // Add to calendar note for visibility
-      const assigneeObj = assigneesList.find((u) => u.id === taskAssigneeId);
+      const assigneeObj = filteredAssignees.find((u) => u.id === taskAssigneeId) || assigneesList.find((u) => u.id === taskAssigneeId);
       const assigneeLabel = assigneeObj ? assigneeObj.fullName : 'Colleague';
       try {
         await calendarService.addEvent(
@@ -233,7 +255,7 @@ export default function AssignTaskModal({
               <option value="" disabled>
                 -- Select Employee from Company --
               </option>
-              {assigneesList.map((u) => (
+              {filteredAssignees.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.fullName} {u.department ? `· ${u.department}` : ''} {u.role ? `(${u.role})` : ''} - {u.email}
                 </option>
