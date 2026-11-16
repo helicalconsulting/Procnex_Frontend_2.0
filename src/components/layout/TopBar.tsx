@@ -182,8 +182,10 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
   const calendarRef = useRef<HTMLDivElement>(null);
   const mailRef = useRef<HTMLDivElement>(null);
 
+  const isVendorUser = isVendor(roles);
+
   const fetchPendingTaskCount = useCallback(() => {
-    if (user?.id) {
+    if (user?.id && !isVendorUser) {
       taskService
         .getTasks({ type: 'all' })
         .then((res) => {
@@ -201,9 +203,10 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
         })
         .catch(() => {});
     }
-  }, [user?.id]);
+  }, [user?.id, isVendorUser]);
 
   useEffect(() => {
+    if (isVendorUser) return;
     fetchPendingTaskCount();
     const handleUpdate = () => fetchPendingTaskCount();
     window.addEventListener('heliflow_tasks_updated', handleUpdate);
@@ -221,7 +224,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
       unsubNotif();
       clearInterval(interval);
     };
-  }, [fetchPendingTaskCount]);
+  }, [fetchPendingTaskCount, isVendorUser]);
 
   const handleToggleMail = () => {
     const nextState = !isMailOpen;
@@ -349,45 +352,47 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
       </div>
 
       <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-        {!isVendor(roles) && <BranchSwitcher />}
+        {!isVendorUser && <BranchSwitcher />}
 
-        {/* Task List / To-Do Inbox */}
-        <div className="relative" ref={mailRef}>
-          <button
-            type="button"
-            data-mail-trigger="true"
-            className={iconButtonClass}
-            onClick={handleToggleMail}
-            title="Assigned Tasks"
-            aria-label="Assigned Tasks"
-            aria-expanded={isMailOpen}
-          >
-            <div className="relative inline-flex items-center justify-center">
-              <ListTodo size={19} />
-              {(hasTaskIndicator || pendingTaskCount > 0) && (
-                <span
-                  className={cn(
-                    "absolute flex items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-card animate-pulse pointer-events-none",
-                    pendingTaskCount > 0
-                      ? "-top-1.5 -right-2.5 min-w-4 h-4 px-1"
-                      : "-top-1 -right-1.5 size-2.5"
-                  )}
-                  title="New task updates"
-                >
-                  {pendingTaskCount > 0 ? (pendingTaskCount > 99 ? '99+' : pendingTaskCount) : ''}
-                </span>
-              )}
-            </div>
-          </button>
-          {isMailOpen && (
-            <TaskInboxPopover
-              isOpen={isMailOpen}
-              onClose={() => setIsMailOpen(false)}
-              triggerRef={mailRef}
-              onTasksUpdated={fetchPendingTaskCount}
-            />
-          )}
-        </div>
+        {/* Task List / To-Do Inbox (Internal users only) */}
+        {!isVendorUser && (
+          <div className="relative" ref={mailRef}>
+            <button
+              type="button"
+              data-mail-trigger="true"
+              className={iconButtonClass}
+              onClick={handleToggleMail}
+              title="Assigned Tasks"
+              aria-label="Assigned Tasks"
+              aria-expanded={isMailOpen}
+            >
+              <div className="relative inline-flex items-center justify-center">
+                <ListTodo size={19} />
+                {(hasTaskIndicator || pendingTaskCount > 0) && (
+                  <span
+                    className={cn(
+                      "absolute flex items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-card animate-pulse pointer-events-none",
+                      pendingTaskCount > 0
+                        ? "-top-1.5 -right-2.5 min-w-4 h-4 px-1"
+                        : "-top-1 -right-1.5 size-2.5"
+                    )}
+                    title="New task updates"
+                  >
+                    {pendingTaskCount > 0 ? (pendingTaskCount > 99 ? '99+' : pendingTaskCount) : ''}
+                  </span>
+                )}
+              </div>
+            </button>
+            {isMailOpen && (
+              <TaskInboxPopover
+                isOpen={isMailOpen}
+                onClose={() => setIsMailOpen(false)}
+                triggerRef={mailRef}
+                onTasksUpdated={fetchPendingTaskCount}
+              />
+            )}
+          </div>
+        )}
 
         <div className="relative" ref={calendarRef}>
           <button
