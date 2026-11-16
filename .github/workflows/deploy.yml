@@ -31,15 +31,23 @@ jobs:
           npm ci
           npm run build
 
-      - name: Copy build artifacts to VPS
+      - name: Build Docker image on runner
+        run: |
+          echo "📦 Building lightweight Frontend Docker image on runner..."
+          docker build -t heliflow-frontend:latest .
+          echo "💾 Compressing image archive..."
+          docker save heliflow-frontend:latest | gzip -1 > heliflow-frontend.tar.gz
+          ls -lh heliflow-frontend.tar.gz
+
+      - name: Copy image to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST || '165.227.82.221' }}
           username: ${{ secrets.SERVER_USER || 'root' }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
-          source: "dist,nginx.conf,Dockerfile,.dockerignore"
-          target: "/opt/heliflow-frontend"
+          source: "heliflow-frontend.tar.gz"
+          target: "/tmp"
           overwrite: true
 
       - name: Restart containers on VPS
@@ -53,13 +61,9 @@ jobs:
           timeout: 60s
           script: |
             set -e
-            cd /opt/heliflow-frontend
-
-            # Ensure dist is never ignored by any legacy .dockerignore on the host
-            sed -i '/^dist$/d' .dockerignore 2>/dev/null || true
-
-            echo "📦 Building lightweight Nginx image..."
-            docker build -t heliflow-frontend:latest .
+            echo "📦 Loading Docker image into VPS Docker daemon..."
+            docker load < /tmp/heliflow-frontend.tar.gz
+            rm -f /tmp/heliflow-frontend.tar.gz
 
             echo "🔄 Restarting Main container (Port 8081)..."
             docker rm -f heliflow-frontend-main || true
