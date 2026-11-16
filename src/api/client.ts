@@ -103,10 +103,12 @@ export function authHeaders(extra?: Record<string, string>, targetPath?: string)
     : (userToken || vendorToken);
 
   const companyCode = getTenantCompanyCode();
+  const activeBranchId = typeof window !== 'undefined' ? localStorage.getItem('heliflow_active_branch_id') : null;
   return {
     'Content-Type': 'application/json',
     'X-Client-Instance-Id': getClientInstanceId(),
     ...(companyCode ? { 'X-Company-Code': companyCode } : {}),
+    ...(activeBranchId ? { 'X-Branch-Id': activeBranchId } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...extra,
   };

@@ -81,12 +81,14 @@ interface PrintPurchaseInvoiceModalProps {
 function normalizeInvoiceItems(rawList: any[], data: PurchaseInvoicePrintData): InvoiceLineItem[] {
   if (!Array.isArray(rawList) || rawList.length === 0) return [];
   return rawList.map((item: any, idx: number) => {
-    const qty = Math.max(1, Number(item.quantity || item.qty || item.orderedQty || 1));
+    const qty = Math.max(1, Number(item.invoicedQty || item.quantity || item.qty || item.orderedQty || item.poQty || 1));
     let unitPrice = Number(item.unitPrice || item.rate || item.price || item.targetPrice || 0);
     let totalPrice = Number(item.totalPrice || item.total || item.grossAmount || item.amount || 0);
 
     if (!totalPrice && unitPrice) {
-      totalPrice = unitPrice * qty;
+      const sub = unitPrice * qty;
+      const tax = item.taxPercent ? sub * (Number(item.taxPercent) / 100) : 0;
+      totalPrice = sub + tax;
     }
     if (!unitPrice && totalPrice) {
       unitPrice = Number((totalPrice / qty).toFixed(2));
@@ -981,25 +983,27 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                             <img src={app.signatureUrl} alt={`Signature of ${app.name}`} className="ppi-stamp-sig-img" />
                           ) : (
                             <div className="ppi-stamp-sig-svg-wrap" style={{ width: '100%', maxWidth: '200px', height: '48px' }}>
-                              <svg viewBox="0 0 170 32" style={{ width: '100%', height: '48px' }}>
-                                <path
-                                  d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
-                                  fill="none"
-                                  stroke="#1e3a8a"
-                                  strokeWidth="2.5"
-                                  strokeLinecap="round"
-                                />
+                              <svg viewBox="0 0 170 36" style={{ width: '100%', height: '48px' }}>
                                 <text
-                                  x="15"
-                                  y="24"
-                                  fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
-                                  fontSize="17"
+                                  x="85"
+                                  y="22"
+                                  textAnchor="middle"
+                                  fontFamily="'Caveat', 'Dancing Script', 'Brush Script MT', 'Segoe Script', cursive, sans-serif"
+                                  fontSize="20"
+                                  fontWeight="600"
                                   fill="#1e3a8a"
                                   fontStyle="italic"
-                                  opacity="0.9"
                                 >
-                                  {app.name}
+                                  {app.name || 'Authorized Signatory'}
                                 </text>
+                                <path
+                                  d="M 15 28 Q 85 33, 155 27"
+                                  fill="none"
+                                  stroke="#2563eb"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  opacity="0.8"
+                                />
                               </svg>
                             </div>
                           )}

@@ -1,11 +1,11 @@
 import { readCachedProfile, applyBrandingProfile } from '../../lib/branding';
-import type { CompanyProfile } from '../../services/companySettingsService';
+import { companySettingsService, type CompanyProfile, type Branch } from '../../services/companySettingsService';
 import { useState, useEffect, useLayoutEffect, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { applyPrimaryColor, DEFAULT_PRIMARY, applyFavicon, applyTitle } from '../../context/BrandingContext';
-import { Eye, EyeOff, AlertCircle, LoaderCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, LoaderCircle, Building2 } from 'lucide-react';
 import { vendorPortalService, type CompanyBranding } from '../../services/vendorPortalService';
 import { setEmployeeCompanyCode, getEmployeeCompanyCode } from '../../utils/tenantResolver';
 import { getFirstAllowedPath } from '../../utils/permissions';
@@ -54,6 +54,11 @@ export const BrandedEmployeeLoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
+    return localStorage.getItem('heliflow_active_branch_id') || '';
+  });
+  const [loadingBranches, setLoadingBranches] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -96,6 +101,33 @@ export const BrandedEmployeeLoginPage: React.FC = () => {
           setIsInvalidCode(true);
           setInvalidCodeError(msg);
         });
+
+      // Fetch branches for this company
+      setLoadingBranches(true);
+      companySettingsService
+        .listBranches(false, code)
+        .then((list) => {
+          if (cancelled) return;
+          const activeList = (list || []).filter((b) => b.isActive !== false);
+          setBranches(activeList);
+          if (activeList.length > 0) {
+            const savedBranchId = localStorage.getItem('heliflow_active_branch_id');
+            const matched = activeList.find((b) => b.id === savedBranchId);
+            if (matched) {
+              setSelectedBranchId(matched.id);
+            } else {
+              const defaultBranch = activeList.find((b) => b.isDefault) || activeList[0];
+              setSelectedBranchId(defaultBranch.id);
+            }
+          }
+        })
+        .catch(() => {
+          // Gracefully fallback
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingBranches(false);
+        });
+
       return () => { cancelled = true; };
     }
   }, [routeCompanyCode, searchParams, resolvedCode]);
@@ -123,10 +155,14 @@ export const BrandedEmployeeLoginPage: React.FC = () => {
       if (activeCode) {
         setEmployeeCompanyCode(activeCode);
       }
+      if (selectedBranchId) {
+        localStorage.setItem('heliflow_active_branch_id', selectedBranchId);
+      }
       await login({
         username: username.trim(),
         password,
         companyCode: activeCode || undefined,
+        branchId: selectedBranchId || undefined,
       });
     } catch (err: any) {
       const msg = err?.message || 'Login failed. Please check your credentials.';
@@ -134,10 +170,14 @@ export const BrandedEmployeeLoginPage: React.FC = () => {
         authService.pruneStorage();
         try {
           const activeCode = (companyCodeState || resolvedCode || '').trim().toUpperCase();
+          if (selectedBranchId) {
+            localStorage.setItem('heliflow_active_branch_id', selectedBranchId);
+          }
           await login({
             username: username.trim(),
             password,
             companyCode: activeCode || undefined,
+            branchId: selectedBranchId || undefined,
           });
           return;
         } catch (retryErr: any) {
@@ -257,6 +297,40 @@ export const BrandedEmployeeLoginPage: React.FC = () => {
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
+        </div>
+
+        {/* Branch Selection Dropdown */}
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[14px] font-semibold text-foreground flex items-center gap-1.5" htmlFor="elogin-branch">
+              <Building2 size={15} className="text-muted-foreground" />
+              <span>Branch</span>
+              {branches.length > 0 && <span className="text-destructive">*</span>}
+            </label>
+            {loadingBranches && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <LoaderCircle size={12} className="animate-spin" /> Loading branches...
+              </span>
+            )}
+          </div>
+          <select
+            id="elogin-branch"
+            value={selectedBranchId}
+            onChange={(e) => setSelectedBranchId(e.target.value)}
+            disabled={isSubmitting || loadingBranches || branches.length === 0}
+            className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            required={branches.length > 0}
+          >
+            {branches.length === 0 ? (
+              <option value="">{loadingBranches ? 'Loading branches…' : 'Main Branch / Head Office'}</option>
+            ) : (
+              branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} ({b.code}){b.city ? ` • ${b.city}` : ''}{b.isDefault ? ' [Head Office]' : ''}
+                </option>
+              ))
+            )}
+          </select>
         </div>
 
         <Button type="submit" size="lg" disabled={isSubmitting} id="elogin-submit-btn" className="mt-1 w-full">

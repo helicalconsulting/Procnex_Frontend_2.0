@@ -1797,9 +1797,15 @@ async function apiSetDefaultWarehouse(id: string): Promise<Warehouse> {
 
 // ─── Branch API ───────────────────────────────────────────────────────────
 
-async function apiListBranches(includeInactive = false): Promise<Branch[]> {
-  const query = includeInactive ? '?includeInactive=true' : '';
-  const data = await apiRequest<{ branches: Branch[] }>(`/company-settings/branches${query}`, { cacheTtlMs: 30000 });
+async function apiListBranches(includeInactive = false, companyCode?: string): Promise<Branch[]> {
+  const params = new URLSearchParams();
+  if (includeInactive) params.set('includeInactive', 'true');
+  if (companyCode) params.set('companyCode', companyCode);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const data = await apiRequest<{ branches: Branch[] }>(`/company-settings/branches${qs}`, {
+    cacheTtlMs: 30000,
+    headers: companyCode ? { 'x-company-code': companyCode } : undefined,
+  });
   return data.branches || [];
 }
 

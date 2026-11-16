@@ -86,6 +86,25 @@ interface VendorOption {
   category: string;
 }
 
+const normalizeItemStr = (s: any) => String(s || '').toLowerCase().trim();
+
+const isItemMatch = (poItem: any, grnItem: any, poIdx?: number, grnIdx?: number) => {
+  const poName = normalizeItemStr(poItem.itemName || poItem.name || poItem.description || poItem.title);
+  const grnName = normalizeItemStr(grnItem.itemName || grnItem.name || grnItem.description || grnItem.title);
+  if (poName && grnName) {
+    if (poName === grnName) return true;
+    if (poName.length >= 3 && grnName.length >= 3 && (poName.includes(grnName) || grnName.includes(poName))) {
+      return true;
+    }
+  }
+  const poCode = normalizeItemStr(poItem.itemCode || poItem.code);
+  const grnCode = normalizeItemStr(grnItem.itemCode || grnItem.code);
+  if (poCode && grnCode && poCode === grnCode) {
+    return true;
+  }
+  return false;
+};
+
 export default function CreatePurchaseInvoicePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -547,6 +566,9 @@ export default function CreatePurchaseInvoicePage() {
 
   // Human-readable Dispatch Note / Invoice Number formatter
   const displayGrnNumber = useMemo(() => {
+    if (selectedGrnId === 'all_grn' || (!selectedGrnId && grnOptions.length > 1)) {
+      return `All GRNs Combined (${grnOptions.length} Receipts)`;
+    }
     const cleanGrnId = selectedGrnId.replace(/^grn_/, '').replace(/^inv_/, '');
     const matchInGrn = grnOptions.find(
       (g) => String(g.id) === String(cleanGrnId) || String(g.grnNumber) === String(cleanGrnId)
@@ -604,6 +626,11 @@ export default function CreatePurchaseInvoicePage() {
   useEffect(() => {
     if (grnIdParam) {
       if (grnOptions.length > 0) {
+        if (grnOptions.length > 1) {
+          // If PO has multiple GRNs, default to all_grn so all fulfilled quantities are accounted for
+          setSelectedGrnId('all_grn');
+          return;
+        }
         const matchGrn = grnOptions.find(
           (g) => String(g.id) === String(grnIdParam) || String(g.grnNumber) === String(grnIdParam)
         );
@@ -627,7 +654,7 @@ export default function CreatePurchaseInvoicePage() {
       return;
     }
 
-    if (selectedPoId && (!selectedGrnId || selectedGrnId === '')) {
+    if (selectedPoId && (!selectedGrnId || selectedGrnId === '' || selectedGrnId === 'all_grn')) {
       // 1. If invoiceNumber matches an invoiceOption, pick it
       if (invoiceNumber && invoiceOptions.length > 0) {
         const matchInvByNumber = invoiceOptions.find(
@@ -639,9 +666,9 @@ export default function CreatePurchaseInvoicePage() {
         }
       }
 
-      // 2. Prioritize verified GRN so the actual inspected goods receipt note renders
+      // 2. Prioritize verified GRN so actual inspected goods receipt notes render (combined if multiple)
       if (grnOptions.length > 0) {
-        setSelectedGrnId(`grn_${grnOptions[0].id}`);
+        setSelectedGrnId(grnOptions.length > 1 ? 'all_grn' : `grn_${grnOptions[0].id}`);
         return;
       }
 
@@ -809,44 +836,127 @@ export default function CreatePurchaseInvoicePage() {
       const invTotalAmount = Number(foundInv?.amount || 0);
       const totalPOValue = Number(poObj?.totalAmount || invTotalAmount || 0);
 
+      // Determine which GRNs to draw received/accepted quantities from:
+      const targetGrns: GoodsReceivedNote[] = (() => {
+        if (!grnOptions || grnOptions.length === 0) {
+          return activeGRN ? [activeGRN] : [];
+        }
+        if (selectedGrnId && selectedGrnId !== 'all_grn' && selectedGrnId.startsWith('grn_')) {
+          const cleanId = selectedGrnId.replace(/^grn_/, '');
+          const single = grnOptions.find((g) => String(g.id) === cleanId || String(g.grnNumber) === cleanId);
+          if (single) return [single];
+        }
+        // Default / 'all_grn': aggregate across ALL GRNs of this PO!
+        return grnOptions;
+      })();
+
+      // Base PO items
+      const basePoItems = (poObj?.items && poObj.items.length > 0)
+        ? poObj.items
+        : (!isDirectMasterRfq ? (poObj?.rfq?.items || poObj?.rfq?.selectedQuotation?.items) : []) || [];
+
       // Check if GRN is selected or prioritized
-      const isGrnSelected = selectedGrnId.startsWith('grn_') || Boolean(grnIdParam) || (!selectedGrnId.startsWith('inv_') && Boolean(activeGRN));
+      const isGrnSelected = selectedGrnId === 'all_grn' || selectedGrnId.startsWith('grn_') || Boolean(grnIdParam) || (!selectedGrnId.startsWith('inv_') && targetGrns.length > 0);
 
-      // ── PRIORITY 1: When GRN is selected (or when creating from GRN), render from activeGRN items! ──
-      if (isGrnSelected && activeGRN && activeGRN.items && activeGRN.items.length > 0) {
-        return activeGRN.items.map((gi: any, idx: number) => {
-          const poMatch = poObj?.items?.find((p: any) => p.itemName === gi.itemName || p.itemCode === gi.itemCode) ||
-            poObj?.items?.[idx] ||
-            (!isDirectMasterRfq ? (poObj?.rfq?.items?.[idx] || poObj?.rfq?.selectedQuotation?.items?.[idx]) : null);
-          const poQty = Math.max(1, Number(gi.orderedQty || poMatch?.quantity || 1));
+      // ── PRIORITY 1: When PO has items and GRN is selected, map PO items with full GRN fulfillment ──
+      if (isGrnSelected && basePoItems.length > 0) {
+        return basePoItems.map((poItem: any, idx: number) => {
+          const poQty = Math.max(1, Number(poItem.quantity || poItem.orderedQty || 1));
+          let unitPrice = Number(poItem.unitPrice || 0);
 
-          // In GRN, acceptedQty is the inspected quantity accepted. Fall back to receivedQty if acceptedQty is not defined.
-          const accVal = gi.acceptedQty !== undefined && gi.acceptedQty !== null ? Number(gi.acceptedQty) : null;
-          const recVal = gi.receivedQty !== undefined && gi.receivedQty !== null ? Number(gi.receivedQty) : null;
-          const grnQty = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 1);
+          let totalAccQty = 0;
+          let totalRecQty = 0;
+          let matchedRemarks = '';
+          let hasAnyMatch = false;
 
-          let unitPrice = Number(gi.unitPrice || poMatch?.unitPrice || (foundInv?.amount ? foundInv.amount / (grnQty || 1) : 0) || 0);
+          targetGrns.forEach((g) => {
+            const gItems = g.items || (g as any).lineItems || [];
+            gItems.forEach((gi: any, gIdx: number) => {
+              if (isItemMatch(poItem, gi, idx, gIdx)) {
+                hasAnyMatch = true;
+                const accVal = gi.acceptedQty !== undefined && gi.acceptedQty !== null ? Number(gi.acceptedQty) : null;
+                const recVal = gi.receivedQty !== undefined && gi.receivedQty !== null ? Number(gi.receivedQty) : null;
+                const acc = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 0);
+                totalAccQty += acc;
+                totalRecQty += recVal !== null ? Math.max(0, recVal) : acc;
+                if (!unitPrice && gi.unitPrice) {
+                  unitPrice = Number(gi.unitPrice);
+                }
+                if (gi.remarks && !matchedRemarks) {
+                  matchedRemarks = gi.remarks;
+                }
+              }
+            });
+          });
+
+          // Dispatch Qty is the quantity dispatched / received by store (e.g. 20 for lap)
+          const dispatchQty = targetGrns.length > 0 ? (hasAnyMatch ? totalRecQty : 0) : poQty;
+          // Accepted Quantity is the inspected quantity accepted by store (e.g. 10 for lap)
+          const acceptedQty = targetGrns.length > 0 ? (hasAnyMatch ? totalAccQty : 0) : poQty;
+
+          const grnQty = dispatchQty;
+          const supplierQty = acceptedQty;
+
           if (!unitPrice && totalPOValue > 0 && poQty > 0) {
-            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / poQty).toFixed(2));
+            unitPrice = Number((totalPOValue / (basePoItems.length || 1) / poQty).toFixed(2));
           }
 
-          let rawItemName = gi.itemName || poMatch?.itemName || poMatch?.name || poMatch?.description || '';
+          let rawItemName = poItem.itemName || poItem.name || poItem.description || '';
           if (!rawItemName || rawItemName.startsWith('Items for PO') || rawItemName.startsWith('Line Item')) {
-            rawItemName = poObj?.rfq?.title || poMatch?.itemName || `Line Item ${idx + 1}`;
+            rawItemName = poObj?.rfq?.title || `Line Item ${idx + 1}`;
           }
 
           return {
-            id: gi.id || `grn_item_${idx}_${Date.now()}`,
-            itemCode: gi.itemCode || poMatch?.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+            id: poItem.id || `po_grn_item_${idx}_${Date.now()}`,
+            itemCode: poItem.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
             itemName: rawItemName,
-            description: gi.remarks || poMatch?.description || '',
+            description: matchedRemarks || poItem.description || '',
             poQty: poQty,
             grnQty: grnQty,
-            supplierQty: grnQty,
+            supplierQty: supplierQty,
             unitPrice: unitPrice,
-            taxPercent: Number(poMatch?.taxPercent ?? 18),
+            taxPercent: Number(poItem.taxPercent ?? 18),
           };
         });
+      }
+
+      // If basePoItems is empty but targetGrns has items
+      if (isGrnSelected && targetGrns.length > 0) {
+        const mergedMap = new Map<string, any>();
+        targetGrns.forEach((g) => {
+          const gItems = g.items || (g as any).lineItems || [];
+          gItems.forEach((gi: any, idx: number) => {
+            const key = normalizeItemStr(gi.itemName || gi.name || `item_${idx}`);
+            const accVal = gi.acceptedQty !== undefined && gi.acceptedQty !== null ? Number(gi.acceptedQty) : null;
+            const recVal = gi.receivedQty !== undefined && gi.receivedQty !== null ? Number(gi.receivedQty) : null;
+            const acc = accVal !== null ? Math.max(0, accVal) : (recVal !== null ? Math.max(0, recVal) : 0);
+            const rec = recVal !== null ? Math.max(0, recVal) : acc;
+            const ord = Number(gi.orderedQty || rec);
+            let price = Number(gi.unitPrice || 0);
+
+            if (mergedMap.has(key)) {
+              const existing = mergedMap.get(key);
+              existing.poQty += ord;
+              existing.grnQty += rec;
+              existing.supplierQty += acc;
+            } else {
+              mergedMap.set(key, {
+                id: gi.id || `grn_item_${idx}_${Date.now()}`,
+                itemCode: gi.itemCode || `ITM-${String(mergedMap.size + 1).padStart(3, '0')}`,
+                itemName: gi.itemName || `Line Item ${mergedMap.size + 1}`,
+                description: gi.remarks || '',
+                poQty: ord,
+                grnQty: rec,
+                supplierQty: acc,
+                unitPrice: price,
+                taxPercent: 18,
+              });
+            }
+          });
+        });
+        if (mergedMap.size > 0) {
+          return Array.from(mergedMap.values());
+        }
       }
 
       // ── PRIORITY 2: Direct Line Items from Vendor Invoice ──
@@ -1023,7 +1133,7 @@ export default function CreatePurchaseInvoicePage() {
             itemName: rawItemName,
             description: item.description || '',
             poQty: qty,
-            grnQty: qty,
+            grnQty: grnOptions && grnOptions.length > 0 ? qty : 0,
             supplierQty: qty,
             unitPrice: price,
             taxPercent: Number(item.taxPercent ?? 18),
@@ -1040,7 +1150,7 @@ export default function CreatePurchaseInvoicePage() {
             itemName: titleName,
             description: 'Vendor Invoice Line Item',
             poQty: 1,
-            grnQty: 1,
+            grnQty: grnOptions && grnOptions.length > 0 ? 1 : 0,
             supplierQty: 1,
             unitPrice: totalPOValue,
             taxPercent: 18,
@@ -1143,10 +1253,13 @@ export default function CreatePurchaseInvoicePage() {
         }
       }
     } else {
+      const isAll = selectedGrnId === 'all_grn' || !selectedGrnId;
       const rawGrnId = selectedGrnId.replace('grn_', '');
-      const foundGRN = grnOptions.find(
-        (g) => String(g.id) === String(rawGrnId) || String(g.grnNumber) === String(rawGrnId) || String(g.id) === String(selectedGrnId)
-      ) || (grnOptions.length > 0 ? grnOptions[0] : null);
+      const foundGRN = isAll
+        ? null
+        : (grnOptions.find(
+            (g) => String(g.id) === String(rawGrnId) || String(g.grnNumber) === String(rawGrnId) || String(g.id) === String(selectedGrnId)
+          ) || (grnOptions.length > 0 ? grnOptions[0] : null));
 
       const resolved = resolveItemsForSelection(null, foundGRN, foundPO);
       if (resolved) {
@@ -1240,10 +1353,13 @@ export default function CreatePurchaseInvoicePage() {
     const totalPoContractedVal = Number(selectedPO?.totalAmount || 0);
 
     // 2. Active GRN values
+    const isAll = selectedGrnId === 'all_grn' || (!selectedGrnId && grnOptions.length > 1);
     const cleanGrnId = String(selectedGrnId).replace(/^grn_/, '').replace(/^inv_/, '');
-    const activeGRN =
-      grnOptions.find((g) => String(g.id) === cleanGrnId || String(g.grnNumber) === cleanGrnId) ||
-      (grnOptions.length > 0 ? grnOptions[0] : null);
+    const activeGRN = isAll
+      ? (grnOptions[0] || null)
+      : (grnOptions.find((g) => String(g.id) === cleanGrnId || String(g.grnNumber) === cleanGrnId) ||
+        (grnOptions.length > 0 ? grnOptions[0] : null));
+    const hasRealGrn = (grnOptions && grnOptions.length > 0) || !!activeGRN;
 
     // 3. Build line-by-line reconciliation items
     let totalPoQty = 0;
@@ -1280,7 +1396,7 @@ export default function CreatePurchaseInvoicePage() {
       const bQty = typeof item.supplierQty === 'number' ? item.supplierQty : 0;
       const bRate = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
       const pQty = Number(item.poQty || 0);
-      const gQty = Number(item.grnQty || 0);
+      const gQty = hasRealGrn ? Number(item.grnQty || 0) : 0;
 
       // Match PO item to find PO agreed unit price
       const matchedPoItem =
@@ -1298,30 +1414,33 @@ export default function CreatePurchaseInvoicePage() {
       const gVal = gQty * pRate;
       const bVal = bQty * bRate;
 
-      // Check shortfall: if billed quantity exceeds GRN received, or GRN received < PO ordered
-      const missingFromGrn = Math.max(0, bQty - gQty);
-      const missingFromPo = Math.max(0, pQty - gQty);
-      const sUnits = missingFromGrn > 0 ? missingFromGrn : (bQty > 0 && gQty < pQty ? missingFromPo : 0);
+      // Check shortfall: if accepted quantity < PO ordered quantity, or exceeds dispatched
+      const overDispatched = Math.max(0, bQty - gQty);
+      const missingFromPo = Math.max(0, pQty - bQty);
+      const sUnits = overDispatched > 0 ? overDispatched : missingFromPo;
       const sVal = sUnits * (pRate > 0 ? pRate : bRate);
 
-      const hasQtyShortfall = sUnits > 0;
+      const hasQtyShortfall = !hasRealGrn || sUnits > 0;
       const hasRateVariance = pRate > 0 && bRate > pRate * 1.02; // Billed rate exceeds PO agreed rate by > 2%
 
       let status: 'MATCHED' | 'SHORTFALL' | 'RATE_VARIANCE' = 'MATCHED';
       let remarks = 'Fully matched with Store GRN inspection';
-      if (hasQtyShortfall) {
+      if (!hasRealGrn) {
         status = 'SHORTFALL';
-        remarks = `${sUnits} units missing from GRN store receiving`;
+        remarks = 'Store GRN not yet received';
+      } else if (hasQtyShortfall) {
+        status = 'SHORTFALL';
+        remarks = `${sUnits} unit${sUnits > 1 ? 's' : ''} not accepted / rejected from store receiving`;
       } else if (hasRateVariance) {
         status = 'RATE_VARIANCE';
         remarks = `Billed rate (${formatAmount(bRate, currency)}) exceeds PO rate (${formatAmount(pRate, currency)})`;
       }
 
       totalPoQty += pQty;
-      totalGrnQty += gQty;
+      totalGrnQty += bQty;
       totalBilledQty += bQty;
       totalPoAgreedVal += pVal;
-      totalGrnFulfilledVal += gVal;
+      totalGrnFulfilledVal += bVal;
       totalBilledVal += bVal;
       totalShortfallUnits += sUnits;
       totalShortfallVal += sVal;
@@ -1349,6 +1468,7 @@ export default function CreatePurchaseInvoicePage() {
     });
 
     const poBaselineTotal = totalPoContractedVal > 0 ? totalPoContractedVal : totalPoAgreedVal;
+    const billedNetTotal = calculations.subtotal > 0 ? calculations.subtotal : totalBilledVal;
     const billedGrandTotal = calculations.grandTotal > 0 ? calculations.grandTotal : totalBilledVal;
 
     // Compute store fulfillment %
@@ -1358,9 +1478,13 @@ export default function CreatePurchaseInvoicePage() {
         : (poBaselineTotal > 0 ? Math.min(100, Math.round((totalGrnFulfilledVal / poBaselineTotal) * 100)) : 100);
 
     // Discrepancy checks
-    const hasGrnShortfall = totalShortfallUnits > 0 || totalShortfallVal > 0.01;
+    const hasGrnShortfall = !hasRealGrn || totalShortfallUnits > 0 || totalShortfallVal > 0.01;
     const hasRateDiscrepancy = reconciledLines.some((l) => l.hasRateVariance);
-    const hasOverbilling = poBaselineTotal > 0 && billedGrandTotal > poBaselineTotal * 1.02;
+
+    // Overbilling check: compare Net-to-Net (goods value excluding tax) or Grand-to-Grand (if PO tracked tax)
+    const isNetMatched = poBaselineTotal > 0 && Math.abs(billedNetTotal - poBaselineTotal) <= Math.max(1, poBaselineTotal * 0.02);
+    const isGrandMatched = poBaselineTotal > 0 && Math.abs(billedGrandTotal - poBaselineTotal) <= Math.max(1, poBaselineTotal * 0.02);
+    const hasOverbilling = poBaselineTotal > 0 && !isNetMatched && !isGrandMatched && billedNetTotal > poBaselineTotal * 1.02;
 
     interface DiscrepancyAlert {
       id: string;
@@ -1375,7 +1499,7 @@ export default function CreatePurchaseInvoicePage() {
 
     if (hasGrnShortfall) {
       const shortfallLines = reconciledLines.filter((l) => l.hasQtyShortfall);
-      const isPendingGrn = grnOptions.length === 0;
+      const isPendingGrn = !hasRealGrn;
       discrepancyAlerts.push({
         id: 'grn_shortfall',
         icon: isPendingGrn ? Clock : PackageX,
@@ -1408,12 +1532,12 @@ export default function CreatePurchaseInvoicePage() {
     }
 
     if (hasOverbilling) {
-      const excess = billedGrandTotal - poBaselineTotal;
+      const excess = billedNetTotal - poBaselineTotal;
       discrepancyAlerts.push({
         id: 'overbilling',
         icon: TrendingDown,
         title: 'PO Value Overbilled',
-        description: `Invoice grand total (${formatAmount(billedGrandTotal, currency)}) exceeds PO contracted value (${formatAmount(poBaselineTotal, currency)}) by ${formatAmount(excess, currency)}.`,
+        description: `Invoice net total (${formatAmount(billedNetTotal, currency)}) exceeds PO contracted value (${formatAmount(poBaselineTotal, currency)}) by ${formatAmount(excess, currency)}.`,
         badge: `+${formatAmount(excess, currency)} Excess`,
       });
     }
@@ -1436,13 +1560,14 @@ export default function CreatePurchaseInvoicePage() {
       totalBilledQty,
       poBaselineTotal,
       totalGrnFulfilledVal,
+      billedNetTotal,
       billedGrandTotal,
       grnPercent,
       totalShortfallUnits,
       totalShortfallVal,
       activeGRN,
     };
-  }, [lineItems, selectedPO, selectedGrnId, grnOptions, calculations.grandTotal, currency, formatAmount]);
+  }, [lineItems, selectedPO, selectedGrnId, grnOptions, calculations.grandTotal, calculations.subtotal, currency, formatAmount]);
 
   // File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1597,12 +1722,14 @@ export default function CreatePurchaseInvoicePage() {
         setErrorMsg('Please select a linked Purchase Order (PO Selection).');
         return false;
       }
-      const activeGrn =
-        grnOptions.find(
-          (g) =>
-            String(g.id) === String(selectedGrnId).replace(/^grn_/, '') ||
-            String(g.grnNumber) === String(selectedGrnId).replace(/^grn_/, '')
-        ) || grnOptions[0];
+      const isAll = selectedGrnId === 'all_grn' || !selectedGrnId;
+      const activeGrn = isAll
+        ? grnOptions[0]
+        : (grnOptions.find(
+            (g) =>
+              String(g.id) === String(selectedGrnId).replace(/^grn_/, '') ||
+              String(g.grnNumber) === String(selectedGrnId).replace(/^grn_/, '')
+          ) || grnOptions[0]);
       const existingInv = activeGrn?.invoices?.find(
         (inv) => inv.status !== 'CANCELLED' && inv.status !== 'REJECTED'
       );
@@ -1612,7 +1739,7 @@ export default function CreatePurchaseInvoicePage() {
           (editingInvoiceId && String(existingInv.id) === String(editingInvoiceId)) ||
           existingInv.status === 'RETURNED');
 
-      if (existingInv && !isCurrentOrReturned) {
+      if (existingInv && !isCurrentOrReturned && !isAll) {
         setErrorMsg(
           `Invoice Already Exists: An invoice (${existingInv.invoiceNumber}) has already been created for Goods Received Note #${activeGrn.grnNumber}. Multiple invoices cannot be created from the same GRN.`
         );
@@ -1623,7 +1750,7 @@ export default function CreatePurchaseInvoicePage() {
       (item) => (item.itemName || '').trim().length > 0 && Number(item.supplierQty || 0) > 0
     );
     if (validItems.length === 0) {
-      setErrorMsg('Please add at least one line item with a valid item name and supplier quantity.');
+      setErrorMsg('Please add at least one line item with a valid item name and accepted quantity.');
       return false;
     }
     return true;
@@ -1663,7 +1790,9 @@ export default function CreatePurchaseInvoicePage() {
       })();
 
       const resolvedGrnId =
-        (selectedGrnId && selectedGrnId.startsWith('grn_') ? selectedGrnId.replace(/^grn_/, '') : selectedGrnId) ||
+        (selectedGrnId && selectedGrnId.startsWith('grn_')
+          ? selectedGrnId.replace(/^grn_/, '')
+          : (selectedGrnId === 'all_grn' ? (grnOptions[0]?.id || null) : selectedGrnId)) ||
         (grnOptions.length > 0 ? grnOptions[0].id : null);
 
       await apiRequest('/invoices/manual', {
@@ -1690,7 +1819,7 @@ export default function CreatePurchaseInvoicePage() {
           matchPoQty: !threeWayMatchData.discrepancyAlerts.some((a) => a.id === 'po_empty'),
           matchGrnQty: !threeWayMatchData.discrepancyAlerts.some((a) => a.id === 'grn_shortfall'),
           matchInvoiceValue: !threeWayMatchData.discrepancyAlerts.some((a) => a.id === 'overbilling' || a.id === 'rate_variance'),
-          matchVariance: threeWayMatchData.billedGrandTotal - threeWayMatchData.poBaselineTotal,
+          matchVariance: !threeWayMatchData.isDiscrepant ? 0 : Math.max(0, threeWayMatchData.billedNetTotal - threeWayMatchData.poBaselineTotal),
           matchNotes: threeWayMatchData.matchNotes,
         }),
       });
@@ -2661,8 +2790,8 @@ export default function CreatePurchaseInvoicePage() {
                   <th style={{ width: '100px' }} className="cpi-th--grn">
                     Dispatch Qty
                   </th>
-                  <th style={{ width: '120px' }} className="cpi-th--supplier">
-                    Supplier Qty *
+                  <th style={{ width: '140px' }} className="cpi-th--supplier">
+                    Accepted Quantity *
                   </th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
                   <th style={{ width: '80px' }}>Tax %</th>
@@ -2903,7 +3032,7 @@ export default function CreatePurchaseInvoicePage() {
                     <span className="cpi-step-tag">Step B • Fulfilment</span>
                     {grnOptions.length > 1 ? (
                       <select
-                        value={selectedGrnId}
+                        value={selectedGrnId || 'all_grn'}
                         disabled={isReadOnly}
                         onChange={(e) => setSelectedGrnId(e.target.value)}
                         style={{
@@ -2917,6 +3046,9 @@ export default function CreatePurchaseInvoicePage() {
                           cursor: 'pointer',
                         }}
                       >
+                        <option value="all_grn">
+                          All GRNs Combined ({grnOptions.length} Receipts)
+                        </option>
                         {grnOptions.map((g) => (
                           <option key={g.id} value={`grn_${g.id}`}>
                             {g.grnNumber}
@@ -2984,7 +3116,7 @@ export default function CreatePurchaseInvoicePage() {
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
                     <span>Net Verified:</span>
                     <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>
-                      {formatAmount(threeWayMatchData.totalGrnFulfilledVal > 0 ? Math.min(threeWayMatchData.billedGrandTotal, threeWayMatchData.totalGrnFulfilledVal) : threeWayMatchData.billedGrandTotal, currency)}
+                      {formatAmount(threeWayMatchData.totalGrnFulfilledVal > 0 ? Math.min(threeWayMatchData.billedNetTotal, threeWayMatchData.totalGrnFulfilledVal) : threeWayMatchData.billedNetTotal, currency)}
                     </span>
                   </div>
                 </div>
@@ -2998,7 +3130,7 @@ export default function CreatePurchaseInvoicePage() {
                   ) : (
                     <>
                       <AlertTriangle size={13} />
-                      <span>Variance: {formatAmount(Math.max(0, threeWayMatchData.billedGrandTotal - threeWayMatchData.totalGrnFulfilledVal), currency)}</span>
+                      <span>Variance: {formatAmount(Math.max(0, threeWayMatchData.billedNetTotal - threeWayMatchData.totalGrnFulfilledVal), currency)}</span>
                     </>
                   )}
                 </div>

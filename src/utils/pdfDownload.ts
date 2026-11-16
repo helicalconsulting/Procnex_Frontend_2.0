@@ -920,9 +920,9 @@ export async function downloadPurchaseOrderAsPdf(
                           stamp.signatureUrl ? `
                             <img src="${stamp.signatureUrl}" style="max-height: 38px; max-width: 150px; object-fit: contain;" />
                           ` : `
-                            <svg viewBox="0 0 170 32" style="width: 140px; height: 32px;">
-                              <path d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10" fill="none" stroke="#1e3a8a" stroke-width="2.5" stroke-linecap="round" />
-                              <text x="15" y="24" font-family="'Dancing Script', 'Brush Script MT', cursive, sans-serif" font-size="16" fill="#1e3a8a" font-style="italic">${stamp.name}</text>
+                            <svg viewBox="0 0 170 36" style="width: 140px; height: 32px;">
+                              <text x="85" y="22" text-anchor="middle" font-family="'Caveat', 'Dancing Script', 'Brush Script MT', 'Segoe Script', cursive, sans-serif" font-size="19" font-weight="600" fill="#1e3a8a" font-style="italic">${stamp.name || 'Authorized Signatory'}</text>
+                              <path d="M 15 28 Q 85 33, 155 27" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" opacity="0.8" />
                             </svg>
                           `
                         ) + `

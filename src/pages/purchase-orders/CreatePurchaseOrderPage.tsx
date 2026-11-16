@@ -66,10 +66,10 @@ interface POItem {
   itemName: string;
   description: string;
   showDescription?: boolean;
-  quantity: number;
+  quantity: number | string;
   unit: string;
-  unitPrice: number;
-  taxPercent: number;
+  unitPrice: number | string;
+  taxPercent: number | string;
 }
 
 export default function CreatePurchaseOrderPage() {
@@ -1087,16 +1087,21 @@ export default function CreatePurchaseOrderPage() {
         internalNotes,
         specialInstructions,
         vendorFulfillmentAllowed,
-        items: items.map((i) => ({
-          itemCode: i.itemCode,
-          itemName: i.itemName,
-          description: i.description,
-          quantity: i.quantity,
-          unit: i.unit,
-          unitPrice: i.unitPrice,
-          taxPercent: i.taxPercent,
-          totalPrice: i.quantity * i.unitPrice * (1 + i.taxPercent / 100),
-        })),
+        items: items.map((i) => {
+          const qty = Number(i.quantity) || 1;
+          const price = Number(i.unitPrice) || 0;
+          const tax = Number(i.taxPercent) || 0;
+          return {
+            itemCode: i.itemCode,
+            itemName: i.itemName,
+            description: i.description,
+            quantity: qty,
+            unit: i.unit,
+            unitPrice: price,
+            taxPercent: tax,
+            totalPrice: qty * price * (1 + tax / 100),
+          };
+        }),
         companyName: companyName || brandingCompanyName || 'Organization',
         companyAddress: companyAddress || ([profile?.companyAddress, profile?.companyCity, profile?.companyState, profile?.companyCountry].filter(Boolean).join(', ')) || '',
         companyWebsite: companyWebsite || '',
@@ -1136,7 +1141,7 @@ export default function CreatePurchaseOrderPage() {
       setTimeout(() => {
         setShowSendingOverlay(false);
         // Redirect to PO Creation & Orders list page
-        navigate('/procurement/purchase-requisitions');
+        navigate('/procurement/purchase-orders');
       }, 350);
     } catch (err) {
       setShowSendingOverlay(false);
@@ -1184,16 +1189,21 @@ export default function CreatePurchaseOrderPage() {
       paymentTerms,
       expectedDelivery: deliveryDate,
       shippingTerms,
-      items: items.map((i) => ({
-        itemCode: i.itemCode,
-        name: i.itemName,
-        description: i.description,
-        quantity: i.quantity,
-        unit: i.unit,
-        unitPrice: i.unitPrice,
-        taxPercent: i.taxPercent,
-        total: i.quantity * i.unitPrice,
-      })),
+      items: items.map((i) => {
+        const qty = Number(i.quantity) || 1;
+        const price = Number(i.unitPrice) || 0;
+        const tax = Number(i.taxPercent) || 0;
+        return {
+          itemCode: i.itemCode,
+          name: i.itemName,
+          description: i.description,
+          quantity: qty,
+          unit: i.unit,
+          unitPrice: price,
+          taxPercent: tax,
+          total: qty * price,
+        };
+      }),
       subtotal,
       taxTotal,
       shippingCharges,
@@ -1992,9 +2002,9 @@ export default function CreatePurchaseOrderPage() {
               </thead>
               <tbody>
                 {items.map((item, index) => {
-                  const lineTotal = taxMode === 'LINE_ITEM' && (item.taxPercent || 0) > 0
-                    ? item.quantity * item.unitPrice * (1 + (item.taxPercent || 0) / 100)
-                    : item.quantity * item.unitPrice;
+                  const lineTotal = taxMode === 'LINE_ITEM' && (Number(item.taxPercent) || 0) > 0
+                    ? (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * (1 + (Number(item.taxPercent) || 0) / 100)
+                    : (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
                   return (
                     <tr key={item.id}>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
@@ -2030,12 +2040,26 @@ export default function CreatePurchaseOrderPage() {
                       </td>
                       <td>
                         <input
-                          type="number"
-                          min="1"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="1"
                           className="cpo-table__input"
-                          value={item.quantity}
+                          value={item.quantity === 0 || item.quantity === '0' || item.quantity === '' ? '' : item.quantity}
                           disabled={isReadOnly}
-                          onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => {
+                            let val = e.target.value.replace(/\D/g, '');
+                            if (val.length > 1) {
+                              val = val.replace(/^0+/, '') || '0';
+                            }
+                            handleItemChange(item.id, 'quantity', val === '' ? '' : Number(val));
+                          }}
+                          onBlur={() => {
+                            if (!item.quantity || Number(item.quantity) <= 0) {
+                              handleItemChange(item.id, 'quantity', 1);
+                            }
+                          }}
                         />
                       </td>
                       <td style={{ width: '100px' }}>
@@ -2049,16 +2073,27 @@ export default function CreatePurchaseOrderPage() {
                       </td>
                       <td>
                         <input
-                          type="number"
-                          min="0"
-                          step="any"
+                          type="text"
+                          inputMode="decimal"
                           placeholder="0"
                           className="cpo-table__input"
-                          value={item.unitPrice === 0 ? '' : item.unitPrice}
+                          value={item.unitPrice === 0 || item.unitPrice === '0' || item.unitPrice === '' ? '' : item.unitPrice}
                           disabled={isReadOnly}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => {
-                            const val = e.target.value;
-                            handleItemChange(item.id, 'unitPrice', val === '' ? 0 : Number(val));
+                            let val = e.target.value.replace(/[^0-9.]/g, '');
+                            const parts = val.split('.');
+                            if (parts.length > 2) {
+                              val = parts[0] + '.' + parts.slice(1).join('');
+                            }
+                            if (/^0[0-9]/.test(val)) {
+                              val = val.replace(/^0+/, '');
+                            }
+                            handleItemChange(item.id, 'unitPrice', val);
+                          }}
+                          onBlur={() => {
+                            const num = Number(item.unitPrice);
+                            handleItemChange(item.id, 'unitPrice', isNaN(num) || num < 0 ? 0 : num);
                           }}
                         />
                       </td>
@@ -2066,15 +2101,30 @@ export default function CreatePurchaseOrderPage() {
                         <td style={{ textAlign: 'center' }}>
                           <div className="pr-tax-input-wrap">
                             <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.5"
+                              type="text"
+                              inputMode="decimal"
                               className="pr-tax-cell-input"
-                              value={item.taxPercent === undefined || item.taxPercent === null ? '' : item.taxPercent}
+                              value={item.taxPercent === 0 || item.taxPercent === '0' || item.taxPercent === '' || item.taxPercent === undefined || item.taxPercent === null ? '' : item.taxPercent}
                               placeholder="0"
                               disabled={isReadOnly}
-                              onChange={(e) => handleItemChange(item.id, 'taxPercent', e.target.value === '' ? 0 : Number(e.target.value))}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => {
+                                let val = e.target.value.replace(/[^0-9.]/g, '');
+                                const parts = val.split('.');
+                                if (parts.length > 2) {
+                                  val = parts[0] + '.' + parts.slice(1).join('');
+                                }
+                                if (/^0[0-9]/.test(val)) {
+                                  val = val.replace(/^0+/, '');
+                                }
+                                const num = Number(val);
+                                if (!isNaN(num) && num > 100) val = '100';
+                                handleItemChange(item.id, 'taxPercent', val);
+                              }}
+                              onBlur={() => {
+                                const num = Number(item.taxPercent);
+                                handleItemChange(item.id, 'taxPercent', isNaN(num) || num < 0 ? 0 : Math.min(100, num));
+                              }}
                             />
                             <span className="pr-tax-input-suffix">%</span>
                           </div>

@@ -168,9 +168,13 @@ export default function GRNListPage() {
         totalPrice: Number(po?.totalAmount || po?.amount || matchedInvoice?.amount || 0),
       }
     ]).map((it: any, idx: number) => {
-      const qty = Number(it.quantity || it.orderedQty || it.qty || 1);
+      const qty = Number(it.invoicedQty || it.quantity || it.orderedQty || it.poQty || it.qty || 1);
       const price = Number(it.unitPrice || it.rate || it.price || 0);
-      const total = Number(it.totalPrice || it.total || it.amount || (qty * price) || 0);
+      const taxRate = Number(it.taxPercent !== undefined ? it.taxPercent : (po?.taxRate !== undefined ? po.taxRate : 18));
+      const lineSubtotal = qty * price;
+      const lineTax = taxRate > 0 ? (lineSubtotal * taxRate) / 100 : 0;
+      const calculatedTotal = lineSubtotal + lineTax;
+      const total = Number(it.totalPrice || it.total || it.amount || (calculatedTotal > 0 ? calculatedTotal : (matchedInvoice?.amount || po?.totalAmount || 0)));
       return {
         id: it.id || idx + 1,
         itemCode: it.itemCode || it.code || `ITM-${String(idx + 1).padStart(3, '0')}`,
@@ -178,20 +182,24 @@ export default function GRNListPage() {
         name: it.itemName || it.name || it.description || (it.title ? it.title : `Line Item ${idx + 1}`),
         description: it.description || '',
         quantity: qty,
+        invoicedQty: qty,
         unitPrice: price,
         totalPrice: total,
+        taxPercent: taxRate,
         unit: it.unit || 'Pcs',
         poNumber: it.poNumber || po?.poNumber || po?.purchaseOrder?.poNumber || matchedInvoice?.poNumber || '—',
         department: it.department || po?.department || po?.purchaseOrder?.department || 'Procurement',
       };
     });
 
+    const invoiceAmount = matchedInvoice?.amount ? Number(matchedInvoice.amount) : getPoTotalWithTax(po);
+
     return {
       id: matchedInvoice?.id || po?.id,
       invoiceNumber: matchedInvoice?.invoiceNumber || po?.dispatchNoteNumber || po?.vendorDispatchNoteNumber || `INV-${po?.poNumber || po?.id || '2026-001'}`,
       poNumber: po?.poNumber || po?.purchaseOrder?.poNumber || matchedInvoice?.poNumber || '—',
       vendorName: po?.vendor?.name || po?.vendorName || matchedInvoice?.vendorName || user?.fullName || 'Supplier',
-      amount: getPoTotalWithTax(po),
+      amount: invoiceAmount,
       dueDate: matchedInvoice?.dueDate || new Date().toISOString().slice(0, 10),
       submittedAt: matchedInvoice?.submittedAt || (po?.createdAt ? String(po.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
       invoiceDate: matchedInvoice?.invoiceDate || matchedInvoice?.submittedAt || (po?.createdAt ? String(po.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
@@ -350,23 +358,39 @@ export default function GRNListPage() {
   const modalItems = useMemo(() => {
     if (!selectedGrn) return [];
     if (Array.isArray(selectedGrn.items) && selectedGrn.items.length > 0) {
-      return selectedGrn.items.map((it: any, idx: number) => ({
-        id: it.id || `grn_item_${idx}`,
-        itemName: it.itemName || it.description || it.name || 'Line Item',
-        orderedQty: it.orderedQty ?? it.quantity ?? 1,
-        receivedQty: it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1,
-        remarks: it.remarks || '—',
-      }));
+      return selectedGrn.items.map((it: any, idx: number) => {
+        const ord = Number(it.orderedQty ?? it.quantity ?? 1);
+        const rec = Number(it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1);
+        const acc = it.acceptedQty != null ? Number(it.acceptedQty) : rec;
+        const rej = it.rejectedQty != null ? Number(it.rejectedQty) : Math.max(0, rec - acc);
+        return {
+          id: it.id || `grn_item_${idx}`,
+          itemName: it.itemName || it.description || it.name || 'Line Item',
+          orderedQty: ord,
+          receivedQty: rec,
+          acceptedQty: acc,
+          rejectedQty: rej,
+          remarks: it.remarks || '—',
+        };
+      });
     }
 
     if (Array.isArray((selectedGrn as any).lineItems) && (selectedGrn as any).lineItems.length > 0) {
-      return (selectedGrn as any).lineItems.map((it: any, idx: number) => ({
-        id: it.id || `grn_item_${idx}`,
-        itemName: it.itemName || it.description || it.name || 'Line Item',
-        orderedQty: it.orderedQty ?? it.quantity ?? it.poQty ?? 1,
-        receivedQty: it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1,
-        remarks: it.remarks || '—',
-      }));
+      return (selectedGrn as any).lineItems.map((it: any, idx: number) => {
+        const ord = Number(it.orderedQty ?? it.quantity ?? it.poQty ?? 1);
+        const rec = Number(it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1);
+        const acc = it.acceptedQty != null ? Number(it.acceptedQty) : rec;
+        const rej = it.rejectedQty != null ? Number(it.rejectedQty) : Math.max(0, rec - acc);
+        return {
+          id: it.id || `grn_item_${idx}`,
+          itemName: it.itemName || it.description || it.name || 'Line Item',
+          orderedQty: ord,
+          receivedQty: rec,
+          acceptedQty: acc,
+          rejectedQty: rej,
+          remarks: it.remarks || '—',
+        };
+      });
     }
 
     const targetPoId = String(selectedGrn.poId || selectedGrn.purchaseOrder?.id || '').toLowerCase();
@@ -379,13 +403,21 @@ export default function GRNListPage() {
 
     const rawPoItems = matchedPo?.items || (matchedPo as any)?.rfq?.items || [];
     if (Array.isArray(rawPoItems) && rawPoItems.length > 0) {
-      return rawPoItems.map((it: any, idx: number) => ({
-        id: it.id || `po_item_${idx}`,
-        itemName: it.itemName || it.description || it.name || (matchedPo as any)?.title || 'Order Item',
-        orderedQty: Number(it.quantity || it.orderedQty || 1),
-        receivedQty: Number(it.quantity || it.receivedQty || it.invoicedQty || 1),
-        remarks: 'From Linked Purchase Order',
-      }));
+      return rawPoItems.map((it: any, idx: number) => {
+        const ord = Number(it.quantity || it.orderedQty || 1);
+        const rec = Number(it.quantity || it.receivedQty || it.invoicedQty || 1);
+        const acc = it.acceptedQty != null ? Number(it.acceptedQty) : rec;
+        const rej = it.rejectedQty != null ? Number(it.rejectedQty) : Math.max(0, rec - acc);
+        return {
+          id: it.id || `po_item_${idx}`,
+          itemName: it.itemName || it.description || it.name || (matchedPo as any)?.title || 'Order Item',
+          orderedQty: ord,
+          receivedQty: rec,
+          acceptedQty: acc,
+          rejectedQty: rej,
+          remarks: 'From Linked Purchase Order',
+        };
+      });
     }
 
     return [
@@ -394,6 +426,8 @@ export default function GRNListPage() {
         itemName: 'Line Item',
         orderedQty: 1,
         receivedQty: 1,
+        acceptedQty: 1,
+        rejectedQty: 0,
         remarks: 'Inspected & Verified',
       },
     ];
@@ -1034,7 +1068,7 @@ export default function GRNListPage() {
       {/* Details Modal */}
       <Dialog open={!!selectedGrn} onOpenChange={(open) => { if (!open) setSelectedGrn(null); }}>
         {selectedGrn && (
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl">
             <DialogHeader className="pr-10">
               <DialogTitle>{selectedGrn.grnNumber}</DialogTitle>
               <DialogDescription>
@@ -1049,8 +1083,10 @@ export default function GRNListPage() {
                   <thead className="border-b border-border/70 bg-muted/40 font-semibold text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2">Item Name</th>
-                      <th className="px-3 py-2">Ordered Qty</th>
-                      <th className="px-3 py-2">Received Qty</th>
+                      <th className="px-3 py-2 text-center">Ordered Qty</th>
+                      <th className="px-3 py-2 text-center">Received Qty</th>
+                      <th className="px-3 py-2 text-center text-emerald-600 dark:text-emerald-400">Accepted Qty</th>
+                      <th className="px-3 py-2 text-center text-destructive">Rejected Qty</th>
                       <th className="px-3 py-2">Remarks</th>
                     </tr>
                   </thead>
@@ -1058,12 +1094,34 @@ export default function GRNListPage() {
                     {modalItems.map((it: any) => (
                       <tr key={it.id}>
                         <td className="px-3 py-2.5 font-medium">{it.itemName}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{it.orderedQty}</td>
-                        <td className="px-3 py-2.5 font-bold text-primary">{it.receivedQty}</td>
+                        <td className="px-3 py-2.5 text-center text-muted-foreground">{it.orderedQty}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-primary">{it.receivedQty}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-emerald-600 dark:text-emerald-400">{it.acceptedQty}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-destructive">{it.rejectedQty}</td>
                         <td className="px-3 py-2.5 text-muted-foreground">{it.remarks || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
+                  {modalItems.length > 1 && (
+                    <tfoot className="border-t-2 border-border/80 bg-muted/20 font-semibold text-xs">
+                      <tr>
+                        <td className="px-3 py-2 text-foreground font-bold">Total</td>
+                        <td className="px-3 py-2 text-center text-muted-foreground">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.orderedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-primary">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.receivedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-emerald-600 dark:text-emerald-400">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.acceptedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-destructive">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.rejectedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">—</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
 
@@ -1161,11 +1219,17 @@ export default function GRNListPage() {
 
             <div className="space-y-4 py-2 text-sm">
               {/* Invoice Summary Banner */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/40 border border-border/70 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-muted/40 border border-border/70 text-xs">
                 <div>
                   <span className="text-muted-foreground block font-medium">Total Amount:</span>
                   <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
                     {formatAmount(selectedInvoiceModal.amount, companyDefaultCurrency)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block font-medium">Total Items:</span>
+                  <span className="font-bold text-sm text-foreground">
+                    {selectedInvoiceModal.items.length} line item{selectedInvoiceModal.items.length > 1 ? 's' : ''}
                   </span>
                 </div>
                 <div>
@@ -1181,9 +1245,17 @@ export default function GRNListPage() {
               </div>
 
               {/* Invoice Line Items Breakdown */}
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Invoiced Line Items Breakdown
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Invoiced Line Items Breakdown
+                </h4>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Total Quantity:{' '}
+                  <span className="font-bold text-foreground font-mono">
+                    {selectedInvoiceModal.items.reduce((acc: number, it: any) => acc + Number(it.invoicedQty || it.quantity || 0), 0)} units
+                  </span>
+                </span>
+              </div>
               <div className="overflow-hidden rounded-xl border border-border/70">
                 <table className="w-full text-left text-xs">
                   <thead className="border-b border-border/70 bg-muted/40 font-semibold text-muted-foreground">
@@ -1196,15 +1268,20 @@ export default function GRNListPage() {
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {selectedInvoiceModal.items.map((it: any, idx: number) => {
-                      const qty = Number(it.quantity || it.orderedQty || 1);
+                      const qty = Number(it.invoicedQty || it.quantity || it.orderedQty || 1);
                       const price = Number(it.unitPrice || it.price || 0);
                       const total = Number(it.totalPrice || (qty * price) || selectedInvoiceModal.amount);
                       return (
                         <tr key={it.id || idx}>
                           <td className="px-3.5 py-2.5 font-medium text-foreground">
                             {it.itemName || it.name || it.description || 'Line Item'}
+                            {it.itemCode && (
+                              <span className="text-[10px] text-muted-foreground font-mono block">
+                                Code: {it.itemCode}
+                              </span>
+                            )}
                           </td>
-                          <td className="px-3.5 py-2.5 text-center font-bold text-foreground">{qty}</td>
+                          <td className="px-3.5 py-2.5 text-center font-bold font-mono text-foreground">{qty}</td>
                           <td className="px-3.5 py-2.5 text-right text-muted-foreground font-mono">
                             {formatAmount(price, companyDefaultCurrency)}
                           </td>
@@ -1215,6 +1292,20 @@ export default function GRNListPage() {
                       );
                     })}
                   </tbody>
+                  {selectedInvoiceModal.items.length > 0 && (
+                    <tfoot className="border-t-2 border-border/70 bg-muted/30 font-semibold">
+                      <tr>
+                        <td className="px-3.5 py-2.5 text-foreground font-bold">Total</td>
+                        <td className="px-3.5 py-2.5 text-center font-bold font-mono text-foreground">
+                          {selectedInvoiceModal.items.reduce((acc: number, it: any) => acc + Number(it.invoicedQty || it.quantity || 0), 0)}
+                        </td>
+                        <td className="px-3.5 py-2.5"></td>
+                        <td className="px-3.5 py-2.5 text-right font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {formatAmount(selectedInvoiceModal.amount, companyDefaultCurrency)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Shield, Search, Plus, Lock, Users, ShieldCheck, ShieldAlert, Edit3, Trash2, X, Save, Check, Info } from 'lucide-react';
+import { Shield, Search, Plus, Lock, Users, ShieldCheck, ShieldAlert, Edit3, Trash2, X, Save, Check, Info, Pencil } from 'lucide-react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useAuth } from '../../context/AuthContext';
 import { adminService, type AdminRoleRecord } from '../../services/adminService';
@@ -49,9 +49,14 @@ export default function RolesPermissionsPage() {
   const [createError, setCreateError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<RoleData | null>(null);
   const [deleteError, setDeleteError] = useState('');
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [editRoleName, setEditRoleName] = useState('');
+  const [editRoleDescription, setEditRoleDescription] = useState('');
+  const [editRoleError, setEditRoleError] = useState('');
   const [showModules, setShowModules] = useState(false);
   const createTrigger = useRef<HTMLButtonElement>(null);
   const roleNameInput = useRef<HTMLInputElement>(null);
+  const editRoleNameInput = useRef<HTMLInputElement>(null);
 
   const summary = useMemo(() => ({ total: roles.length, system: roles.filter(r => r.isSystem).length, custom: roles.filter(r => !r.isSystem).length }), [roles]);
   const filtered = roles.filter(role => (filter === 'all' || (filter === 'system' ? role.isSystem : !role.isSystem))
@@ -65,6 +70,17 @@ export default function RolesPermissionsPage() {
   const editable = Boolean(draft && canManage && selected && !selected.protected);
   const counts = permissionSelection(permissions);
   const duplicateName = Boolean(name.trim() && duplicateRoleName(name, roles.flatMap(role => [role.roleName, role.displayRoleName || role.roleName])));
+  const isEditDuplicate = useMemo(() => {
+    if (!editingRoleId || !editRoleName.trim()) return false;
+    const trimmed = editRoleName.trim().toLowerCase();
+    const currentRole = roles.find(r => r.id === editingRoleId);
+    const currentName = (currentRole?.displayRoleName || currentRole?.roleName || '').trim().toLowerCase();
+    if (trimmed === currentName) return false;
+    return roles.some(
+      r => r.id !== editingRoleId &&
+        (r.roleName.toLowerCase() === trimmed || (r.displayRoleName && r.displayRoleName.toLowerCase() === trimmed))
+    );
+  }, [editingRoleId, editRoleName, roles]);
   const createDirty = showCreate && Boolean(name || description || permissionSelection(newPermissions).granted);
   const removesOwnManagement = Boolean(editable && selected && authRoles.includes(selected.roleName)
     && !permissions.find(p => p.module === 'Roles & Permissions')?.canCreate);
@@ -125,6 +141,44 @@ export default function RolesPermissionsPage() {
       setMessage({ type: 'success', text: `Role ${deleteTarget.displayRoleName || deleteTarget.roleName} deleted.` });
     } catch (failure) { setDeleteError(failure instanceof Error ? failure.message : 'Could not delete role.'); }
     finally { requestPending.current = false; setBusy(false); }
+  }
+
+  function startEditingRole(target: RoleData) {
+    if (!canManage || busy || target.protected) return;
+    setEditingRoleId(target.id);
+    setEditRoleName(target.displayRoleName || target.roleName);
+    setEditRoleDescription(target.description || '');
+    setEditRoleError('');
+    setMessage(null);
+  }
+
+  function cancelEditingRole() {
+    setEditingRoleId(null);
+    setEditRoleName('');
+    setEditRoleDescription('');
+    setEditRoleError('');
+  }
+
+  async function saveRoleMetadata() {
+    if (!selected || editingRoleId !== selected.id || !canManage || !editRoleName.trim() || isEditDuplicate || requestPending.current) return;
+    requestPending.current = true;
+    setBusy(true);
+    setEditRoleError('');
+    try {
+      const updated = await adminService.updateRole(selected.id, {
+        roleName: editRoleName.trim(),
+        description: editRoleDescription.trim(),
+      });
+      await forceRefresh();
+      setEditingRoleId(null);
+      setMessage({ type: 'success', text: `Role "${updated.displayRoleName || updated.roleName}" updated successfully.` });
+      window.dispatchEvent(new Event('heliflow_auth_change'));
+    } catch (failure) {
+      setEditRoleError(failure instanceof Error ? failure.message : 'Could not update role.');
+    } finally {
+      requestPending.current = false;
+      setBusy(false);
+    }
   }
 
   return (
@@ -219,7 +273,7 @@ export default function RolesPermissionsPage() {
                     className="roles-picker__item"
                     aria-pressed={isSelected}
                     disabled={busy}
-                    onClick={() => { setSelectedId(role.id); setMessage(null); }}
+                    onClick={() => { setSelectedId(role.id); setMessage(null); cancelEditingRole(); }}
                   >
                     <div className="roles-picker__item-top">
                       <span className="roles-picker__name">
@@ -262,45 +316,139 @@ export default function RolesPermissionsPage() {
             <section className={`roles-detail ${draft ? 'roles-detail--editing' : ''}`} aria-label={`Permissions for ${selected.displayRoleName || selected.roleName}`}>
               <header className="roles-detail__header">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                      {selected.displayRoleName || selected.roleName}
-                    </h2>
-                    {selected.protected && (
-                      <span className="roles-badge roles-badge--protected">
-                        <Lock size={12} />
-                        Protected
-                      </span>
-                    )}
-                    {selected.isSystem && !selected.protected && (
-                      <span className="roles-badge roles-badge--system">
-                        <Shield size={12} />
-                        System Role
-                      </span>
-                    )}
-                    {draft && (
-                      <span className="roles-badge roles-badge--editing">
-                        <Edit3 size={12} />
-                        Editing Mode
-                      </span>
-                    )}
-                  </div>
+                  {editingRoleId === selected.id ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void saveRoleMetadata();
+                      }}
+                      className="space-y-3 py-0.5"
+                    >
+                      <div className="flex items-start gap-3 flex-wrap">
+                        <div className="flex-1 min-w-[220px] max-w-sm">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                            Role Name <span className="text-destructive">*</span>
+                          </label>
+                          <Input
+                            ref={editRoleNameInput}
+                            required
+                            placeholder="Role name..."
+                            value={editRoleName}
+                            disabled={busy}
+                            aria-invalid={isEditDuplicate}
+                            onChange={(e) => setEditRoleName(e.target.value)}
+                            className="h-8 text-sm font-semibold bg-background"
+                            autoFocus
+                          />
+                          {isEditDuplicate && (
+                            <p className="roles-error text-xs mt-1">A role with this name already exists.</p>
+                          )}
+                          {editRoleError && (
+                            <p className="roles-error text-xs mt-1">{editRoleError}</p>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-[220px] max-w-md">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                            Description
+                          </label>
+                          <Input
+                            placeholder="Role responsibilities overview..."
+                            value={editRoleDescription}
+                            disabled={busy}
+                            onChange={(e) => setEditRoleDescription(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                          />
+                        </div>
+                      </div>
 
-                  <p className="roles-detail__desc">
-                    {selected.description || 'Configure this role’s access to application modules.'}
-                  </p>
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={
+                            busy ||
+                            !editRoleName.trim() ||
+                            isEditDuplicate ||
+                            (editRoleName.trim() === (selected.displayRoleName || selected.roleName)?.trim() &&
+                              editRoleDescription.trim() === (selected.description || '').trim())
+                          }
+                          className="gap-1.5 h-8 px-3 shadow-xs"
+                        >
+                          <Check size={14} />
+                          {busy ? 'Saving…' : 'Save changes'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={cancelEditingRole}
+                          disabled={busy}
+                          className="h-8 px-3 text-muted-foreground hover:text-foreground"
+                        >
+                          <X size={14} />
+                          Cancel
+                        </Button>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          Updating for <strong>{selected.userCount ?? 0}</strong> assigned user{selected.userCount === 1 ? '' : 's'}.
+                        </span>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                          {selected.displayRoleName || selected.roleName}
+                        </h2>
+                        {!selected.protected && canManage && !draft && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => startEditingRole(selected)}
+                            disabled={busy}
+                            className="h-7 px-2 text-xs font-medium text-muted-foreground hover:text-foreground gap-1 -ml-1"
+                            title="Edit role name & description inline"
+                          >
+                            <Pencil size={12} />
+                            <span>Edit name</span>
+                          </Button>
+                        )}
+                        {selected.protected && (
+                          <span className="roles-badge roles-badge--protected">
+                            <Lock size={12} />
+                            Protected
+                          </span>
+                        )}
+                        {selected.isSystem && !selected.protected && (
+                          <span className="roles-badge roles-badge--system">
+                            <Shield size={12} />
+                            System Role
+                          </span>
+                        )}
+                        {draft && (
+                          <span className="roles-badge roles-badge--editing">
+                            <Edit3 size={12} />
+                            Editing Mode
+                          </span>
+                        )}
+                      </div>
 
-                  <div className="roles-detail__meta">
-                    <span className="roles-meta-item">
-                      <Users size={13} className="text-muted-foreground" />
-                      <strong>{selected.userCount ?? 0}</strong> assigned user{selected.userCount === 1 ? '' : 's'}
-                    </span>
-                    <span className="roles-meta-divider">·</span>
-                    <span className="roles-meta-item">
-                      <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
-                      <strong>{counts.granted}</strong> of {counts.total} permissions granted
-                    </span>
-                  </div>
+                      <p className="roles-detail__desc">
+                        {selected.description || 'Configure this role’s access to application modules.'}
+                      </p>
+
+                      <div className="roles-detail__meta">
+                        <span className="roles-meta-item">
+                          <Users size={13} className="text-muted-foreground" />
+                          <strong>{selected.userCount ?? 0}</strong> assigned user{selected.userCount === 1 ? '' : 's'}
+                        </span>
+                        <span className="roles-meta-divider">·</span>
+                        <span className="roles-meta-item">
+                          <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
+                          <strong>{counts.granted}</strong> of {counts.total} permissions granted
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="roles-detail__actions">
@@ -309,16 +457,31 @@ export default function RolesPermissionsPage() {
                       <Lock size={13} /> Full access
                     </span>
                   ) : !draft ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={startEditing}
-                      disabled={!canManage || busy}
-                      className="gap-1.5 font-medium shadow-2xs hover:border-primary/40 hover:text-primary"
-                    >
-                      <Edit3 size={14} />
-                      Edit permissions
-                    </Button>
+                    <>
+                      {!selected.protected && canManage && editingRoleId !== selected.id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => startEditingRole(selected)}
+                          disabled={busy}
+                          className="gap-1.5 font-medium shadow-2xs hover:border-primary/40 hover:text-primary"
+                          title="Alter role name & description inline"
+                        >
+                          <Pencil size={13} />
+                          Edit role
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={startEditing}
+                        disabled={!canManage || busy || editingRoleId === selected.id}
+                        className="gap-1.5 font-medium shadow-2xs hover:border-primary/40 hover:text-primary"
+                      >
+                        <Edit3 size={14} />
+                        Edit permissions
+                      </Button>
+                    </>
                   ) : (
                     <div className="flex items-center gap-2">
                       <Button

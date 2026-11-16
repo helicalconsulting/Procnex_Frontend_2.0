@@ -765,6 +765,25 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
             });
             if (byName?.dataUrl) return byName.dataUrl;
+
+            const bySaved = savedSigs.find((s: any) => {
+              const sName = (s.name || '').toLowerCase().trim();
+              return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
+            });
+            if (bySaved?.dataUrl) return bySaved.dataUrl;
+
+            if (cleanName.includes('mahi')) {
+              const m = localStorage.getItem('heliflow_sig_mahi');
+              if (m) return m;
+            }
+            if (cleanName.includes('nischal')) {
+              const n = localStorage.getItem('heliflow_sig_nischal');
+              if (n) return n;
+            }
+            if (cleanName.includes('kanika') || cleanName.includes('pari')) {
+              const k = localStorage.getItem('heliflow_sig_kanika');
+              if (k) return k;
+            }
           }
 
           return undefined;
@@ -1233,9 +1252,12 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                       </span>
                     </div>
 
-                    {/* Role Name & Date */}
+                    {/* Role Name, Approver Name & Date */}
                     <div className="bpv-stamp-card__details">
                       <div className="bpv-stamp-role">{app.role}</div>
+                      {app.name && (
+                        <div className="bpv-stamp-name">{app.name}</div>
+                      )}
                       <div className="bpv-stamp-date">Date: <strong>{app.date}</strong></div>
                     </div>
 
@@ -1249,25 +1271,27 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                             <img src={app.signatureUrl} alt={`Signature of ${app.name}`} className="bpv-stamp-sig-img" />
                           ) : (
                             <div className="bpv-stamp-sig-svg-wrap">
-                              <svg viewBox="0 0 170 32" className="bpv-stamp-sig-svg">
-                                <path
-                                  d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
-                                  fill="none"
-                                  stroke="#1e3a8a"
-                                  strokeWidth="2.5"
-                                  strokeLinecap="round"
-                                />
+                              <svg viewBox="0 0 170 36" className="bpv-stamp-sig-svg">
                                 <text
-                                  x="15"
-                                  y="24"
-                                  fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
-                                  fontSize="17"
+                                  x="85"
+                                  y="22"
+                                  textAnchor="middle"
+                                  fontFamily="'Caveat', 'Dancing Script', 'Brush Script MT', 'Segoe Script', cursive, sans-serif"
+                                  fontSize="20"
+                                  fontWeight="600"
                                   fill="#1e3a8a"
                                   fontStyle="italic"
-                                  opacity="0.9"
                                 >
-                                  {app.name}
+                                  {app.name || 'Authorized Signatory'}
                                 </text>
+                                <path
+                                  d="M 15 28 Q 85 33, 155 27"
+                                  fill="none"
+                                  stroke="#2563eb"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  opacity="0.8"
+                                />
                               </svg>
                             </div>
                           )}

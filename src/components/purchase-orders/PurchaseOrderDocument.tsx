@@ -379,25 +379,27 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
                             />
                           ) : (
                             <div className="po-doc__stamp-sig-svg-wrap" style={{ width: '100%', maxWidth: '200px', height: '48px' }}>
-                              <svg viewBox="0 0 170 32" style={{ width: '100%', height: '48px' }}>
-                                <path
-                                  d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
-                                  fill="none"
-                                  stroke="#1e3a8a"
-                                  strokeWidth="2.5"
-                                  strokeLinecap="round"
-                                />
+                              <svg viewBox="0 0 170 36" style={{ width: '100%', height: '48px' }}>
                                 <text
-                                  x="15"
-                                  y="24"
-                                  fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
-                                  fontSize="17"
+                                  x="85"
+                                  y="22"
+                                  textAnchor="middle"
+                                  fontFamily="'Caveat', 'Dancing Script', 'Brush Script MT', 'Segoe Script', cursive, sans-serif"
+                                  fontSize="20"
+                                  fontWeight="600"
                                   fill="#1e3a8a"
                                   fontStyle="italic"
-                                  opacity="0.9"
                                 >
                                   {cleanDisplayName}
                                 </text>
+                                <path
+                                  d="M 15 28 Q 85 33, 155 27"
+                                  fill="none"
+                                  stroke="#2563eb"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  opacity="0.8"
+                                />
                               </svg>
                             </div>
                           )}

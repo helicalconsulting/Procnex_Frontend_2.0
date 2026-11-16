@@ -53,6 +53,9 @@ interface MockUser {
   phone: string;
   department: string;
   companyCode: string;
+  branchId?: string | null;
+  branchCode?: string | null;
+  branchName?: string | null;
   role: string;
   apiRoleName: string;
   isActive: boolean;
@@ -65,7 +68,7 @@ interface MockUser {
 }
 
 function mapUser(
-  u: User & { roles?: string[]; isMobileAccessEnabled?: boolean }
+  u: User & { roles?: string[]; isMobileAccessEnabled?: boolean; branch?: { id: string; code: string; name: string } | null; branchName?: string | null }
 ): MockUser {
   const rawRole = u.roles?.[0] || 'Staff';
   const role = rawRole;
@@ -79,6 +82,9 @@ function mapUser(
     phone: u.phone || '—',
     department: u.department || '—',
     companyCode: u.companyCode,
+    branchId: u.branchId || null,
+    branchCode: u.branchCode || u.branch?.code || null,
+    branchName: u.branchName || u.branch?.name || (u.branchCode ? u.branchCode : '—'),
     role,
     apiRoleName: rawRole,
     isActive: u.isActive,
@@ -139,6 +145,17 @@ const ALL_COLUMNS: UserColumnDef[] = [
   },
   { key: 'department', label: 'Department', defaultVisible: true, width: '130px', render: (u) => <span className="users-table__dept">{u.department}</span> },
   {
+    key: 'branch',
+    label: 'Branch',
+    defaultVisible: true,
+    width: '150px',
+    render: (u) => (
+      <span className="users-table__dept" title={u.branchName || '—'}>
+        {u.branchName || (u.branchCode ? u.branchCode : '—')}
+      </span>
+    ),
+  },
+  {
     key: 'access', label: 'Access', defaultVisible: true, required: true, width: '190px',
   },
   { key: 'lastLogin', label: 'Last Login', defaultVisible: true, width: '160px', render: (u, _fd, fmtDT) => <span className="users-table__date">{fmtDT(u.lastLoginAt)}</span> },
@@ -180,6 +197,13 @@ export default function UsersPage() {
     { cacheKey: 'users:positions' }
   );
 
+  const { data: branches = [] } = useServiceData(
+    () => companySettingsService.listBranches(),
+    [],
+    [],
+    { cacheKey: 'users:branches' }
+  );
+
   // ── Company User Limit ──
   const [maxUsersAllowed, setMaxUsersAllowed] = useState<number>(50);
   useEffect(() => {
@@ -217,6 +241,7 @@ export default function UsersPage() {
   const [editCountryCode, setEditCountryCode] = useState('+254');
   const [editPhone, setEditPhone] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
+  const [editBranchId, setEditBranchId] = useState('');
   const [editRoleName, setEditRoleName] = useState('');
   const [editMobileAccess, setEditMobileAccess] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -279,6 +304,7 @@ export default function UsersPage() {
   const [newPhone, setNewPhone] = useState('');
   const [newRole, setNewRole] = useState<string>('');
   const [newDepartment, setNewDepartment] = useState('');
+  const [newBranchId, setNewBranchId] = useState('');
   const [newPosition, setNewPosition] = useState('');
   const [newMobileAccess, setNewMobileAccess] = useState(false);
 
@@ -443,6 +469,7 @@ export default function UsersPage() {
     setNewPhone('');
     setNewRole('');
     setNewDepartment('');
+    setNewBranchId('');
     setNewPosition('');
     setNewMobileAccess(false);
     setDocAadhaar(null);
@@ -491,6 +518,7 @@ export default function UsersPage() {
         password: newPassword,
         phone: newPhone.trim() ? `${newCountryCode}${newPhone.trim()}` : undefined,
         department: newDepartment.trim(),
+        branchId: newBranchId || undefined,
         position: selectedUserType === 'rfq' ? newPosition : undefined,
         companyCode: userCompanyCode || undefined,
         roleName,
@@ -548,6 +576,7 @@ export default function UsersPage() {
       setEditPhone(rawEditPhone);
     }
     setEditDepartment(user.department === '—' ? '' : user.department);
+    setEditBranchId(user.branchId || '');
     setEditRoleName(user.apiRoleName || user.role || '');
     setEditMobileAccess(user.isMobileAccessEnabled);
   }, []);
@@ -570,6 +599,7 @@ export default function UsersPage() {
         email: editEmail.trim(),
         phone: editPhone.trim() ? `${editCountryCode}${editPhone.trim()}` : undefined,
         department: editDepartment.trim(),
+        branchId: editBranchId || 'HQ',
         roleName: editRoleName.trim(),
         isMobileAccessEnabled: editMobileAccess,
       });
@@ -583,7 +613,7 @@ export default function UsersPage() {
     }
   }, [
     editingUser, editFullName, editEmail, isEditEmailInvalid, editPhone, editCountryCode,
-    editDepartment, editRoleName, editMobileAccess, forceRefresh, actionLoading, hasPermission,
+    editDepartment, editBranchId, editRoleName, editMobileAccess, forceRefresh, actionLoading, hasPermission,
   ]);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -1293,6 +1323,15 @@ export default function UsersPage() {
                       </div>
                     </div>
                   )}
+                  <div className="users-modal__row" style={{ marginTop: 8 }}>
+                    <div className="users-modal__field" style={{ width: '100%' }}>
+                      <label htmlFor="users-newBranch" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Branch <span className="text-[11px] text-muted-foreground font-normal">(Optional)</span></label>
+                      <Select id="users-newBranch" disabled={actionLoading} className="users-modal__select" value={newBranchId} onChange={(e) => setNewBranchId(e.target.value)}>
+                        <option value="">Select branch</option>
+                        {branches.filter((b) => b.isActive).map((b) => (<option key={b.id} value={b.id}>{b.name} ({b.code})</option>))}
+                      </Select>
+                    </div>
+                  </div>
                   <div className="users-mobile-setting">
                     <div className="users-mobile-setting__heading">
                       <span className="users-modal__label"><Smartphone size={18} /> Allow Mobile App Access</span>
@@ -1365,10 +1404,13 @@ export default function UsersPage() {
               </div>
               <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Department</label><p style={{ margin: 0 }}>{viewUser.department}</p></div>
-                <div className="users-modal__field"><label className="users-modal__label">Status</label><p style={{ margin: 0 }}>{viewUser.isActive ? 'Active' : 'Inactive'}</p></div>
+                <div className="users-modal__field"><label className="users-modal__label">Branch</label><p style={{ margin: 0 }}>{viewUser.branchName || '—'}</p></div>
               </div>
               <div className="users-modal__row">
+                <div className="users-modal__field"><label className="users-modal__label">Status</label><p style={{ margin: 0 }}>{viewUser.isActive ? 'Active' : 'Inactive'}</p></div>
                 <div className="users-modal__field"><label className="users-modal__label">Mobile App Access</label><p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Smartphone size={15} strokeWidth={2} /> {viewUser.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}</p></div>
+              </div>
+              <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Last Login</label><p style={{ margin: 0 }}>{formatDateTime(viewUser.lastLoginAt)}</p></div>
               </div>
             </div>
@@ -1438,6 +1480,13 @@ export default function UsersPage() {
                     {positionRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
                   </Select>
                 </div>
+              </div>
+              <div className="users-modal__field" style={{ marginTop: 8 }}>
+                <label htmlFor="users-editBranch" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Branch</label>
+                <Select id="users-editBranch" disabled={actionLoading} className="users-modal__select" value={editBranchId} onChange={(e) => setEditBranchId(e.target.value)}>
+                  <option value="">Select branch</option>
+                  {branches.filter((b) => b.isActive).map((b) => (<option key={b.id} value={b.id}>{b.name} ({b.code})</option>))}
+                </Select>
               </div>
               <div className="users-mobile-setting">
                     <div className="users-mobile-setting__heading">

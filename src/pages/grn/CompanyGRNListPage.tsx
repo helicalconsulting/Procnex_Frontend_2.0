@@ -145,26 +145,84 @@ export default function CompanyGRNListPage() {
 
   // Map of PO ID/Number to Inbound Dispatch / Invoice
   const inboundShipmentMap = useMemo(() => {
-    const map = new Map<string, { type: 'DISPATCH' | 'INVOICE'; refNumber: string }>();
+    interface InboundInfo {
+      type: 'DISPATCH' | 'INVOICE';
+      refNumber: string;
+      totalDispatches: number;
+      dispatchNumbers: string[];
+      pendingDispatches: string[];
+      receivedDispatches: string[];
+      hasPendingDispatch: boolean;
+    }
+
+    const map = new Map<string, InboundInfo>();
+
+    const receivedDnSet = new Set<string>();
+    (grns || []).forEach((g) => {
+      if (g.dispatchNoteId) receivedDnSet.add(String(g.dispatchNoteId).toLowerCase().trim());
+      if (g.dispatchNoteNumber) receivedDnSet.add(String(g.dispatchNoteNumber).toLowerCase().trim());
+    });
 
     (dispatchNotes || []).forEach((dn) => {
       const pId = String(dn.poId || '').toLowerCase().trim();
-      const pNum = String(dn.poNumber || '').toLowerCase().trim();
-      const val = { type: 'DISPATCH' as const, refNumber: dn.dispatchNoteNumber };
-      if (pId) map.set(pId, val);
-      if (pNum) map.set(pNum, val);
+      const pNum = String(dn.poNumber || dn.purchaseOrder?.poNumber || '').toLowerCase().trim();
+      const dnNum = String(dn.dispatchNoteNumber || '').trim();
+      const dnId = String(dn.id || '').toLowerCase().trim();
+
+      const isReceived =
+        dn.status === 'RECEIVED' ||
+        (dnId && receivedDnSet.has(dnId)) ||
+        (dnNum && receivedDnSet.has(dnNum.toLowerCase()));
+
+      const keys = [pId, pNum].filter(Boolean);
+      keys.forEach((key) => {
+        let existing = map.get(key);
+        if (!existing || existing.type !== 'DISPATCH') {
+          existing = {
+            type: 'DISPATCH',
+            refNumber: dnNum,
+            totalDispatches: 0,
+            dispatchNumbers: [],
+            pendingDispatches: [],
+            receivedDispatches: [],
+            hasPendingDispatch: false,
+          };
+          map.set(key, existing);
+        }
+
+        if (dnNum && !existing.dispatchNumbers.includes(dnNum)) {
+          existing.dispatchNumbers.push(dnNum);
+          existing.totalDispatches = existing.dispatchNumbers.length;
+          if (isReceived) {
+            existing.receivedDispatches.push(dnNum);
+          } else {
+            existing.pendingDispatches.push(dnNum);
+          }
+          existing.hasPendingDispatch = existing.pendingDispatches.length > 0;
+          existing.refNumber = existing.pendingDispatches[0] || existing.dispatchNumbers[0] || dnNum;
+        }
+      });
     });
 
     (invoicesList || []).forEach((inv) => {
       const pId = String(inv.poId || '').toLowerCase().trim();
       const pNum = String(inv.poNumber || '').toLowerCase().trim();
-      const val = { type: 'INVOICE' as const, refNumber: inv.invoiceNumber };
+      const invNum = String(inv.invoiceNumber || '').trim();
+      const val: InboundInfo = {
+        type: 'INVOICE',
+        refNumber: invNum,
+        totalDispatches: 0,
+        dispatchNumbers: [],
+        pendingDispatches: [],
+        receivedDispatches: [],
+        hasPendingDispatch: false,
+      };
       if (pId && !map.has(pId)) map.set(pId, val);
       if (pNum && !map.has(pNum)) map.set(pNum, val);
     });
 
     return map;
-  }, [dispatchNotes, invoicesList]);
+  }, [dispatchNotes, invoicesList, grns]);
 
   // Auto-switch tab and invalidate queries when arriving with recorded tab state
   useEffect(() => {
@@ -418,6 +476,9 @@ export default function CompanyGRNListPage() {
       list = list.filter((po) => {
         const poIdStr = String(po.id || '').toLowerCase().trim();
         const poNumStr = String(po.poNumber || '').toLowerCase().trim();
+        const inbound = inboundShipmentMap.get(poIdStr) || inboundShipmentMap.get(poNumStr);
+        if (inbound?.hasPendingDispatch) return true;
+
         const hasGrn =
           (poIdStr && posWithGrn.has(poIdStr)) ||
           (poNumStr && posWithGrn.has(poNumStr));
@@ -550,13 +611,16 @@ export default function CompanyGRNListPage() {
     return approvedOrders.filter((po) => {
       const poIdStr = String(po.id || '').toLowerCase().trim();
       const poNumStr = String(po.poNumber || '').toLowerCase().trim();
+      const inbound = inboundShipmentMap.get(poIdStr) || inboundShipmentMap.get(poNumStr);
+      if (inbound?.hasPendingDispatch) return true;
+
       const hasGrn =
         (poIdStr && posWithGrn.has(poIdStr)) ||
         (poNumStr && posWithGrn.has(poNumStr));
       const s = String(po?.status || '').toUpperCase().trim();
       return !hasGrn && s !== 'GRN_RECEIVED' && s !== 'DELIVERED' && s !== 'CLOSED';
     }).length;
-  }, [approvedOrders, posWithGrn]);
+  }, [approvedOrders, posWithGrn, inboundShipmentMap]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -571,22 +635,38 @@ export default function CompanyGRNListPage() {
   const modalItems = useMemo(() => {
     if (!selectedGrn) return [];
     if (Array.isArray(selectedGrn.items) && selectedGrn.items.length > 0) {
-      return selectedGrn.items.map((it: any, idx: number) => ({
-        id: it.id || `grn_item_${idx}`,
-        itemName: it.itemName || it.description || it.name || 'Line Item',
-        orderedQty: it.orderedQty ?? it.quantity ?? 1,
-        receivedQty: it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1,
-        remarks: it.remarks || '—',
-      }));
+      return selectedGrn.items.map((it: any, idx: number) => {
+        const ord = Number(it.orderedQty ?? it.quantity ?? 1);
+        const rec = Number(it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1);
+        const acc = it.acceptedQty != null ? Number(it.acceptedQty) : rec;
+        const rej = it.rejectedQty != null ? Number(it.rejectedQty) : Math.max(0, rec - acc);
+        return {
+          id: it.id || `grn_item_${idx}`,
+          itemName: it.itemName || it.description || it.name || 'Line Item',
+          orderedQty: ord,
+          receivedQty: rec,
+          acceptedQty: acc,
+          rejectedQty: rej,
+          remarks: it.remarks || '—',
+        };
+      });
     }
     if (Array.isArray((selectedGrn as any).lineItems) && (selectedGrn as any).lineItems.length > 0) {
-      return (selectedGrn as any).lineItems.map((it: any, idx: number) => ({
-        id: it.id || `grn_item_${idx}`,
-        itemName: it.itemName || it.description || it.name || 'Line Item',
-        orderedQty: it.orderedQty ?? it.quantity ?? it.poQty ?? 1,
-        receivedQty: it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1,
-        remarks: it.remarks || '—',
-      }));
+      return (selectedGrn as any).lineItems.map((it: any, idx: number) => {
+        const ord = Number(it.orderedQty ?? it.quantity ?? it.poQty ?? 1);
+        const rec = Number(it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1);
+        const acc = it.acceptedQty != null ? Number(it.acceptedQty) : rec;
+        const rej = it.rejectedQty != null ? Number(it.rejectedQty) : Math.max(0, rec - acc);
+        return {
+          id: it.id || `grn_item_${idx}`,
+          itemName: it.itemName || it.description || it.name || 'Line Item',
+          orderedQty: ord,
+          receivedQty: rec,
+          acceptedQty: acc,
+          rejectedQty: rej,
+          remarks: it.remarks || '—',
+        };
+      });
     }
     const targetPoId = String(selectedGrn.poId || selectedGrn.purchaseOrder?.id || '').toLowerCase();
     const targetPoNum = String(selectedGrn.purchaseOrder?.poNumber || '').toLowerCase();
@@ -598,15 +678,33 @@ export default function CompanyGRNListPage() {
 
     const rawPoItems = matchedPo?.items || (matchedPo as any)?.rfq?.items || [];
     if (Array.isArray(rawPoItems) && rawPoItems.length > 0) {
-      return rawPoItems.map((it: any, idx: number) => ({
-        id: it.id || `po_item_${idx}`,
-        itemName: it.itemName || it.description || it.name || (matchedPo as any)?.title || 'Order Item',
-        orderedQty: Number(it.quantity || it.orderedQty || 1),
-        receivedQty: Number(it.quantity || it.receivedQty || it.invoicedQty || 1),
-        remarks: 'From Linked Purchase Order',
-      }));
+      return rawPoItems.map((it: any, idx: number) => {
+        const ord = Number(it.quantity || it.orderedQty || 1);
+        const rec = Number(it.quantity || it.receivedQty || it.invoicedQty || 1);
+        const acc = it.acceptedQty != null ? Number(it.acceptedQty) : rec;
+        const rej = it.rejectedQty != null ? Number(it.rejectedQty) : Math.max(0, rec - acc);
+        return {
+          id: it.id || `po_item_${idx}`,
+          itemName: it.itemName || it.description || it.name || (matchedPo as any)?.title || 'Order Item',
+          orderedQty: ord,
+          receivedQty: rec,
+          acceptedQty: acc,
+          rejectedQty: rej,
+          remarks: 'From Linked Purchase Order',
+        };
+      });
     }
-    return [{ id: 'default_item_1', itemName: 'Line Item', orderedQty: 1, receivedQty: 1, remarks: 'Inspected & Verified' }];
+    return [
+      {
+        id: 'default_item_1',
+        itemName: 'Line Item',
+        orderedQty: 1,
+        receivedQty: 1,
+        acceptedQty: 1,
+        rejectedQty: 0,
+        remarks: 'Inspected & Verified',
+      },
+    ];
   }, [selectedGrn, poList]);
 
   return (
@@ -760,7 +858,11 @@ export default function CompanyGRNListPage() {
                           {hasInbound ? (
                             <Badge variant="outline" className="gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold text-xs">
                               <Truck className="size-3 text-emerald-500" />
-                              {inbound?.type === 'INVOICE' ? `Invoice: ${inbound.refNumber}` : `Dispatch: ${inbound?.refNumber || 'Dispatched'}`}
+                              {inbound?.type === 'INVOICE'
+                                ? `Invoice: ${inbound.refNumber}`
+                                : (inbound?.totalDispatches || 0) > 1
+                                ? `${inbound?.totalDispatches} Dispatches (${inbound?.dispatchNumbers.join(', ')})`
+                                : `Dispatch: ${inbound?.refNumber || 'Dispatched'}`}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium text-xs">
@@ -770,7 +872,7 @@ export default function CompanyGRNListPage() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {hasGrn ? (
+                            {hasGrn && !inbound?.hasPendingDispatch ? (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -783,9 +885,18 @@ export default function CompanyGRNListPage() {
                               <Button
                                 type="button"
                                 disabled={!canCreateGRN}
-                                onClick={() => navigate(`/procurement/create-company-grn?poId=${po.id || po.poNumber}`, { state: { po } })}
+                                onClick={() => {
+                                  const pendingDn = inbound?.pendingDispatches?.[0] || '';
+                                  const dnQuery = pendingDn ? `&dnId=${encodeURIComponent(pendingDn)}` : '';
+                                  navigate(`/procurement/create-company-grn?poId=${encodeURIComponent(po.poNumber || po.id)}${dnQuery}`, { state: { po } });
+                                }}
                               >
                                 <Plus className="size-4" /> Create GRN
+                                {inbound && inbound.totalDispatches > 1 && (
+                                  <span className="ml-1 text-[11px] opacity-80">
+                                    ({inbound.receivedDispatches.length}/{inbound.totalDispatches})
+                                  </span>
+                                )}
                               </Button>
                             ) : (
                               <Button
@@ -931,7 +1042,7 @@ export default function CompanyGRNListPage() {
       {/* Details Modal */}
       <Dialog open={!!selectedGrn} onOpenChange={(open) => { if (!open) setSelectedGrn(null); }}>
         {selectedGrn && (
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl">
             <DialogHeader className="pr-10">
               <DialogTitle>{selectedGrn.grnNumber}</DialogTitle>
               <DialogDescription>
@@ -946,21 +1057,45 @@ export default function CompanyGRNListPage() {
                   <thead className="border-b border-border/70 bg-muted/40 font-semibold text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2">Item Name</th>
-                      <th className="px-3 py-2">Ordered Qty</th>
-                      <th className="px-3 py-2">Received Qty</th>
+                      <th className="px-3 py-2 text-center">Ordered Qty</th>
+                      <th className="px-3 py-2 text-center">Received Qty</th>
+                      <th className="px-3 py-2 text-center text-emerald-600 dark:text-emerald-400">Accepted Qty</th>
+                      <th className="px-3 py-2 text-center text-destructive">Rejected Qty</th>
                       <th className="px-3 py-2">Remarks</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {modalItems.map((it) => (
+                    {modalItems.map((it: any) => (
                       <tr key={it.id}>
                         <td className="px-3 py-2.5 font-medium">{it.itemName}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{it.orderedQty}</td>
-                        <td className="px-3 py-2.5 font-bold text-primary">{it.receivedQty}</td>
+                        <td className="px-3 py-2.5 text-center text-muted-foreground">{it.orderedQty}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-primary">{it.receivedQty}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-emerald-600 dark:text-emerald-400">{it.acceptedQty}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-destructive">{it.rejectedQty}</td>
                         <td className="px-3 py-2.5 text-muted-foreground">{it.remarks || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
+                  {modalItems.length > 1 && (
+                    <tfoot className="border-t-2 border-border/80 bg-muted/20 font-semibold text-xs">
+                      <tr>
+                        <td className="px-3 py-2 text-foreground font-bold">Total</td>
+                        <td className="px-3 py-2 text-center text-muted-foreground">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.orderedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-primary">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.receivedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-emerald-600 dark:text-emerald-400">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.acceptedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-destructive">
+                          {modalItems.reduce((acc: number, it: any) => acc + (Number(it.rejectedQty) || 0), 0)}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">—</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
 

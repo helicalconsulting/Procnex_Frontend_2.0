@@ -45,9 +45,9 @@ interface LineItemState {
   id: string;
   itemCode?: string;
   itemName: string;
-  orderedQty: number; // PO Quantity
+  orderedQty: number | string; // PO Quantity
   deliveredQty: number; // Delivered Quantity (previously delivered)
-  quantityToBeDelivered: number; // Quantity to be delivered in this note
+  quantityToBeDelivered: number | string; // Quantity to be delivered in this note
   remainingQty: number; // Remaining Quantity: orderedQty - (deliveredQty + quantityToBeDelivered)
   dispatchedQty: number; // Synced with quantityToBeDelivered
   unit: string;
@@ -317,16 +317,21 @@ export default function VendorCreateDispatchNotePage() {
 
   // Update Quantity to be delivered with formula: Remaining Quantity = PO Quantity - (Delivered Quantity + Quantity to be delivered)
   const handleUpdateQuantityToBeDelivered = (id: string, value: any) => {
-    const num = value === '' ? 0 : Number(value);
+    let cleanVal = String(value ?? '').replace(/\D/g, '');
+    if (cleanVal.length > 1) {
+      cleanVal = cleanVal.replace(/^0+/, '') || '0';
+    }
+    const num = cleanVal === '' ? 0 : Number(cleanVal);
     setLineItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
-        const validVal = isNaN(num) ? 0 : num;
-        const remaining = Math.max(0, item.orderedQty - (item.deliveredQty + validVal));
+        const ordQty = Number(item.orderedQty) || 0;
+        const delivQty = Number(item.deliveredQty) || 0;
+        const remaining = Math.max(0, ordQty - (delivQty + num));
         return {
           ...item,
-          quantityToBeDelivered: validVal,
-          dispatchedQty: validVal,
+          quantityToBeDelivered: cleanVal,
+          dispatchedQty: num,
           remainingQty: remaining,
         };
       })
@@ -335,15 +340,20 @@ export default function VendorCreateDispatchNotePage() {
 
   // Update Ordered Qty (for manual items)
   const handleUpdateOrderedQty = (id: string, value: any) => {
-    const num = value === '' ? 0 : Number(value);
+    let cleanVal = String(value ?? '').replace(/\D/g, '');
+    if (cleanVal.length > 1) {
+      cleanVal = cleanVal.replace(/^0+/, '') || '0';
+    }
+    const num = cleanVal === '' ? 0 : Number(cleanVal);
     setLineItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
-        const validVal = isNaN(num) ? 0 : num;
-        const remaining = Math.max(0, validVal - (item.deliveredQty + item.quantityToBeDelivered));
+        const delivQty = Number(item.deliveredQty) || 0;
+        const toDeliver = Number(item.quantityToBeDelivered) || 0;
+        const remaining = Math.max(0, num - (delivQty + toDeliver));
         return {
           ...item,
-          orderedQty: validVal,
+          orderedQty: cleanVal,
           remainingQty: remaining,
         };
       })
@@ -1181,9 +1191,9 @@ export default function VendorCreateDispatchNotePage() {
                   </tr>
                 ) : (
                   lineItems.map((item, index) => {
-                    const maxAllowed = Math.max(0, item.orderedQty - item.deliveredQty);
-                    const isFullyDelivered = item.orderedQty > 0 && maxAllowed === 0;
-                    const isExceeded = item.quantityToBeDelivered > maxAllowed;
+                    const maxAllowed = Math.max(0, Number(item.orderedQty || 0) - Number(item.deliveredQty || 0));
+                    const isFullyDelivered = Number(item.orderedQty || 0) > 0 && maxAllowed === 0;
+                    const isExceeded = Number(item.quantityToBeDelivered || 0) > maxAllowed;
 
                     return (
                       <tr key={item.id} className="hover:bg-muted/30 transition-colors">
@@ -1207,10 +1217,29 @@ export default function VendorCreateDispatchNotePage() {
                         <td className="py-3 px-3.5 text-center">
                           {item.id.startsWith('manual_') ? (
                             <Input
-                              type="number"
-                              min="1"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
                               value={item.orderedQty}
+                              onFocus={(e) => e.target.select()}
                               onChange={(e) => handleUpdateOrderedQty(item.id, e.target.value)}
+                              onBlur={() => {
+                                setLineItems((prev) =>
+                                  prev.map((it) => {
+                                    if (it.id !== item.id) return it;
+                                    if (!it.orderedQty || Number(it.orderedQty) <= 0) {
+                                      const delivQty = Number(it.deliveredQty) || 0;
+                                      const toDeliver = Number(it.quantityToBeDelivered) || 0;
+                                      return {
+                                        ...it,
+                                        orderedQty: 1,
+                                        remainingQty: Math.max(0, 1 - (delivQty + toDeliver)),
+                                      };
+                                    }
+                                    return it;
+                                  })
+                                );
+                              }}
                               className="h-9 text-sm text-center font-semibold font-mono bg-background"
                             />
                           ) : (
@@ -1232,12 +1261,31 @@ export default function VendorCreateDispatchNotePage() {
                         <td className="py-3 px-3.5 text-center">
                           <div className="flex flex-col items-center">
                             <Input
-                              type="number"
-                              min="0"
-                              max={maxAllowed}
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
                               disabled={isFullyDelivered}
                               value={item.quantityToBeDelivered}
+                              onFocus={(e) => e.target.select()}
                               onChange={(e) => handleUpdateQuantityToBeDelivered(item.id, e.target.value)}
+                              onBlur={() => {
+                                setLineItems((prev) =>
+                                  prev.map((it) => {
+                                    if (it.id !== item.id) return it;
+                                    if (it.quantityToBeDelivered === '' || isNaN(Number(it.quantityToBeDelivered))) {
+                                      const ordQty = Number(it.orderedQty) || 0;
+                                      const delivQty = Number(it.deliveredQty) || 0;
+                                      return {
+                                        ...it,
+                                        quantityToBeDelivered: 0,
+                                        dispatchedQty: 0,
+                                        remainingQty: Math.max(0, ordQty - delivQty),
+                                      };
+                                    }
+                                    return it;
+                                  })
+                                );
+                              }}
                               className={`h-9 text-sm text-center font-bold font-mono bg-background ${
                                 isExceeded
                                   ? 'border-rose-500 text-rose-600 focus-visible:ring-rose-500'
@@ -1435,12 +1483,12 @@ export default function VendorCreateDispatchNotePage() {
               id: li.id,
               itemCode: li.itemCode,
               itemName: li.itemName,
-              poQty: li.orderedQty,
-              orderedQty: li.orderedQty,
-              deliveredQty: li.deliveredQty,
-              quantityToBeDelivered: li.quantityToBeDelivered,
-              dispatchedQty: li.quantityToBeDelivered,
-              remainingQty: li.remainingQty,
+              poQty: Number(li.orderedQty) || 0,
+              orderedQty: Number(li.orderedQty) || 0,
+              deliveredQty: Number(li.deliveredQty) || 0,
+              quantityToBeDelivered: Number(li.quantityToBeDelivered) || 0,
+              dispatchedQty: Number(li.quantityToBeDelivered) || 0,
+              remainingQty: Number(li.remainingQty) || 0,
               unit: li.unit,
               remarks: li.remarks,
             })),

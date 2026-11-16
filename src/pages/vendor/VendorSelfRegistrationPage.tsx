@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Mail,
@@ -22,8 +22,11 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { motionTransition } from '../../lib/motion';
 import { useTheme } from '../../context/ThemeContext';
+import { useBranding, applyTitle, applyFavicon } from '../../context/BrandingContext';
+import { getTenantCompanyCode, getVendorPath } from '../../utils/tenantResolver';
+import { getActiveCompanyCode, readCachedProfile } from '../../lib/branding';
 import PhoneInput from '../../components/shared/PhoneInput';
-import { companySettingsService, type Category } from '../../services/companySettingsService';
+import { companySettingsService, type Category, type CompanyProfile } from '../../services/companySettingsService';
 import {
   procurementService,
   type SelfRegisteredVendorRecord,
@@ -55,10 +58,88 @@ function formatBytes(bytes: number): string {
 
 export default function VendorSelfRegistrationPage() {
   const { isDark, toggleTheme } = useTheme();
-  const { companyCode } = useParams<{ companyCode?: string }>();
-  const activeCompany = (companyCode || 'HFL').toUpperCase();
-  const companyDisplayName = activeCompany === 'HFL' ? 'Procnex' : activeCompany === 'ALZORAH' ? "'Al Zorah' Group" : `${activeCompany} Group`;
-  const supportEmail = activeCompany === 'HFL' ? 'admin@procnex.com' : activeCompany === 'ALZORAH' ? 'procurement@alzorah.com' : `procurement@${activeCompany.toLowerCase()}.com`;
+  const { companyCode: routeCompanyCode } = useParams<{ companyCode?: string }>();
+  const [searchParams] = useSearchParams();
+  const branding = useBranding();
+
+  // Resolve active company code from all available tenant signals
+  const resolvedCompanyCode = (
+    routeCompanyCode?.toUpperCase() ||
+    searchParams.get('company')?.toUpperCase() ||
+    searchParams.get('companyCode')?.toUpperCase() ||
+    getTenantCompanyCode() ||
+    getActiveCompanyCode() ||
+    'HFL'
+  ).trim().toUpperCase();
+
+  const [activeCompany, setActiveCompany] = useState<string>(resolvedCompanyCode);
+  const [tenantProfile, setTenantProfile] = useState<CompanyProfile | null>(() => readCachedProfile(resolvedCompanyCode));
+
+  useEffect(() => {
+    let mounted = true;
+    const code = resolvedCompanyCode;
+    setActiveCompany(code);
+
+    const fetchProfile = async () => {
+      try {
+        const prof = await companySettingsService.getPublicCompanyProfile(code);
+        if (mounted && prof) {
+          setTenantProfile(prof);
+          return;
+        }
+      } catch {
+        try {
+          const prof = await companySettingsService.getCompanyProfile();
+          if (mounted && prof) {
+            setTenantProfile(prof);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    void fetchProfile();
+
+    const handleBrandingChange = (event: Event) => {
+      const updated = (event as CustomEvent<CompanyProfile>).detail;
+      if (updated && (!code || updated.companyCode?.toUpperCase() === code)) {
+        setTenantProfile(updated);
+      }
+    };
+
+    window.addEventListener('heliflow_branding_change', handleBrandingChange);
+    return () => {
+      mounted = false;
+      window.removeEventListener('heliflow_branding_change', handleBrandingChange);
+    };
+  }, [resolvedCompanyCode]);
+
+  // Dynamic company display name derived from configured company settings
+  const rawCompanyName =
+    tenantProfile?.companyName?.trim() ||
+    (branding.companyName && branding.companyName !== 'Organization' && branding.companyName.trim()) ||
+    '';
+
+  const companyDisplayName =
+    rawCompanyName ||
+    (activeCompany === 'HFL' ? 'Helical Consulting' : activeCompany === 'ALZORAH' ? "'Al Zorah' Group" : `${activeCompany} Group`);
+
+  const companyLogoUrl = tenantProfile?.logoUrl || branding.logoUrl || null;
+
+  const supportEmail =
+    tenantProfile?.supportEmail?.trim() ||
+    tenantProfile?.companyEmail?.trim() ||
+    branding.supportEmail?.trim() ||
+    (activeCompany === 'HFL' ? 'admin@helical.consulting' : `procurement@${activeCompany.toLowerCase()}.com`);
+
+  // Dynamically update document title & favicon
+  useEffect(() => {
+    applyTitle(`${companyDisplayName} — Vendor Registration`);
+    if (tenantProfile?.faviconUrl || tenantProfile?.logoUrl) {
+      applyFavicon(tenantProfile.faviconUrl, tenantProfile.logoUrl);
+    }
+  }, [companyDisplayName, tenantProfile]);
 
   // Form Fields
   const [companyName, setCompanyName] = useState('');
@@ -179,7 +260,7 @@ export default function VendorSelfRegistrationPage() {
 
     setEmailCheckLoading(true);
     try {
-      const res = await procurementService.checkVendorEmail(trimmed, companyCode || 'HFL');
+      const res = await procurementService.checkVendorEmail(trimmed, activeCompany);
       if (res.exists || !res.available) {
         const msg = res.message || 'A vendor with this email is already registered. Please sign in or use another email.';
         setEmailExistsWarning(msg);
@@ -233,7 +314,7 @@ export default function VendorSelfRegistrationPage() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [contactEmail, companyCode]);
+  }, [contactEmail, activeCompany]);
 
   const handleFileChange = (
     docType: 'trade_license' | 'vat_certificate' | 'emirates_id',
@@ -412,7 +493,7 @@ export default function VendorSelfRegistrationPage() {
     // 4. Pre-flight backend email verification directly before submission
     setSubmitting(true);
     try {
-      const emailCheck = await procurementService.checkVendorEmail(cleanEmail, companyCode || 'HFL');
+      const emailCheck = await procurementService.checkVendorEmail(cleanEmail, activeCompany);
       if (emailCheck.exists || !emailCheck.available) {
         const msg = emailCheck.message || 'A vendor with this email is already registered. Please sign in or use another email.';
         setEmailExistsWarning(msg);
@@ -480,7 +561,7 @@ export default function VendorSelfRegistrationPage() {
         categoryId,
         supplierType,
         notes,
-        companyCode: companyCode || 'HFL',
+        companyCode: activeCompany,
         documents,
       });
       setRegisteredRecord(record);
@@ -535,7 +616,7 @@ export default function VendorSelfRegistrationPage() {
       {/* Light / Dark Mode Toggle & Vendor Login */}
       <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
         <Link
-          to="/vendor/login"
+          to={getVendorPath('/vendor/login')}
           className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-border/80 bg-card/90 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/80 shadow-sm backdrop-blur-md transition-all"
         >
           Sign In
@@ -568,11 +649,23 @@ export default function VendorSelfRegistrationPage() {
       <div className="max-w-3xl mx-auto space-y-6 pt-2">
         {/* Brand Header */}
         <div className="text-center space-y-2">
+          {companyLogoUrl && (
+            <div className="flex justify-center mb-3">
+              <img
+                src={companyLogoUrl}
+                alt={companyDisplayName}
+                className="h-10 sm:h-12 max-h-14 w-auto object-contain rounded-md"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
             {companyDisplayName}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground max-w-lg mx-auto">
-            Submit your supplier details and required legal documents below to register as an authorized vendor.
+            Submit your supplier details and required legal documents below to register as an authorized vendor for {companyDisplayName}.
           </p>
         </div>
 
@@ -671,7 +764,7 @@ export default function VendorSelfRegistrationPage() {
                 Register Another Vendor
               </Button>
               <Link
-                to="/vendor/login"
+                to={getVendorPath('/vendor/login')}
                 className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'w-full sm:w-auto gap-1.5')}
               >
                 Go to Vendor Login

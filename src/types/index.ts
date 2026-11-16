@@ -61,6 +61,7 @@ export interface LoginPayload {
   username: string;
   password: string;
   companyCode?: string;
+  branchId?: string;
 }
 
 // ─── RFQ ────────────────────────────────────────────────────

@@ -10,8 +10,9 @@ import {
   MapPin, Phone, Mail, Globe, Lock, Eye, EyeOff,
   Loader2, Upload, Edit3, Save, X,
   Paperclip, ShieldCheck, UserCheck, KeyRound,
-  PenLine, Layers, Star,
+  PenLine, Layers, Star, Sparkles,
 } from 'lucide-react';
+import { scanDocumentWithOcr } from '../../services/ocrService';
 import { Badge } from '../../components/ui/badge';
 import { Button, buttonVariants } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -128,6 +129,44 @@ export default function VendorProfilePage() {
   const [issuingAuthority, setIssuingAuthority] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
+  const [scanningDoc, setScanningDoc] = useState(false);
+  const [ocrMsg, setOcrMsg] = useState('');
+
+  const handleFileSelect = async (file: File | null) => {
+    setSelectedFile(file);
+    setOcrMsg('');
+    if (!file) return;
+
+    // Run client-side OCR if the uploaded file is an image
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+    if (isImage) {
+      setScanningDoc(true);
+      try {
+        const result = await scanDocumentWithOcr(file);
+        let filledCount = 0;
+        if (result.issueDate && showIssueDate) {
+          setIssueDate(result.issueDate);
+          filledCount++;
+        }
+        if (result.expirationDate && showExpDate) {
+          setExpirationDate(result.expirationDate);
+          filledCount++;
+        }
+        if (result.issuingAuthority && showAuthority && !issuingAuthority) {
+          setIssuingAuthority(result.issuingAuthority);
+          filledCount++;
+        }
+        if (filledCount > 0) {
+          setOcrMsg(`✨ Auto-detected ${filledCount} field${filledCount > 1 ? 's' : ''} from document. Please review.`);
+          setTimeout(() => setOcrMsg(''), 6000);
+        }
+      } catch (err) {
+        console.warn('Document OCR scan failed or was skipped:', err);
+      } finally {
+        setScanningDoc(false);
+      }
+    }
+  };
 
   const passwordErrors = passwordValidation(currentPassword, newPassword, confirmPassword);
   const canUpdatePassword = !pwLoading && !Object.values(passwordErrors).some(Boolean);
@@ -712,14 +751,14 @@ export default function VendorProfilePage() {
                       accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                       aria-label="Choose compliance document"
                       className="sr-only"
-                      disabled={uploading}
-                      onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                      disabled={uploading || scanningDoc}
+                      onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
                     />
                   </label>
 
                   <Button
                     onClick={handleUploadDoc}
-                    disabled={uploading || !selectedFile || invalidDocumentDates}
+                    disabled={uploading || scanningDoc || !selectedFile || invalidDocumentDates}
                     className="h-10 rounded-xl gap-1.5 text-xs"
                   >
                     {uploading
@@ -727,6 +766,20 @@ export default function VendorProfilePage() {
                       : <><Upload className="size-3.5" /> Upload</>}
                   </Button>
                 </div>
+
+                {scanningDoc && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs font-medium text-primary animate-pulse">
+                    <Loader2 className="size-3.5 animate-spin shrink-0" />
+                    <span>Scanning document with OCR to detect Date of Issue & Expiry...</span>
+                  </div>
+                )}
+
+                {ocrMsg && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    <Sparkles className="size-3.5 shrink-0" />
+                    <span>{ocrMsg}</span>
+                  </div>
+                )}
 
                 {/* Metadata Fields */}
                 {(showIssueDate || showExpDate || showAuthority) && (
@@ -1112,14 +1165,14 @@ export default function VendorProfilePage() {
                           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                           aria-label="Choose compliance document"
                           className="sr-only"
-                          disabled={uploading}
-                          onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                          disabled={uploading || scanningDoc}
+                          onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
                         />
                       </label>
 
                       <Button
                         onClick={handleUploadDoc}
-                        disabled={uploading || !selectedFile || invalidDocumentDates}
+                        disabled={uploading || scanningDoc || !selectedFile || invalidDocumentDates}
                         className="h-10 rounded-xl gap-1.5 text-xs"
                       >
                         {uploading
@@ -1127,6 +1180,20 @@ export default function VendorProfilePage() {
                           : <><Upload className="size-3.5" /> Upload</>}
                       </Button>
                     </div>
+
+                    {scanningDoc && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs font-medium text-primary animate-pulse">
+                        <Loader2 className="size-3.5 animate-spin shrink-0" />
+                        <span>Scanning document with OCR to detect Date of Issue & Expiry...</span>
+                      </div>
+                    )}
+
+                    {ocrMsg && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                        <Sparkles className="size-3.5 shrink-0" />
+                        <span>{ocrMsg}</span>
+                      </div>
+                    )}
 
                     {/* Metadata Fields */}
                     {(showIssueDate || showExpDate || showAuthority) && (

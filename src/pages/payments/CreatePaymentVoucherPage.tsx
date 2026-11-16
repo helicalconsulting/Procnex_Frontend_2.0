@@ -842,9 +842,7 @@ export default function CreatePaymentVoucherPage() {
 
         setVendorInvoices(mappedInvoices);
         if (mappedInvoices.length > 0) {
-          if (!voucherNumber) {
-            updateTotalsFromInvoices(mappedInvoices);
-          }
+          updateTotalsFromInvoices(mappedInvoices);
         }
       } catch (_err) {
         if (isMounted) setVendorInvoices([]);
@@ -864,15 +862,42 @@ export default function CreatePaymentVoucherPage() {
   const updateTotalsFromInvoices = (list: VendorInvoiceItem[], mode: 'single' | 'multiple' = selectionMode) => {
     const selected = list.filter((i) => i.selected);
     if (selected.length > 0) {
-      const totalGross = selected.reduce((sum, item) => sum + item.paymentAmount, 0);
-      setGrossAmount(totalGross);
+      const totalGross = selected.reduce((sum, item) => sum + (Number(item.paymentAmount) || Number(item.amount) || 0), 0);
+      setGrossAmount(Number(totalGross.toFixed(2)));
 
-      const refText = selected.map((i) => i.invoiceNumber).join(', ') + (selected.length > 1 ? ` (${selected.length} Invoices)` : '');
-      setInvoiceRef(refText);
+      const refText = selected.map((i) => i.invoiceNumber).filter(Boolean).join(', ') + (selected.length > 1 ? ` (${selected.length} Invoices)` : '');
+      if (refText) setInvoiceRef(refText);
       setMatchStatus('MATCHED');
       setDiscrepancyReason('');
+    } else {
+      setGrossAmount('');
+      setInvoiceRef('');
     }
   };
+
+  // Automatically synchronize grossAmount and invoice references whenever invoice selection or invoices list changes
+  useEffect(() => {
+    if (vendorInvoices.length === 0) return;
+    const selected = vendorInvoices.filter((i) => i.selected);
+    if (selected.length > 0) {
+      const totalGross = selected.reduce(
+        (sum, item) => sum + (Number(item.paymentAmount) || Number(item.amount) || 0),
+        0
+      );
+      setGrossAmount(Number(totalGross.toFixed(2)));
+
+      const refText = selected
+        .map((i) => i.invoiceNumber)
+        .filter(Boolean)
+        .join(', ') + (selected.length > 1 ? ` (${selected.length} Invoices)` : '');
+      if (refText) setInvoiceRef(refText);
+      setMatchStatus('MATCHED');
+      setDiscrepancyReason('');
+    } else if (invoiceEntryMode === 'AUTO_FILL') {
+      setGrossAmount('');
+      setInvoiceRef('');
+    }
+  }, [vendorInvoices, invoiceEntryMode]);
 
   const handleToggleSelectInvoice = (invId: string) => {
     setVendorInvoices((prev) => {
@@ -885,7 +910,6 @@ export default function CreatePaymentVoucherPage() {
         }
         return item;
       });
-      updateTotalsFromInvoices(updated);
       return updated;
     });
   };
@@ -893,9 +917,7 @@ export default function CreatePaymentVoucherPage() {
   const handleSelectAllInvoices = (selectAll: boolean) => {
     if (selectionMode === 'single') return;
     setVendorInvoices((prev) => {
-      const updated = prev.map((item) => ({ ...item, selected: selectAll }));
-      updateTotalsFromInvoices(updated);
-      return updated;
+      return prev.map((item) => ({ ...item, selected: selectAll }));
     });
   };
 
@@ -916,7 +938,6 @@ export default function CreatePaymentVoucherPage() {
           updated[0].selected = true;
         }
       }
-      updateTotalsFromInvoices(updated, newMode);
       return updated;
     });
   };
@@ -1021,7 +1042,6 @@ export default function CreatePaymentVoucherPage() {
     };
     setVendorInvoices((prev) => {
       const updated = selectionMode === 'single' ? [newInv] : [...prev, newInv];
-      updateTotalsFromInvoices(updated);
       return updated;
     });
   };
@@ -1080,16 +1100,13 @@ export default function CreatePaymentVoucherPage() {
         }
         return item;
       });
-      updateTotalsFromInvoices(updated);
       return updated;
     });
   };
 
   const handleRemoveInvoice = (invId: string) => {
     setVendorInvoices((prev) => {
-      const updated = prev.filter((i) => i.id !== invId);
-      updateTotalsFromInvoices(updated);
-      return updated;
+      return prev.filter((i) => i.id !== invId);
     });
   };
 
@@ -1289,10 +1306,27 @@ export default function CreatePaymentVoucherPage() {
 
   // Calculations
   const isInvoiceDerived = vendorInvoices.some((i) => i.selected);
-  const totalAmount = typeof grossAmount === 'number' ? grossAmount : 0;
+
+  const selectedInvoicesSum = useMemo(() => {
+    return vendorInvoices
+      .filter((i) => i.selected)
+      .reduce((sum, item) => sum + (Number(item.paymentAmount) || Number(item.amount) || 0), 0);
+  }, [vendorInvoices]);
+
+  const effectiveGrossAmount = useMemo(() => {
+    if (typeof grossAmount === 'number' && grossAmount > 0) {
+      return grossAmount;
+    }
+    if (isInvoiceDerived && selectedInvoicesSum > 0) {
+      return selectedInvoicesSum;
+    }
+    return typeof grossAmount === 'number' ? grossAmount : 0;
+  }, [grossAmount, isInvoiceDerived, selectedInvoicesSum]);
+
+  const totalAmount = effectiveGrossAmount;
   const taxRate = taxPercent || 0;
 
-  // When invoices are selected, grossAmount represents the invoice bill total (inclusive of VAT/tax).
+  // When invoices are selected, totalAmount represents the invoice bill total (inclusive of VAT/tax).
   // Hence we extract the pre-tax base subtotal and tax amount so the net disbursement matches the invoice amount.
   const subtotal = useMemo(() => {
     if (isInvoiceDerived && taxRate > 0) {
@@ -1354,7 +1388,8 @@ export default function CreatePaymentVoucherPage() {
       setErrorMsg('Please select or specify a Supplier / Beneficiary.');
       return false;
     }
-    if (!grossAmount || grossAmount <= 0) {
+    const finalAmount = effectiveGrossAmount;
+    if (!finalAmount || finalAmount <= 0) {
       setErrorMsg('Please enter a valid Payment Amount greater than 0.');
       return false;
     }
@@ -1365,6 +1400,10 @@ export default function CreatePaymentVoucherPage() {
   const submitVoucher = async () => {
     if (submitting) return;
     if (!validateForm()) return;
+
+    if ((grossAmount === '' || grossAmount <= 0) && effectiveGrossAmount > 0) {
+      setGrossAmount(effectiveGrossAmount);
+    }
 
     setSubmitting(true);
     setShowSendingOverlay(true);
@@ -2747,6 +2786,18 @@ export default function CreatePaymentVoucherPage() {
                         </tr>
                       ))}
                     </tbody>
+                    {vendorInvoices.length > 0 && (
+                      <tfoot>
+                        <tr style={{ background: 'var(--surface-secondary, rgba(255,255,255,0.03))', borderTop: '2px solid var(--border-color, rgba(255,255,255,0.1))' }}>
+                          <td colSpan={7} style={{ padding: '12px 16px', fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)' }}>
+                            Total Selected Invoices ({vendorInvoices.filter((i) => i.selected).length} of {vendorInvoices.length} selected):
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '12px 16px', fontWeight: 700, fontSize: 14, color: 'var(--primary-500, #0a6ed1)' }}>
+                            {formatAmount(selectedInvoicesSum, currency)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               )}
@@ -2871,7 +2922,7 @@ export default function CreatePaymentVoucherPage() {
                   min="0"
                   step="0.01"
                   placeholder="0.00"
-                  value={grossAmount}
+                  value={grossAmount !== '' ? grossAmount : (effectiveGrossAmount > 0 ? effectiveGrossAmount : '')}
                   onChange={(e) =>
                     setGrossAmount(e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0))
                   }

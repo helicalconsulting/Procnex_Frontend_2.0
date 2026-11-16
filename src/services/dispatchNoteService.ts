@@ -118,6 +118,12 @@ export const dispatchNoteService = {
 
     try {
       const res = await apiRequest<{ dispatchNotes: DispatchNote[]; total: number }>(endpoint, { cacheTtlMs: 30000 });
+      if (res && Array.isArray(res.dispatchNotes)) {
+        res.dispatchNotes = res.dispatchNotes.map((dn) => ({
+          ...dn,
+          poNumber: dn.poNumber || dn.purchaseOrder?.poNumber || '',
+        }));
+      }
       return res || { dispatchNotes: [], total: 0 };
     } catch {
       return { dispatchNotes: [], total: 0 };
@@ -130,6 +136,9 @@ export const dispatchNoteService = {
     }
     try {
       const res = await apiRequest<DispatchNote>(`/dispatch-notes/${id}`);
+      if (res) {
+        res.poNumber = res.poNumber || res.purchaseOrder?.poNumber || '';
+      }
       return res || null;
     } catch {
       return null;

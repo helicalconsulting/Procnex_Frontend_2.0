@@ -46,6 +46,7 @@ interface LineItemState {
   id: string;
   itemName: string;
   orderedQty: number;
+  initialOrderedQty?: number;
   receivedQty: number | '';
   acceptedQty: number | '';
   rejectedQty: number | '';
@@ -83,6 +84,7 @@ export default function CreateGRNPage() {
     poFromState?.poNumber;
 
   const invoiceIdParam = searchParams.get('invoiceId');
+  const dispatchNoteIdParam = searchParams.get('dispatchNoteId') || searchParams.get('dnId') || searchParams.get('dn');
   const modeParam = searchParams.get('mode');
 
   const { companyDefaultCurrency, formatAmount } = useCurrency();
@@ -236,7 +238,12 @@ export default function CreateGRNPage() {
   const [grnNumber, setGrnNumber] = useState<string>(() => `GRN-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [selectedPoId, setSelectedPoId] = useState<string>(() => safeStr(poIdParam));
   const [selectedInboundDocId, setSelectedInboundDocId] = useState<string>(() => {
-    if (invoiceIdParam) return `inv_${invoiceIdParam}`;
+    if (dispatchNoteIdParam) {
+      return dispatchNoteIdParam.startsWith('dn_') ? dispatchNoteIdParam : `dn_${dispatchNoteIdParam}`;
+    }
+    if (invoiceIdParam) {
+      return invoiceIdParam.startsWith('inv_') ? invoiceIdParam : `inv_${invoiceIdParam}`;
+    }
     return '';
   });
   const [vendorDispatchNoteNumber, setVendorDispatchNoteNumber] = useState<string>('');
@@ -307,12 +314,69 @@ export default function CreateGRNPage() {
     );
   }, [poFromState, fetchedDirectPO, rawPoList, selectedPoId]);
 
-  // Check if the selected PO has already been received
+  // Selected Dispatch Note & Invoice derived objects
+  const selectedDispatchNote = useMemo(() => {
+    if (!selectedInboundDocId) return null;
+    if (selectedInboundDocId.startsWith('dn_')) {
+      const rawId = selectedInboundDocId.replace('dn_', '');
+      return dispatchNotes.find((dn) => String(dn.id) === String(rawId) || String(dn.dispatchNoteNumber) === String(rawId)) || null;
+    }
+    return null;
+  }, [selectedInboundDocId, dispatchNotes]);
+
+  const selectedInvoice = useMemo(() => {
+    if (!selectedInboundDocId) return null;
+    if (selectedInboundDocId.startsWith('inv_')) {
+      const rawId = selectedInboundDocId.replace('inv_', '');
+      return (invoicesList || []).find((inv) => String(inv.id) === String(rawId) || String(inv.invoiceNumber) === String(rawId)) || null;
+    }
+    return null;
+  }, [selectedInboundDocId, invoicesList]);
+
+  // Check if the selected PO or dispatch note has already been received
   const isSelectedPoAlreadyReceived = useMemo(() => {
     if (!selectedPoId && !selectedPO) return false;
+
+    // If receiving against a specific dispatch note, verify if THAT dispatch note was already received
+    if (selectedDispatchNote) {
+      const dnId = safeStr(selectedDispatchNote.id).toLowerCase().trim();
+      const dnNum = safeStr(selectedDispatchNote.dispatchNoteNumber).toLowerCase().trim();
+      return existingGrns.some((g) => {
+        const gDnId = safeStr(g.dispatchNoteId || (g as any).dispatchNote?.id).toLowerCase().trim();
+        const gDnNum = safeStr(g.dispatchNoteNumber || (g as any).dispatchNote?.dispatchNoteNumber).toLowerCase().trim();
+        return (dnId && gDnId === dnId) || (dnNum && gDnNum === dnNum);
+      });
+    }
+
     const poIdStr = safeStr(selectedPO?.id || selectedPoId).toLowerCase().trim();
     const poNumStr = safeStr(selectedPO?.poNumber).toLowerCase().trim();
     const s = String(selectedPO?.status || '').toUpperCase().trim();
+
+    // Check if PO has dispatches and if any dispatch is still unreceived
+    const matchingDns = (dispatchNotes || []).filter((dn) => {
+      const pId = safeStr(dn.poId).toLowerCase().trim();
+      const pNum = safeStr(dn.poNumber || dn.purchaseOrder?.poNumber).toLowerCase().trim();
+      return (poIdStr && (pId === poIdStr || pNum === poIdStr)) ||
+             (poNumStr && (pId === poNumStr || pNum === poNumStr));
+    });
+
+    if (matchingDns.length > 0) {
+      const hasUnreceivedDn = matchingDns.some((dn) => {
+        const dnId = safeStr(dn.id).toLowerCase().trim();
+        const dnNum = safeStr(dn.dispatchNoteNumber).toLowerCase().trim();
+        const isRec =
+          dn.status === 'RECEIVED' ||
+          existingGrns.some((g) => {
+            const gDnId = safeStr(g.dispatchNoteId || (g as any).dispatchNote?.id).toLowerCase().trim();
+            const gDnNum = safeStr(g.dispatchNoteNumber || (g as any).dispatchNote?.dispatchNoteNumber).toLowerCase().trim();
+            return (dnId && gDnId === dnId) || (dnNum && gDnNum === dnNum);
+          });
+        return !isRec;
+      });
+      // If there are still dispatches awaiting receipt, the PO is NOT fully received!
+      if (hasUnreceivedDn) return false;
+    }
+
     return (
       (poIdStr && posWithExistingGrn.has(poIdStr)) ||
       (poNumStr && posWithExistingGrn.has(poNumStr)) ||
@@ -320,7 +384,7 @@ export default function CreateGRNPage() {
       s === 'DELIVERED' ||
       s === 'CLOSED'
     );
-  }, [selectedPoId, selectedPO, posWithExistingGrn]);
+  }, [selectedPoId, selectedPO, selectedDispatchNote, dispatchNotes, existingGrns, posWithExistingGrn]);
 
   // Keep selectedPoId in sync with selectedPO id/poNumber
   useEffect(() => {
@@ -338,9 +402,33 @@ export default function CreateGRNPage() {
       const pId = safeStr(po.id).toLowerCase().trim();
       const pNum = safeStr(po.poNumber).toLowerCase().trim();
       const s = String(po?.status || '').toUpperCase().trim();
-      const hasGrn = (pId && posWithExistingGrn.has(pId)) || (pNum && posWithExistingGrn.has(pNum));
       const isCurrentSelected = selectedPO && (pId === safeStr(selectedPO.id).toLowerCase().trim() || pNum === safeStr(selectedPO.poNumber).toLowerCase().trim());
-      return isCurrentSelected || (!hasGrn && s !== 'GRN_RECEIVED' && s !== 'DELIVERED' && s !== 'CLOSED');
+      if (isCurrentSelected) return true;
+
+      const matchingDns = (dispatchNotes || []).filter((dn) => {
+        const dnPoId = safeStr(dn.poId).toLowerCase().trim();
+        const dnPoNum = safeStr(dn.poNumber || dn.purchaseOrder?.poNumber).toLowerCase().trim();
+        return (pId && (dnPoId === pId || dnPoNum === pId)) || (pNum && (dnPoId === pNum || dnPoNum === pNum));
+      });
+
+      if (matchingDns.length > 0) {
+        const hasUnreceivedDn = matchingDns.some((dn) => {
+          const dnId = safeStr(dn.id).toLowerCase().trim();
+          const dnNum = safeStr(dn.dispatchNoteNumber).toLowerCase().trim();
+          const isRec =
+            dn.status === 'RECEIVED' ||
+            existingGrns.some((g) => {
+              const gDnId = safeStr(g.dispatchNoteId || (g as any).dispatchNote?.id).toLowerCase().trim();
+              const gDnNum = safeStr(g.dispatchNoteNumber || (g as any).dispatchNote?.dispatchNoteNumber).toLowerCase().trim();
+              return (dnId && gDnId === dnId) || (dnNum && gDnNum === dnNum);
+            });
+          return !isRec;
+        });
+        if (hasUnreceivedDn) return true;
+      }
+
+      const hasGrn = (pId && posWithExistingGrn.has(pId)) || (pNum && posWithExistingGrn.has(pNum));
+      return !hasGrn && s !== 'GRN_RECEIVED' && s !== 'DELIVERED' && s !== 'CLOSED';
     });
     if (selectedPO) {
       const selId = safeStr(selectedPO.id || selectedPO.poNumber).toLowerCase().trim();
@@ -349,7 +437,7 @@ export default function CreateGRNPage() {
       }
     }
     return list;
-  }, [approvedPOs, selectedPO, posWithExistingGrn]);
+  }, [approvedPOs, selectedPO, dispatchNotes, existingGrns, posWithExistingGrn]);
 
   // Fetch single PO directly from API if poIdParam is present but not found in state or rawPoList
   useEffect(() => {
@@ -385,15 +473,30 @@ export default function CreateGRNPage() {
       const vName = dn.vendor?.name || (dn as any).vendorName || 'Supplier';
       const itemsCount = dn.items?.length || 0;
       const countLabel = itemsCount > 0 ? ` (${itemsCount} items)` : '';
+      const poNum = dn.poNumber || dn.purchaseOrder?.poNumber || '';
+
+      const dnId = safeStr(dn.id).toLowerCase().trim();
+      const dnNum = safeStr(dn.dispatchNoteNumber).toLowerCase().trim();
+      const isAlreadyReceived =
+        dn.status === 'RECEIVED' ||
+        existingGrns.some((g) => {
+          const gDnId = safeStr(g.dispatchNoteId || (g as any).dispatchNote?.id).toLowerCase().trim();
+          const gDnNum = safeStr(g.dispatchNoteNumber || (g as any).dispatchNote?.dispatchNoteNumber).toLowerCase().trim();
+          return (dnId && gDnId === dnId) || (dnNum && gDnNum === dnNum);
+        });
+
+      const statusTag = isAlreadyReceived ? ' [✓ Received / GRN Created]' : ' [Pending GRN]';
+
       list.push({
         id: `dn_${dn.id}`,
         docType: 'DISPATCH',
         docNumber: dn.dispatchNoteNumber,
-        label: `🚚 [Dispatch Note] ${dn.dispatchNoteNumber} — ${vName}${countLabel}`,
+        label: `🚚 [Dispatch Note] ${dn.dispatchNoteNumber}${statusTag} — ${vName}${countLabel}`,
         poId: dn.poId || '',
-        poNumber: dn.poNumber || '',
+        poNumber: poNum,
         vendorName: vName,
         rawDoc: dn,
+        isAlreadyReceived,
       });
     });
 
@@ -410,6 +513,7 @@ export default function CreateGRNPage() {
         poNumber: inv.poNumber || '',
         vendorName: vName,
         rawDoc: inv,
+        isAlreadyReceived: false,
       });
     });
 
@@ -431,7 +535,7 @@ export default function CreateGRNPage() {
     }
 
     return list;
-  }, [dispatchNotes, invoicesList, selectedPO, currency, formatAmount]);
+  }, [dispatchNotes, invoicesList, selectedPO, currency, formatAmount, existingGrns]);
 
   // Check if inbound dispatch or invoice is submitted for selected PO
   const hasInboundDispatch = useMemo(() => {
@@ -441,7 +545,7 @@ export default function CreateGRNPage() {
 
     const hasDn = (dispatchNotes || []).some((dn) => {
       const pId = safeStr(dn.poId).toLowerCase().trim();
-      const pNum = safeStr(dn.poNumber).toLowerCase().trim();
+      const pNum = safeStr(dn.poNumber || dn.purchaseOrder?.poNumber).toLowerCase().trim();
       return (targetPoId && (pId === targetPoId || pNum === targetPoId)) ||
              (targetPoNum && (pId === targetPoNum || pNum === targetPoNum));
     });
@@ -460,25 +564,6 @@ export default function CreateGRNPage() {
     }
     return false;
   }, [selectedPO, dispatchNotes, invoicesList]);
-
-  // Selected Dispatch Note & Invoice derived objects
-  const selectedDispatchNote = useMemo(() => {
-    if (!selectedInboundDocId) return null;
-    if (selectedInboundDocId.startsWith('dn_')) {
-      const rawId = selectedInboundDocId.replace('dn_', '');
-      return dispatchNotes.find((dn) => String(dn.id) === String(rawId) || String(dn.dispatchNoteNumber) === String(rawId)) || null;
-    }
-    return null;
-  }, [selectedInboundDocId, dispatchNotes]);
-
-  const selectedInvoice = useMemo(() => {
-    if (!selectedInboundDocId) return null;
-    if (selectedInboundDocId.startsWith('inv_')) {
-      const rawId = selectedInboundDocId.replace('inv_', '');
-      return (invoicesList || []).find((inv) => String(inv.id) === String(rawId) || String(inv.invoiceNumber) === String(rawId)) || null;
-    }
-    return null;
-  }, [selectedInboundDocId, invoicesList]);
 
   // Handle selecting an inbound document from dropdown
   const handleInboundDocSelect = (docId: string) => {
@@ -527,7 +612,22 @@ export default function CreateGRNPage() {
     }
   };
 
-  // Auto-sync matching inbound document when PO is selected
+  // Sync dispatchNoteIdParam from URL query if provided
+  useEffect(() => {
+    if (dispatchNoteIdParam && displayInboundDocOptions.length > 0) {
+      const target = dispatchNoteIdParam.replace('dn_', '').toLowerCase().trim();
+      const match = displayInboundDocOptions.find(
+        (opt) =>
+          safeStr(opt.id).replace('dn_', '').toLowerCase().trim() === target ||
+          safeStr(opt.docNumber).toLowerCase().trim() === target
+      );
+      if (match) {
+        handleInboundDocSelect(match.id);
+      }
+    }
+  }, [dispatchNoteIdParam, displayInboundDocOptions]);
+
+  // Auto-sync matching inbound document when PO is selected (prefers unreceived dispatches)
   useEffect(() => {
     if (!selectedPO) return;
     if (selectedInboundDocId) {
@@ -535,8 +635,9 @@ export default function CreateGRNPage() {
       if (current) return;
     }
     if (displayInboundDocOptions.length > 0) {
+      const unreceivedDn = displayInboundDocOptions.find((d) => d.docType === 'DISPATCH' && !(d as any).isAlreadyReceived);
       const firstDn = displayInboundDocOptions.find((d) => d.docType === 'DISPATCH');
-      const pick = firstDn || displayInboundDocOptions[0];
+      const pick = unreceivedDn || firstDn || displayInboundDocOptions[0];
       handleInboundDocSelect(pick.id);
     }
   }, [selectedPO, displayInboundDocOptions]);
@@ -577,8 +678,9 @@ export default function CreateGRNPage() {
               id: `dn_item_${idx}_${Date.now()}`,
               itemName: name,
               orderedQty: ordQty,
-              receivedQty: dispQty,
-              acceptedQty: dispQty,
+              initialOrderedQty: ordQty,
+              receivedQty: Math.min(ordQty, dispQty),
+              acceptedQty: Math.min(ordQty, dispQty),
               rejectedQty: 0,
               unitPrice: price,
               unit: safeStr(item.unit || item.uom || 'Units'),
@@ -638,8 +740,9 @@ export default function CreateGRNPage() {
                 id: `item_${idx}_${Date.now()}`,
                 itemName: name || 'Purchase Order Material/Services',
                 orderedQty: qty,
-                receivedQty: recQty,
-                acceptedQty: recQty,
+                initialOrderedQty: qty,
+                receivedQty: Math.min(qty, recQty),
+                acceptedQty: Math.min(qty, recQty),
                 rejectedQty: 0,
                 unitPrice: price,
                 unit: safeStr(item.unit || item.uom || 'Units'),
@@ -660,6 +763,7 @@ export default function CreateGRNPage() {
               id: `item_0_${Date.now()}`,
               itemName: fallbackTitle || 'Purchase Order Material/Services',
               orderedQty: 1,
+              initialOrderedQty: 1,
               receivedQty: 1,
               acceptedQty: 1,
               rejectedQty: 0,
@@ -719,50 +823,80 @@ export default function CreateGRNPage() {
         const updated = { ...item, [field]: value };
         const rec = updated.receivedQty === '' || updated.receivedQty == null ? 0 : Number(updated.receivedQty) || 0;
 
-        if (field === 'acceptedQty') {
-          if (value === '' || value == null) {
-            updated.acceptedQty = '';
-            updated.rejectedQty = rec;
-          } else {
-            let acc = Number(value);
-            if (isNaN(acc) || acc < 0) acc = 0;
-            if (acc > rec) {
-              setErrorMsg(`Accepted quantity cannot be greater than received quantity (${rec}) for "${item.itemName || 'Line Item'}". Automatically capped to ${rec}.`);
-              acc = rec;
-            } else {
-              if (errorMsg && errorMsg.includes('Accepted quantity')) {
-                setErrorMsg(null);
-              }
-            }
-            updated.acceptedQty = acc;
-            updated.rejectedQty = Math.max(0, rec - acc);
+        if (field === 'orderedQty') {
+          const rawOrd = value === '' || value == null ? 0 : Math.max(0, Number(value) || 0);
+          const maxOrd = item.initialOrderedQty != null && item.initialOrderedQty > 0 ? item.initialOrderedQty : rawOrd;
+          let newOrd = rawOrd;
+          if (maxOrd > 0 && newOrd > maxOrd) {
+            setErrorMsg(`Ordered quantity (${newOrd}) cannot be greater than initial ordered quantity (${maxOrd}) for "${item.itemName || 'Line Item'}". Automatically capped to ${maxOrd}.`);
+            newOrd = maxOrd;
+          } else if (errorMsg && errorMsg.includes('Ordered quantity')) {
+            setErrorMsg(null);
           }
-        } else if (field === 'rejectedQty') {
-          if (value === '' || value == null) {
-            updated.rejectedQty = '';
-            updated.acceptedQty = rec;
-          } else {
-            const rej = Number(value);
-            if (rej > rec) {
-              updated.rejectedQty = rec;
-              updated.acceptedQty = 0;
-            } else {
-              updated.rejectedQty = Math.max(0, rej);
-              updated.acceptedQty = Math.max(0, rec - rej);
+          updated.orderedQty = newOrd;
+
+          // Received quantity must never exceed ordered quantity
+          const currentRec = typeof updated.receivedQty === 'number' ? updated.receivedQty : (Number(updated.receivedQty) || 0);
+          if (newOrd > 0 && currentRec > newOrd) {
+            updated.receivedQty = newOrd;
+            const currentAcc = typeof updated.acceptedQty === 'number' ? updated.acceptedQty : (Number(updated.acceptedQty) || 0);
+            if (currentAcc > newOrd) {
+              updated.acceptedQty = newOrd;
+              updated.rejectedQty = 0;
             }
           }
         } else if (field === 'receivedQty') {
-          const newRec = value === '' || value == null ? 0 : Number(value) || 0;
-          const currentAcc = updated.acceptedQty === '' || updated.acceptedQty == null ? 0 : Number(updated.acceptedQty) || 0;
-          if (currentAcc > newRec) {
-            updated.acceptedQty = newRec;
+          if (value === '' || value == null) {
+            updated.receivedQty = '';
+            updated.acceptedQty = '';
             updated.rejectedQty = 0;
-            if (errorMsg && errorMsg.includes('Accepted quantity')) {
+            return updated;
+          }
+          const rawRec = Math.max(0, Number(value) || 0);
+          const maxAllowedRec = Number(updated.orderedQty || 0);
+          let newRec = rawRec;
+          if (maxAllowedRec > 0 && newRec > maxAllowedRec) {
+            setErrorMsg(`Received quantity (${newRec}) cannot be greater than ordered quantity (${maxAllowedRec}) for "${item.itemName || 'Line Item'}". Automatically capped to ${maxAllowedRec}.`);
+            newRec = maxAllowedRec;
+          } else if (errorMsg && errorMsg.includes('Received quantity')) {
+            setErrorMsg(null);
+          }
+          updated.receivedQty = newRec;
+          updated.acceptedQty = newRec;
+          updated.rejectedQty = 0;
+        } else if (field === 'acceptedQty') {
+          const currentRec = updated.receivedQty === '' || updated.receivedQty == null ? 0 : Number(updated.receivedQty) || 0;
+          if (value === '' || value == null) {
+            updated.acceptedQty = '';
+            updated.rejectedQty = currentRec;
+          } else {
+            let acc = Number(value);
+            if (isNaN(acc) || acc < 0) acc = 0;
+            if (acc > currentRec) {
+              setErrorMsg(`Accepted quantity cannot be greater than received quantity (${currentRec}) for "${item.itemName || 'Line Item'}". Automatically capped to ${currentRec}.`);
+              acc = currentRec;
+            } else if (errorMsg && errorMsg.includes('Accepted quantity')) {
               setErrorMsg(null);
             }
+            updated.acceptedQty = acc;
+            updated.rejectedQty = Math.max(0, currentRec - acc);
+          }
+        } else if (field === 'rejectedQty') {
+          const currentRec = updated.receivedQty === '' || updated.receivedQty == null ? 0 : Number(updated.receivedQty) || 0;
+          if (value === '' || value == null) {
+            updated.rejectedQty = '';
+            updated.acceptedQty = currentRec;
           } else {
-            const rej = updated.rejectedQty === '' || updated.rejectedQty == null ? 0 : Number(updated.rejectedQty) || 0;
-            updated.acceptedQty = Math.max(0, newRec - rej);
+            let rej = Number(value);
+            if (isNaN(rej) || rej < 0) rej = 0;
+            if (rej > currentRec) {
+              setErrorMsg(`Rejected quantity cannot be greater than received quantity (${currentRec}) for "${item.itemName || 'Line Item'}". Automatically capped to ${currentRec}.`);
+              rej = currentRec;
+            } else if (errorMsg && errorMsg.includes('Rejected quantity')) {
+              setErrorMsg(null);
+            }
+            updated.rejectedQty = rej;
+            updated.acceptedQty = Math.max(0, currentRec - rej);
           }
         }
         return updated;
@@ -845,17 +979,34 @@ export default function CreateGRNPage() {
       return false;
     }
     for (const item of lineItems) {
+      const ord = Number(item.orderedQty || 0);
+      const initOrd = item.initialOrderedQty != null && item.initialOrderedQty > 0 ? Number(item.initialOrderedQty) : ord;
       const rec = typeof item.receivedQty === 'number' ? item.receivedQty : (Number(item.receivedQty) || 0);
       const acc = typeof item.acceptedQty === 'number' ? item.acceptedQty : (item.acceptedQty === '' ? 0 : Number(item.acceptedQty) || 0);
+
+      if (initOrd > 0 && ord > initOrd) {
+        setErrorMsg(`Ordered quantity (${ord}) cannot be greater than initial ordered quantity (${initOrd}) for "${item.itemName || 'Line Item'}".`);
+        return false;
+      }
+      if (ord > 0 && rec > ord) {
+        setErrorMsg(`Received quantity (${rec}) cannot be greater than ordered quantity (${ord}) for "${item.itemName || 'Line Item'}".`);
+        return false;
+      }
       if (acc > rec) {
         setErrorMsg(`Accepted quantity (${acc}) cannot be greater than received quantity (${rec}) for "${item.itemName || 'Line Item'}". Please adjust accepted quantity.`);
         return false;
       }
-      if (acc < 0) {
-        setErrorMsg(`Accepted quantity cannot be negative for "${item.itemName || 'Line Item'}".`);
+      if (acc < 0 || rec < 0 || ord < 0) {
+        setErrorMsg(`Quantities cannot be negative for "${item.itemName || 'Line Item'}".`);
         return false;
       }
     }
+
+    if (calculations.totalGrnValue > calculations.totalPoValue && calculations.totalPoValue > 0) {
+      setErrorMsg(`Total Received Value (${formatAmount(calculations.totalGrnValue, currency)}) cannot be greater than Total Ordered PO Value (${formatAmount(calculations.totalPoValue, currency)}).`);
+      return false;
+    }
+
     return true;
   };
 
@@ -903,7 +1054,7 @@ export default function CreateGRNPage() {
       showSuccess({
         title: 'Goods Receipt Note Created!',
         badge: 'GRN POSTED',
-        message: `Goods Receipt Note ${grnNumber} has been verified and posted directly. Ready for Purchase Invoice creation.`,
+        message: `Goods Receipt Note ${grnNumber} has been verified and posted directly.`,
         referenceNumber: grnNumber,
         details: [
           { label: 'Purchase Order', value: selectedPO?.poNumber || selectedPoId || 'MANUAL-PO' },
@@ -918,12 +1069,6 @@ export default function CreateGRNPage() {
             state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber },
             replace: true,
           });
-        },
-        secondaryBtnText: 'Create Purchase Invoice',
-        onSecondaryClick: () => {
-          navigate(
-            `/procurement/create-purchase-invoice?poId=${encodeURIComponent(selectedPO?.id || selectedPO?.poNumber || selectedPoId)}&grnId=${encodeURIComponent(grnNumber)}`
-          );
         },
         onClose: () => {
           navigate('/procurement/goods-receipt?tab=recorded', {
@@ -958,7 +1103,7 @@ export default function CreateGRNPage() {
       {isSelectedPoAlreadyReceived && (
         <div className="mb-4">
           <MessageStrip type="warning">
-            A Goods Receipt Note has already been recorded for this Purchase Order (#{selectedPO?.poNumber || selectedPoId}). You can view the verified document in Recorded GRNs. Duplicate GRN creation is disabled.
+            A Goods Receipt Note has already been recorded for {selectedDispatchNote ? `Dispatch Note #${selectedDispatchNote.dispatchNoteNumber}` : `Purchase Order #${selectedPO?.poNumber || selectedPoId}`}. You can view the verified document in Recorded GRNs. Duplicate GRN creation is disabled.
           </MessageStrip>
         </div>
       )}
@@ -1109,6 +1254,49 @@ export default function CreateGRNPage() {
             <Truck className="size-5 text-primary" />
             <h2 className="text-base font-bold text-foreground">Header & Reference Details</h2>
           </div>
+
+          {/* Multi-Dispatch Quick Switcher */}
+          {entryMode === 'AUTO_FILL' && selectedPO && displayInboundDocOptions.filter((d) => d.docType === 'DISPATCH').length > 1 && (
+            <div className="p-3.5 bg-blue-500/10 border border-blue-500/25 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-blue-700 dark:text-blue-300">
+              <div className="flex items-center gap-2">
+                <Truck className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <span className="font-bold">Multi-Dispatch Order:</span> Vendor created {displayInboundDocOptions.filter((d) => d.docType === 'DISPATCH').length} separate dispatches for this PO.
+                  Click a dispatch note below to generate its separate GRN:
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                {displayInboundDocOptions
+                  .filter((d) => d.docType === 'DISPATCH')
+                  .map((dnOpt) => {
+                    const isSelected = dnOpt.id === selectedInboundDocId;
+                    const isRec = (dnOpt as any).isAlreadyReceived;
+                    return (
+                      <button
+                        key={dnOpt.id}
+                        type="button"
+                        onClick={() => handleInboundDocSelect(dnOpt.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : isRec
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                            : 'bg-background hover:bg-muted text-foreground border-border'
+                        }`}
+                      >
+                        {isRec ? <CheckCircle2 className="size-3.5 text-emerald-500" /> : <Truck className="size-3.5" />}
+                        <span>{dnOpt.docNumber}</span>
+                        {isRec ? (
+                          <span className="text-[10px] font-normal opacity-85">(Received)</span>
+                        ) : (
+                          <span className="text-[10px] font-normal opacity-85">(Pending)</span>
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {/* GRN # */}
@@ -1352,23 +1540,44 @@ export default function CreateGRNPage() {
                           <Input
                             type="number"
                             min="0"
+                            max={item.initialOrderedQty || item.orderedQty}
                             value={item.orderedQty}
-                            onChange={(e) => handleUpdateItem(item.id, 'orderedQty', parseFloat(e.target.value) || 0)}
-                            className="h-9 text-sm text-center font-bold bg-background"
+                            disabled={Boolean(selectedPO)}
+                            readOnly={Boolean(selectedPO)}
+                            title={Boolean(selectedPO) ? 'Contracted PO quantity cannot be changed during GRN inspection' : undefined}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const maxVal = item.initialOrderedQty || item.orderedQty;
+                              handleUpdateItem(item.id, 'orderedQty', maxVal > 0 ? Math.min(val, maxVal) : val);
+                            }}
+                            className={cn("h-9 text-sm text-center font-bold bg-background", Boolean(selectedPO) && "opacity-80 cursor-not-allowed")}
                           />
                         </td>
                         <td className="py-3 px-3.5 text-center">
                           <Input
                             type="number"
                             min="0"
+                            max={item.orderedQty}
                             value={item.receivedQty}
-                            onChange={(e) =>
-                              handleUpdateItem(
-                                item.id,
-                                'receivedQty',
-                                e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0)
-                              )
-                            }
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              if (e.target.value === '') {
+                                handleUpdateItem(item.id, 'receivedQty', '');
+                                return;
+                              }
+                              const val = Math.max(0, parseFloat(e.target.value) || 0);
+                              const maxAllowed = item.orderedQty || 0;
+                              if (maxAllowed > 0 && val > maxAllowed) {
+                                handleUpdateItem(item.id, 'receivedQty', maxAllowed);
+                              } else {
+                                handleUpdateItem(item.id, 'receivedQty', val);
+                              }
+                            }}
+                            onBlur={() => {
+                              if (item.receivedQty === '') {
+                                handleUpdateItem(item.id, 'receivedQty', 0);
+                              }
+                            }}
                             className="h-9 text-sm text-center font-bold text-primary border-primary/40 bg-background"
                           />
                         </td>
@@ -1379,6 +1588,7 @@ export default function CreateGRNPage() {
                             max={rec}
                             step="any"
                             value={item.acceptedQty}
+                            onFocus={(e) => e.target.select()}
                             onChange={(e) => {
                               const raw = e.target.value;
                               if (raw === '') {
@@ -1392,6 +1602,11 @@ export default function CreateGRNPage() {
                                 handleUpdateItem(item.id, 'acceptedQty', isNaN(val) ? 0 : Math.max(0, val));
                               }
                             }}
+                            onBlur={() => {
+                              if (item.acceptedQty === '') {
+                                handleUpdateItem(item.id, 'acceptedQty', rec);
+                              }
+                            }}
                             className="h-9 text-sm text-center font-bold text-emerald-600 dark:text-emerald-400 bg-background"
                           />
                         </td>
@@ -1399,15 +1614,24 @@ export default function CreateGRNPage() {
                           <Input
                             type="number"
                             min="0"
+                            max={rec}
                             step="any"
                             value={item.rejectedQty}
-                            onChange={(e) =>
-                              handleUpdateItem(
-                                item.id,
-                                'rejectedQty',
-                                e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0)
-                              )
-                            }
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              if (raw === '') {
+                                handleUpdateItem(item.id, 'rejectedQty', '');
+                                return;
+                              }
+                              const val = parseFloat(raw);
+                              handleUpdateItem(item.id, 'rejectedQty', isNaN(val) ? 0 : Math.max(0, Math.min(rec, val)));
+                            }}
+                            onBlur={() => {
+                              if (item.rejectedQty === '') {
+                                handleUpdateItem(item.id, 'rejectedQty', 0);
+                              }
+                            }}
                             className="h-9 text-sm text-center font-bold text-destructive bg-background"
                           />
                         </td>
@@ -1417,6 +1641,9 @@ export default function CreateGRNPage() {
                             min="0"
                             step="any"
                             value={item.unitPrice}
+                            disabled={Boolean(selectedPO)}
+                            readOnly={Boolean(selectedPO)}
+                            title={Boolean(selectedPO) ? 'Contracted PO unit price' : undefined}
                             onChange={(e) =>
                               handleUpdateItem(
                                 item.id,
@@ -1424,7 +1651,7 @@ export default function CreateGRNPage() {
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="h-9 text-sm text-right font-mono bg-background"
+                            className={cn("h-9 text-sm text-right font-mono bg-background", Boolean(selectedPO) && "opacity-80 cursor-not-allowed")}
                           />
                         </td>
                         <td className="py-3 px-3.5 text-right font-semibold tabular-nums text-foreground">
@@ -1535,14 +1762,42 @@ export default function CreateGRNPage() {
                 return acc > rec || acc < 0;
               });
 
+              const hasInvalidReceivedQty = lineItems.some((item) => {
+                const ord = Number(item.orderedQty || 0);
+                const rec = typeof item.receivedQty === 'number' ? item.receivedQty : (item.receivedQty === '' ? 0 : Number(item.receivedQty) || 0);
+                return ord > 0 && rec > ord;
+              });
+
+              const hasInvalidOrderedQty = lineItems.some((item) => {
+                const ord = Number(item.orderedQty || 0);
+                const initOrd = item.initialOrderedQty != null && item.initialOrderedQty > 0 ? Number(item.initialOrderedQty) : ord;
+                return initOrd > 0 && ord > initOrd;
+              });
+
+              const hasInvalidTotalValue = calculations.totalGrnValue > calculations.totalPoValue && calculations.totalPoValue > 0;
+
+              const isSubmitDisabled =
+                submitting ||
+                hasInvalidAcceptedQty ||
+                hasInvalidReceivedQty ||
+                hasInvalidOrderedQty ||
+                hasInvalidTotalValue ||
+                (Boolean(selectedPO) && !hasInboundDispatch);
+
               return (
                 <Button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={submitting || hasInvalidAcceptedQty || (Boolean(selectedPO) && !hasInboundDispatch)}
+                  disabled={isSubmitDisabled}
                   title={
-                    hasInvalidAcceptedQty
+                    hasInvalidOrderedQty
+                      ? 'Ordered quantity cannot exceed initial contracted PO quantity.'
+                      : hasInvalidReceivedQty
+                      ? 'Received quantity cannot exceed ordered quantity.'
+                      : hasInvalidAcceptedQty
                       ? 'Accepted quantity cannot be greater than received quantity.'
+                      : hasInvalidTotalValue
+                      ? 'Total received value cannot exceed total ordered PO value.'
                       : Boolean(selectedPO) && !hasInboundDispatch
                       ? 'Vendor Dispatch Note or Invoice is required before GRN can be posted.'
                       : undefined

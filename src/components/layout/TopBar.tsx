@@ -21,6 +21,7 @@ import {
 import { isVendor } from '../../utils/rbac';
 import VendorNotificationBell from './VendorNotificationBell';
 import AdminNotificationBell from './AdminNotificationBell';
+import BranchSwitcher from './BranchSwitcher';
 import HeaderCalendarPopover from './HeaderCalendarPopover';
 import TaskInboxPopover from './TaskInboxPopover';
 import { taskService } from '../../services/taskService';
@@ -347,7 +348,9 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
         <span className="truncate pr-2 text-sm font-semibold text-foreground sm:hidden">{pageTitle}</span>
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+        {!isVendor(roles) && <BranchSwitcher />}
+
         {/* Task List / To-Do Inbox */}
         <div className="relative" ref={mailRef}>
           <button
