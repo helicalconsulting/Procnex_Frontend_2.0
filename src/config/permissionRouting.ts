@@ -40,6 +40,8 @@ export const ROUTE_PERMISSION_RULES: Array<{ prefix: string; rule: RoutePermissi
   { prefix: '/procurement/create-company-grn', rule: { module: 'PO Creation', action: 'canView' } },
   { prefix: '/budget/create', rule: { module: 'Budget Management', action: 'canView' } },
   { prefix: '/budget', rule: { module: 'Budget Management', action: 'canView' } },
+  { prefix: '/procurement/budget', rule: { module: 'Budget Management', action: 'canView' } },
+  { prefix: '/procurement/budgets', rule: { module: 'Budget Management', action: 'canView' } },
   { prefix: '/contracts', rule: { module: 'Contracts', action: 'canView' } },
 ];
 

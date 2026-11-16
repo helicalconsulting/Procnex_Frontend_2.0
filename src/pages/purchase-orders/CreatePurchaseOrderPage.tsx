@@ -1338,7 +1338,7 @@ export default function CreatePurchaseOrderPage() {
                 {!isReadOnly && budgetLines.length === 0 && !budgetLoading && (
                   <button
                     type="button"
-                    onClick={() => navigate('/procurement/budgets/create')}
+                    onClick={() => navigate('/budget/create')}
                     className="cpo-btn cpo-btn--secondary"
                     style={{ whiteSpace: 'nowrap', fontSize: 12, padding: '7px 12px' }}
                     title="No active budgets exist yet. Click to configure organizational budgets."
@@ -2624,7 +2624,7 @@ export default function CreatePurchaseOrderPage() {
         }}
         onRequestVirement={() => {
           setShowBudgetExceededModal(false);
-          navigate(`/procurement/budgets/${budgetValidation?.budgetId || ''}`);
+          navigate(budgetValidation?.budgetId ? `/budget/${budgetValidation.budgetId}` : '/budget');
         }}
       />
     </div>

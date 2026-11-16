@@ -247,6 +247,10 @@ export default function App() {
                           <Route path="/budget" element={page(BudgetCreatePage)} />
                           <Route path="/budget/create" element={page(BudgetCreatePage)} />
                           <Route path="/budget/:id" element={page(BudgetDetailPage)} />
+                          <Route path="/procurement/budget" element={page(BudgetCreatePage)} />
+                          <Route path="/procurement/budgets" element={page(BudgetCreatePage)} />
+                          <Route path="/procurement/budgets/create" element={page(BudgetCreatePage)} />
+                          <Route path="/procurement/budgets/:id" element={page(BudgetDetailPage)} />
                           <Route
                             path="/accounts-payable"
                             element={page(AccountsPayablePage)}
