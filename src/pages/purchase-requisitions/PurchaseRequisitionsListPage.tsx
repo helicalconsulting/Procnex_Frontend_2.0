@@ -124,6 +124,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: 'department', label: 'Department', defaultVisible: true },
   { key: 'submittedToName', label: 'Assigned To', defaultVisible: true },
   { key: 'requesterName', label: 'Requester', defaultVisible: true },
+  { key: 'justification', label: 'Business Justification / Remarks', defaultVisible: false },
   { key: 'items', label: 'Requested Items', defaultVisible: true },
   { key: 'conversionStatus', label: 'Next Step / Routing', defaultVisible: true },
   { key: 'poDate', label: 'Date', defaultVisible: true },
@@ -683,13 +684,19 @@ export default function PurchaseRequisitionsListPage() {
 
     const rawItems: any[] = [];
     targetItems.forEach((pr) => {
-      const pItems = Array.isArray(pr.items) ? pr.items : [];
+      let pItems: any[] = [];
+      if (Array.isArray(pr.items)) {
+        pItems = pr.items;
+      } else if (typeof pr.items === 'string') {
+        try { pItems = JSON.parse(pr.items); } catch {}
+      }
       const itemDate = pr.deliveryDate ? new Date(pr.deliveryDate).toISOString().slice(0, 10) : resolvedDate;
       pItems.forEach((it) => {
         rawItems.push({
           id: `item-${Date.now()}-${rawItems.length + 1}`,
           itemCode: it.itemCode || `ITEM-${String(rawItems.length + 1).padStart(3, '0')}`,
           itemName: it.itemName || it.description || 'Item',
+          itemClass: (it as any).itemClass || (it as any).category || (pr as any).itemClass || '',
           description: '',
           quantity: String(it.quantity || 1),
           unit: it.unit || 'pcs',
@@ -698,12 +705,18 @@ export default function PurchaseRequisitionsListPage() {
       });
     });
 
+    const resolvedItemClass = rawItems.find((it) => it.itemClass)?.itemClass ||
+      (targetItems[0] as any)?.itemClass ||
+      (targetItems[0] as any)?.supplierType ||
+      '';
+
     const prefillData = {
       fromConsolidation: true,
       requisitionIds: targetItems.map((r) => String(r.id || r.rfqId)),
       prNumbers: targetItems.map((r) => r.prNumber || r.id).filter(Boolean),
       title: defaultTitle,
       department: rfqDepartment,
+      itemClass: resolvedItemClass || undefined,
       description: '',
       closingDate: resolvedDate,
       date: resolvedDate,
@@ -733,11 +746,35 @@ export default function PurchaseRequisitionsListPage() {
       .map((r) => r.prNumber || r.id)
       .filter(Boolean)
       .join(', ');
-    const firstClass = (targetItems[0]?.items as any)?.[0]?.itemClass || 'General';
+    const firstPr = targetItems[0];
+    let resolvedItemClass = '';
+    const firstItems = Array.isArray(firstPr?.items)
+      ? firstPr.items
+      : typeof firstPr?.items === 'string'
+      ? (() => { try { return JSON.parse(firstPr.items); } catch { return []; } })()
+      : [];
+    const itemWithClass = firstItems.find((it: any) => it?.itemClass || it?.category);
+    if (itemWithClass?.itemClass) {
+      resolvedItemClass = itemWithClass.itemClass;
+    } else if (itemWithClass?.category) {
+      resolvedItemClass = itemWithClass.category;
+    } else if ((firstPr as any)?.itemClass) {
+      resolvedItemClass = (firstPr as any).itemClass;
+    } else if ((firstPr as any)?.category) {
+      resolvedItemClass = (firstPr as any).category;
+    } else if ((firstPr as any)?.supplierType) {
+      resolvedItemClass = (firstPr as any).supplierType;
+    }
+
+    const firstClass = resolvedItemClass || 'General';
 
     const rawItems: any[] = [];
     targetItems.forEach((pr) => {
-      const pItems = Array.isArray(pr.items) ? pr.items : [];
+      const pItems = Array.isArray(pr.items)
+        ? pr.items
+        : typeof pr.items === 'string'
+        ? (() => { try { return JSON.parse(pr.items); } catch { return []; } })()
+        : [];
       pItems.forEach((it) => {
         rawItems.push({
           id: String(rawItems.length + 1),
@@ -748,6 +785,7 @@ export default function PurchaseRequisitionsListPage() {
           unit: it.unit || 'pcs',
           unitPrice: Number(it.unitPrice || it.estimatedPrice) || 0,
           taxPercent: 0,
+          itemClass: it.itemClass || it.category || resolvedItemClass || '',
         });
       });
     });
@@ -756,6 +794,7 @@ export default function PurchaseRequisitionsListPage() {
       fromConsolidation: true,
       requisitionIds: targetItems.map((r) => String(r.id || r.rfqId)),
       prNumbers: prNumbersString,
+      itemClass: firstClass,
       supplierType: firstClass,
       items: rawItems,
     };
@@ -782,13 +821,19 @@ export default function PurchaseRequisitionsListPage() {
     ) : undefined;
 
     const rawItems: any[] = [];
-    const pItems = Array.isArray(pr.items) ? pr.items : [];
+    let pItems: any[] = [];
+    if (Array.isArray(pr.items)) {
+      pItems = pr.items;
+    } else if (typeof pr.items === 'string') {
+      try { pItems = JSON.parse(pr.items); } catch {}
+    }
     const itemDate = pr.deliveryDate ? new Date(pr.deliveryDate).toISOString().slice(0, 10) : resolvedDate;
     pItems.forEach((it, idx) => {
       rawItems.push({
         id: `item-${Date.now()}-${idx + 1}`,
         itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
         itemName: it.itemName || it.description || 'Item',
+        itemClass: (it as any).itemClass || (it as any).category || (pr as any).itemClass || '',
         description: '',
         quantity: String(it.quantity || 1),
         unit: it.unit || 'pcs',
@@ -796,12 +841,20 @@ export default function PurchaseRequisitionsListPage() {
       });
     });
 
+    const detectedItemClass = rawItems.find((it) => it.itemClass)?.itemClass ||
+      (pItems[0] as any)?.itemClass ||
+      (pItems[0] as any)?.category ||
+      (pr as any)?.itemClass ||
+      (pr as any)?.supplierType ||
+      '';
+
     const prefillData = {
       fromConsolidation: true,
       requisitionIds: [String(pr.id || pr.rfqId)],
       prNumbers: [pr.prNumber || pr.id].filter(Boolean),
       title: defaultTitle,
       department: rfqDepartment,
+      itemClass: detectedItemClass || undefined,
       description: '',
       closingDate: resolvedDate,
       date: resolvedDate,
@@ -818,7 +871,21 @@ export default function PurchaseRequisitionsListPage() {
   };
 
   const handleCreatePoForRequisition = (pr: ListPurchaseRequisition) => {
-    const pItems = Array.isArray(pr.items) ? pr.items : [];
+    const pItems = Array.isArray(pr.items)
+      ? pr.items
+      : typeof pr.items === 'string'
+      ? (() => { try { return JSON.parse(pr.items); } catch { return []; } })()
+      : [];
+
+    const itemWithClass = pItems.find((it: any) => it?.itemClass || it?.category);
+    const resolvedItemClass =
+      itemWithClass?.itemClass ||
+      itemWithClass?.category ||
+      (pr as any)?.itemClass ||
+      (pr as any)?.category ||
+      (pr as any)?.supplierType ||
+      '';
+
     const rawItems: any[] = pItems.map((it: any, idx: number) => ({
       id: String(idx + 1),
       itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
@@ -828,13 +895,15 @@ export default function PurchaseRequisitionsListPage() {
       unit: it.unit || 'pcs',
       unitPrice: Number(it.unitPrice || it.estimatedPrice) || 0,
       taxPercent: 0,
+      itemClass: it.itemClass || it.category || resolvedItemClass || '',
     }));
 
     const prefillData = {
       fromConsolidation: true,
       requisitionIds: [String(pr.id || pr.rfqId)],
       prNumbers: pr.prNumber || pr.id || '',
-      supplierType: (pr.items as any)?.[0]?.itemClass || 'General',
+      itemClass: resolvedItemClass || (pItems[0] as any)?.itemClass || 'General',
+      supplierType: resolvedItemClass || (pItems[0] as any)?.itemClass || 'General',
       items: rawItems,
     };
 
@@ -1703,6 +1772,24 @@ export default function PurchaseRequisitionsListPage() {
                                 </td>
                               );
                             }
+                            if (col.key === 'justification') {
+                              const reason = (
+                                (requisition as any).justification ||
+                                requisition.description ||
+                                requisition.internalNotes ||
+                                requisition.specialInstructions ||
+                                ''
+                              ).trim();
+                              return (
+                                <td key="justification" className="max-w-[220px] truncate px-4 py-4 text-xs text-muted-foreground" title={reason || undefined}>
+                                  {reason ? (
+                                    <span className="font-medium text-foreground">{reason}</span>
+                                  ) : (
+                                    <span className="italic text-muted-foreground/60">—</span>
+                                  )}
+                                </td>
+                              );
+                            }
                             if (col.key === 'items') {
                               return (
                                 <td key="items" className="max-w-[220px] truncate px-4 py-4 text-muted-foreground" title={primaryItem}>
@@ -2049,6 +2136,34 @@ export default function PurchaseRequisitionsListPage() {
                   )}
                 </div>
 
+                {/* Business Justification / Remarks */}
+                {(() => {
+                  const reasonText = (
+                    (viewingPr as any).justification ||
+                    viewingPr.description ||
+                    viewingPr.internalNotes ||
+                    viewingPr.specialInstructions ||
+                    ''
+                  ).trim();
+                  return (
+                    <div className="rounded-xl border border-primary/25 bg-primary/5 dark:bg-primary/10 p-3.5 space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                        <FileText className="size-4" />
+                        <span>Business Justification / Remarks</span>
+                      </div>
+                      {reasonText ? (
+                        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed font-medium pl-6">
+                          {reasonText}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic pl-6">
+                          No business justification or remarks provided for this requisition.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Conversion / Routing Status */}
                 <div className="rounded-xl border border-border/70 bg-card p-3.5">
                   <span className="text-muted-foreground block text-xs font-medium mb-1.5">Procurement Routing Status:</span>
@@ -2188,18 +2303,6 @@ export default function PurchaseRequisitionsListPage() {
                     </table>
                   </div>
                 </div>
-
-                {/* Justification / Description */}
-                {(viewingPr.description || viewingPr.specialInstructions || viewingPr.internalNotes) && (
-                  <div className="rounded-lg bg-muted/30 p-3 border border-border/50">
-                    <span className="text-xs font-semibold text-muted-foreground block mb-0.5">
-                      Business Justification / Description:
-                    </span>
-                    <p className="text-sm text-foreground italic">
-                      {viewingPr.description || viewingPr.specialInstructions || viewingPr.internalNotes}
-                    </p>
-                  </div>
-                )}
               </div>
 
               <DialogFooter className="pt-2 border-t border-border/60">

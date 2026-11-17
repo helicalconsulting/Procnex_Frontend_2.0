@@ -2,13 +2,13 @@ import LandingTable, { type LandingColumn } from '../../components/shared/Landin
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type Warehouse, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type ContractTemplate, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
+import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type Warehouse, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type ContractTemplate, type FormFieldConfig, type SequenceSetting, type ItemClass, type SupplierClass } from '../../services/companySettingsService';
 import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, Search,
   Save, Settings, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, ArrowLeft, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
-  Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw, Wallet,
+  Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw, Wallet, Boxes, Truck,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -595,6 +595,14 @@ const TABS: TabDef[] = [
   { key: 'budget-logic',        label: 'Budget Settings',        icon: Wallet },
 ];
 
+const VALID_TABS: TabKey[] = [
+  'general', 'branding', 'departments', 'warehouses', 'forms',
+  'form-documents', 'email-templates', 'documents-contracts',
+  'doc-serialization', 'budget-logic'
+];
+
+const SETTINGS_DETAIL_TABS = TABS.map(({ key, label, icon }) => ({ id: key, label, icon }));
+
 // ─── Email Template Labels & Placeholders ───────────────────
 
 const EMAIL_TEMPLATE_LABELS: Record<string, string> = {
@@ -894,24 +902,32 @@ export default function CompanySettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get('tab') as TabKey | null;
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
-    if (urlTab && (['general', 'branding', 'departments', 'warehouses', 'forms', 'form-documents', 'email-templates', 'documents-contracts', 'doc-serialization', 'budget-logic'] as string[]).includes(urlTab)) {
+    if (urlTab && VALID_TABS.includes(urlTab)) {
       return urlTab;
     }
     return 'general';
   });
 
+  const prevUrlTabRef = useRef<TabKey | null>(urlTab);
   useEffect(() => {
-    if (urlTab && urlTab !== activeTab && (['general', 'branding', 'departments', 'warehouses', 'forms', 'form-documents', 'email-templates', 'documents-contracts', 'doc-serialization', 'budget-logic'] as string[]).includes(urlTab)) {
-      setActiveTab(urlTab);
+    if (urlTab !== prevUrlTabRef.current) {
+      prevUrlTabRef.current = urlTab;
+      const valid = urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'general';
+      setActiveTab(valid);
     }
-  }, [urlTab, activeTab]);
+  }, [urlTab]);
 
   const handleTabChange = useCallback((key: string) => {
     const nextTab = key as TabKey;
+    prevUrlTabRef.current = nextTab;
     setActiveTab(nextTab);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set('tab', nextTab);
+      if (nextTab === 'general') {
+        next.delete('tab');
+      } else {
+        next.set('tab', nextTab);
+      }
       return next;
     }, { replace: true });
   }, [setSearchParams]);
@@ -1609,8 +1625,30 @@ export default function CompanySettingsPage() {
   const [positionDesc, setPositionDesc] = useState('');
   const [positionError, setPositionError] = useState<string | null>(null);
 
+  // Item Classes state
+  const [itemClasses, setItemClasses] = useState<ItemClass[]>([]);
+  const [itemClassSearch, setItemClassSearch] = useState('');
+  const [showItemClassModal, setShowItemClassModal] = useState(false);
+  const [editingItemClass, setEditingItemClass] = useState<ItemClass | null>(null);
+  const [itemClassName, setItemClassName] = useState('');
+  const [itemClassCode, setItemClassCode] = useState('');
+  const [itemClassDesc, setItemClassDesc] = useState('');
+  const [itemClassSupplierClassId, setItemClassSupplierClassId] = useState('');
+  const [itemClassSupplierClassName, setItemClassSupplierClassName] = useState('');
+  const [itemClassError, setItemClassError] = useState<string | null>(null);
+
+  // Supplier Classes state
+  const [supplierClasses, setSupplierClasses] = useState<SupplierClass[]>([]);
+  const [supplierClassSearch, setSupplierClassSearch] = useState('');
+  const [showSupplierClassModal, setShowSupplierClassModal] = useState(false);
+  const [editingSupplierClass, setEditingSupplierClass] = useState<SupplierClass | null>(null);
+  const [supplierClassName, setSupplierClassName] = useState('');
+  const [supplierClassCode, setSupplierClassCode] = useState('');
+  const [supplierClassDesc, setSupplierClassDesc] = useState('');
+  const [supplierClassError, setSupplierClassError] = useState<string | null>(null);
+
   // Delete confirmation state
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'department' | 'category' | 'unit' | 'position' | 'paymentTerm' | 'requiredDocument'; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'department' | 'category' | 'unit' | 'position' | 'paymentTerm' | 'requiredDocument' | 'itemClass' | 'supplierClass'; id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Financial Year Configuration Modal State
@@ -1633,6 +1671,28 @@ export default function CompanySettingsPage() {
           d.description?.toLowerCase().includes(search.toLowerCase())
       )
     : departments;
+
+  // Filtered item classes
+  const filteredItemClasses = useMemo(() => {
+    if (!itemClassSearch.trim()) return itemClasses;
+    const q = itemClassSearch.toLowerCase();
+    return itemClasses.filter(
+      (ic) => ic.name.toLowerCase().includes(q) ||
+        (ic.code || '').toLowerCase().includes(q) ||
+        (ic.description || '').toLowerCase().includes(q)
+    );
+  }, [itemClasses, itemClassSearch]);
+
+  // Filtered supplier classes
+  const filteredSupplierClasses = useMemo(() => {
+    if (!supplierClassSearch.trim()) return supplierClasses;
+    const q = supplierClassSearch.toLowerCase();
+    return supplierClasses.filter(
+      (sc) => sc.name.toLowerCase().includes(q) ||
+        (sc.code || '').toLowerCase().includes(q) ||
+        (sc.description || '').toLowerCase().includes(q)
+    );
+  }, [supplierClasses, supplierClassSearch]);
 
   // Categories grouped by department
   const categoriesByDept = new Map<string, Category[]>();
@@ -2598,7 +2658,7 @@ export default function CompanySettingsPage() {
     }
   }, [selectedDocTemplate, selectedDocId, editedDocName, editedDocContent]);
 
-  const anyModalOpen = !!(showDeptModal || showCatModal || showUnitModal || showPositionModal || showPaymentTermModal || deleteTarget || cropFile || confirmModalConfig?.isOpen || showPasscodeModal);
+  const anyModalOpen = !!(showDeptModal || showCatModal || showUnitModal || showPositionModal || showPaymentTermModal || deleteTarget || cropFile || confirmModalConfig?.isOpen || showPasscodeModal || showItemClassModal || showSupplierClassModal);
   useBodyScrollLock(anyModalOpen);
 
 
@@ -2815,7 +2875,172 @@ export default function CompanySettingsPage() {
     }
   }, [editableDocs, requiredDocuments, reloadRequiredDocuments, canCreateSettings]);
 
+  // ── Item & Supplier Classes CRUD & Lifecycle ──
 
+  const loadItemAndSupplierClasses = useCallback(async () => {
+    try {
+      const [ic, sc] = await Promise.all([
+        companySettingsService.listItemClasses(true),
+        companySettingsService.listSupplierClasses(true),
+      ]);
+      setItemClasses(ic);
+      setSupplierClasses(sc);
+    } catch {
+      // defaults already handled in service
+    }
+  }, []);
+
+  useEffect(() => {
+    loadItemAndSupplierClasses();
+    const handleIc = () => {
+      companySettingsService.listItemClasses(true).then(setItemClasses).catch(() => {});
+    };
+    const handleSc = () => {
+      companySettingsService.listSupplierClasses(true).then(setSupplierClasses).catch(() => {});
+    };
+    window.addEventListener('itemClassesChanged', handleIc);
+    window.addEventListener('supplierClassesChanged', handleSc);
+    return () => {
+      window.removeEventListener('itemClassesChanged', handleIc);
+      window.removeEventListener('supplierClassesChanged', handleSc);
+    };
+  }, [loadItemAndSupplierClasses]);
+
+  const openAddItemClass = useCallback(() => {
+    setEditingItemClass(null);
+    setItemClassName('');
+    setItemClassCode('');
+    setItemClassDesc('');
+    setItemClassSupplierClassId('');
+    setItemClassSupplierClassName('');
+    setItemClassError(null);
+    setShowItemClassModal(true);
+  }, []);
+
+  const openEditItemClass = useCallback((ic: ItemClass) => {
+    setEditingItemClass(ic);
+    setItemClassName(ic.name);
+    setItemClassCode(ic.code || '');
+    setItemClassDesc(ic.description || '');
+    setItemClassSupplierClassId(ic.supplierClassId || '');
+    setItemClassSupplierClassName(ic.supplierClassName || '');
+    setItemClassError(null);
+    setShowItemClassModal(true);
+  }, []);
+
+  const handleSaveItemClass = useCallback(async () => {
+    if (!canCreateSettings) return;
+    const name = itemClassName.trim();
+    if (!name) return;
+    setActionLoading(true);
+    setItemClassError(null);
+    try {
+      if (editingItemClass) {
+        await companySettingsService.updateItemClass(editingItemClass.id, {
+          name,
+          code: itemClassCode.trim() || undefined,
+          description: itemClassDesc.trim() || undefined,
+          supplierClassId: itemClassSupplierClassId || null,
+          supplierClassName: itemClassSupplierClassName || null,
+        });
+        setPageMsg(`Item Class "${name}" updated.`);
+      } else {
+        await companySettingsService.createItemClass({
+          name,
+          code: itemClassCode.trim() || undefined,
+          description: itemClassDesc.trim() || undefined,
+          supplierClassId: itemClassSupplierClassId || undefined,
+          supplierClassName: itemClassSupplierClassName || undefined,
+        });
+        setPageMsg(`Item Class "${name}" created.`);
+      }
+      setShowItemClassModal(false);
+      loadItemAndSupplierClasses();
+    } catch (err: any) {
+      setItemClassError(err?.message || 'Failed to save item class');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [canCreateSettings, itemClassName, itemClassCode, itemClassDesc, itemClassSupplierClassId, itemClassSupplierClassName, editingItemClass, loadItemAndSupplierClasses]);
+
+  const toggleItemClassActive = useCallback(async (ic: ItemClass) => {
+    if (!canCreateSettings) return;
+    try {
+      await companySettingsService.updateItemClass(ic.id, { isActive: !ic.isActive });
+      loadItemAndSupplierClasses();
+    } catch {
+      // ignore
+    }
+  }, [canCreateSettings, loadItemAndSupplierClasses]);
+
+  const handleDeleteItemClass = useCallback((ic: ItemClass) => {
+    if (!canCreateSettings) return;
+    setDeleteTarget({ type: 'itemClass', id: ic.id, name: ic.name });
+  }, [canCreateSettings]);
+
+  const openAddSupplierClass = useCallback(() => {
+    setEditingSupplierClass(null);
+    setSupplierClassName('');
+    setSupplierClassCode('');
+    setSupplierClassDesc('');
+    setSupplierClassError(null);
+    setShowSupplierClassModal(true);
+  }, []);
+
+  const openEditSupplierClass = useCallback((sc: SupplierClass) => {
+    setEditingSupplierClass(sc);
+    setSupplierClassName(sc.name);
+    setSupplierClassCode(sc.code || '');
+    setSupplierClassDesc(sc.description || '');
+    setSupplierClassError(null);
+    setShowSupplierClassModal(true);
+  }, []);
+
+  const handleSaveSupplierClass = useCallback(async () => {
+    if (!canCreateSettings) return;
+    const name = supplierClassName.trim();
+    if (!name) return;
+    setActionLoading(true);
+    setSupplierClassError(null);
+    try {
+      if (editingSupplierClass) {
+        await companySettingsService.updateSupplierClass(editingSupplierClass.id, {
+          name,
+          code: supplierClassCode.trim() || undefined,
+          description: supplierClassDesc.trim() || undefined,
+        });
+        setPageMsg(`Supplier Class "${name}" updated.`);
+      } else {
+        await companySettingsService.createSupplierClass({
+          name,
+          code: supplierClassCode.trim() || undefined,
+          description: supplierClassDesc.trim() || undefined,
+        });
+        setPageMsg(`Supplier Class "${name}" created.`);
+      }
+      setShowSupplierClassModal(false);
+      loadItemAndSupplierClasses();
+    } catch (err: any) {
+      setSupplierClassError(err?.message || 'Failed to save supplier class');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [canCreateSettings, supplierClassName, supplierClassCode, supplierClassDesc, editingSupplierClass, loadItemAndSupplierClasses]);
+
+  const toggleSupplierClassActive = useCallback(async (sc: SupplierClass) => {
+    if (!canCreateSettings) return;
+    try {
+      await companySettingsService.updateSupplierClass(sc.id, { isActive: !sc.isActive });
+      loadItemAndSupplierClasses();
+    } catch {
+      // ignore
+    }
+  }, [canCreateSettings, loadItemAndSupplierClasses]);
+
+  const handleDeleteSupplierClass = useCallback((sc: SupplierClass) => {
+    if (!canCreateSettings) return;
+    setDeleteTarget({ type: 'supplierClass', id: sc.id, name: sc.name });
+  }, [canCreateSettings]);
 
   // ── Department CRUD ──
 
@@ -3180,6 +3405,16 @@ export default function CompanySettingsPage() {
         await companySettingsService.deleteRequiredDocument(deleteTarget.id);
         setPageMsg(`Required document "${deleteTarget.name}" deleted.`);
         reloadRequiredDocuments();
+      } else if (deleteTarget.type === 'itemClass') {
+        await companySettingsService.deleteItemClass(deleteTarget.id);
+        setItemClasses((prev) => prev.filter((x) => x.id !== deleteTarget.id));
+        setPageMsg(`Item class "${deleteTarget.name}" deleted.`);
+        loadItemAndSupplierClasses();
+      } else if (deleteTarget.type === 'supplierClass') {
+        await companySettingsService.deleteSupplierClass(deleteTarget.id);
+        setSupplierClasses((prev) => prev.filter((x) => x.id !== deleteTarget.id));
+        setPageMsg(`Supplier class "${deleteTarget.name}" deleted.`);
+        loadItemAndSupplierClasses();
       }
       setDeleteTarget(null);
     } catch (err) {
@@ -3187,7 +3422,7 @@ export default function CompanySettingsPage() {
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, reload, reloadCategories, reloadUnits, reloadPaymentTerms, reloadPositions, reloadRequiredDocuments, canCreateSettings]);
+  }, [deleteTarget, reload, reloadCategories, reloadUnits, reloadPaymentTerms, reloadPositions, reloadRequiredDocuments, loadItemAndSupplierClasses, canCreateSettings]);
 
   const cancelDelete = useCallback(() => {
     setDeleteTarget(null);
@@ -3378,7 +3613,7 @@ export default function CompanySettingsPage() {
         <DetailTabs
           id="settings"
           label="Company Settings categories"
-          tabs={TABS.map(({ key, label, icon }) => ({ id: key, label, icon }))}
+          tabs={SETTINGS_DETAIL_TABS}
           activeTab={activeTab}
           onChange={handleTabChange}
         />
@@ -4448,13 +4683,10 @@ export default function CompanySettingsPage() {
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
-                <h2><Building2 size={17} /> Departments & Categories</h2>
-                <p>Manage procurement departments and their vendor categories</p>
+                <h2><Building2 size={17} /> Departments</h2>
+                <p>Manage organizational and procurement departments</p>
               </div>
               <div className="cs-section-header__actions">
-                <Button type="button" variant="default" size="default" className="settings-action" onClick={() => openAddCat()}>
-                  <Plus size={16} /> Add Category
-                </Button>
                 <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddDept}>
                   <Plus size={16} /> Add Department
                 </Button>
@@ -4472,7 +4704,7 @@ export default function CompanySettingsPage() {
                 />
               </div>
 
-              {/* Department & Category Tree */}
+              {/* Department List */}
               {filtered.length === 0 ? (
                 <div className="cs-empty">
                   <div className="cs-empty__icon"><Building2 size={28} /></div>
@@ -4483,82 +4715,214 @@ export default function CompanySettingsPage() {
                 </div>
               ) : (
                 <div className="cs-dept-list">
-                  {filtered.map((dept) => {
-                    const deptCats = categoriesByDept.get(dept.id) || [];
-                    const isExpanded = expandedDept.has(dept.id);
-                    return (
-                      <div key={dept.id} className={`cs-dept ${!dept.isActive ? 'cs-dept--inactive' : ''}`}>
-                        {/* Department Row */}
-                        <div className="cs-dept__row">
-                          <button className="cs-dept__expand" aria-expanded={isExpanded} aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${dept.name} categories`} onClick={() => toggleExpand(dept.id)}>
-                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {filtered.map((dept) => (
+                    <div key={dept.id} className={`cs-dept ${!dept.isActive ? 'cs-dept--inactive' : ''}`}>
+                      {/* Department Row */}
+                      <div className="cs-dept__row">
+                        <Building2 size={18} className="cs-dept__icon" />
+                        <div className="cs-dept__info">
+                          <span className="cs-dept__name">{dept.name}</span>
+                          {dept.description && <span className="cs-dept__desc">{dept.description}</span>}
+                        </div>
+                        <div className="cs-dept__actions">
+                          <button
+                            className={`company-settings__badge ${dept.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}
+                            onClick={() => toggleDeptActive(dept)}
+                            title={dept.isActive ? 'Deactivate' : 'Activate'}
+                          >
+                            {dept.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
                           </button>
-                          <Building2 size={18} className="cs-dept__icon" />
-                          <div className="cs-dept__info">
-                            <span className="cs-dept__name">{dept.name}</span>
-                            {dept.description && <span className="cs-dept__desc">{dept.description}</span>}
+                          <Button aria-label="Edit department" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => openEditDept(dept)} title="Edit department">
+                            <Edit3 size={14} />
+                          </Button>
+                          <Button aria-label="Delete department" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => requestDeleteDept(dept)} title="Delete department">
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Item Classes (Product Demand Classifications) ── */}
+          <div className="cs-section-card" style={{ marginTop: 24 }}>
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Boxes size={17} /> Item Classes (Product Demand Classifications)</h2>
+                <p>Manage product demand categories for purchase requisitions, RFQs, and cross-department aggregation</p>
+              </div>
+              <div className="cs-section-header__actions">
+                <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddItemClass}>
+                  <Plus size={16} /> Add Item Class
+                </Button>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              {/* Search */}
+              <div className="cs-dept-search">
+                <Search size={16} />
+                <Input
+                  type="text"
+                  placeholder="Search item classes..."
+                  value={itemClassSearch}
+                  onChange={(e) => setItemClassSearch(e.target.value)}
+                />
+              </div>
+
+              {filteredItemClasses.length === 0 ? (
+                <div className="cs-empty">
+                  <div className="cs-empty__icon"><Boxes size={28} /></div>
+                  <p>No item classes found. Add your first item class to get started.</p>
+                  <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddItemClass}>
+                    <Plus size={16} /> Add Item Class
+                  </Button>
+                </div>
+              ) : (
+                <div className="cs-class-grid">
+                  {filteredItemClasses.map((ic) => (
+                    <div key={ic.id} className={`cs-class-card ${!ic.isActive ? 'cs-class-card--inactive' : ''}`}>
+                      <div className="cs-class-card__header">
+                        <div className="cs-class-card__title-row">
+                          <div className="cs-class-card__icon-wrap">
+                            <Boxes size={16} />
                           </div>
-                          <span className="cs-dept__count">{deptCats.length} {deptCats.length === 1 ? 'category' : 'categories'}</span>
-                          <div className="cs-dept__actions">
-                            <button
-                              className={`company-settings__badge ${dept.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}
-                              onClick={() => toggleDeptActive(dept)}
-                              title={dept.isActive ? 'Deactivate' : 'Activate'}
-                            >
-                              {dept.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
-                            </button>
-                            <Button aria-label="Add category to this department" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => { openAddCat(dept.id); }} title="Add category to this department">
-                              <Plus size={14} />
-                            </Button>
-                            <Button aria-label="Edit department" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => openEditDept(dept)} title="Edit department">
-                              <Edit3 size={14} />
-                            </Button>
-                            <Button aria-label="Delete department" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => requestDeleteDept(dept)} title="Delete department">
-                              <Trash2 size={14} />
-                            </Button>
+                          <div className="cs-class-card__headings">
+                            <div className="cs-class-card__name-wrap">
+                              <span className="cs-class-card__name">{ic.name}</span>
+                              {ic.code && (
+                                <span className="cs-class-card__code" title={`Code: ${ic.code}`}>{ic.code}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
-                        {/* Categories for this department */}
-                        {isExpanded && (
-                          <div className="cs-cats">
-                            {deptCats.length === 0 ? (
-                              <div className="cs-cats__empty">
-                                <Tag size={14} /> No categories yet. Click <Plus size={12} /> to add one.
-                              </div>
-                            ) : (
-                              deptCats.map((cat) => (
-                                <div key={cat.id} className={`cs-cat ${!cat.isActive ? 'cs-cat--inactive' : ''}`}>
-                                  <Tag size={14} className="cs-cat__icon" />
-                                  <span className="cs-cat__name">{cat.name}</span>
-                                  {cat.description && <span className="cs-cat__desc">{cat.description}</span>}
-                                  <div className="cs-cat__actions">
-                                    <button
-                                      className={`company-settings__badge company-settings__badge--sm ${cat.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}
-                                      onClick={() => toggleCatActive(cat)}
-                                      title={cat.isActive ? 'Deactivate' : 'Activate'}
-                                    >
-                                      {cat.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
-                                    </button>
-                                    <Button aria-label="Edit category" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => openEditCat(cat)} title="Edit category">
-                                      <Edit3 size={13} />
-                                    </Button>
-                                    <Button aria-label="Delete category" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => requestDeleteCat(cat)} title="Delete category">
-                                      <Trash2 size={13} />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
+                        <div className="cs-class-card__actions">
+                          <button
+                            className={`company-settings__badge company-settings__badge--sm ${ic.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}
+                            onClick={() => toggleItemClassActive(ic)}
+                            title={ic.isActive ? 'Deactivate' : 'Activate'}
+                          >
+                            {ic.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
+                          </button>
+                          <Button aria-label="Edit item class" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => openEditItemClass(ic)} title="Edit item class">
+                            <Edit3 size={13} />
+                          </Button>
+                          <Button aria-label="Delete item class" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => handleDeleteItemClass(ic)} title="Delete item class">
+                            <Trash2 size={13} />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {ic.supplierClassName ? (
+                        <div className="cs-class-card__link-row">
+                          <span className="cs-class-card__link-badge cs-class-card__link-badge--linked" title={`Linked to Supplier Class: ${ic.supplierClassName}`}>
+                            <Truck size={12} className="shrink-0" />
+                            <span className="cs-class-card__link-label">Linked Supplier:</span>
+                            <strong>{ic.supplierClassName}</strong>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="cs-class-card__link-row">
+                          <span className="cs-class-card__link-badge cs-class-card__link-badge--unlinked" title="Not linked to any Supplier Class yet">
+                            <Truck size={12} className="shrink-0 opacity-60" />
+                            <span className="cs-class-card__link-label">No supplier class linked</span>
+                          </span>
                         </div>
                       )}
-                  )}
+
+                      {ic.description && (
+                        <p className="cs-class-card__desc" title={ic.description}>
+                          {ic.description}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Supplier Classes (Vendor Classifications) ── */}
+          <div className="cs-section-card" style={{ marginTop: 24 }}>
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Truck size={17} /> Supplier Classes (Vendor Classifications)</h2>
+                <p>Configure vendor tier classifications and supplier segments (e.g. Manufacturer / OEM, Authorized Distributor, Tier 1)</p>
+              </div>
+              <div className="cs-section-header__actions">
+                <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddSupplierClass}>
+                  <Plus size={16} /> Add Supplier Class
+                </Button>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              {/* Search */}
+              <div className="cs-dept-search">
+                <Search size={16} />
+                <Input
+                  type="text"
+                  placeholder="Search supplier classes..."
+                  value={supplierClassSearch}
+                  onChange={(e) => setSupplierClassSearch(e.target.value)}
+                />
+              </div>
+
+              {filteredSupplierClasses.length === 0 ? (
+                <div className="cs-empty">
+                  <div className="cs-empty__icon"><Truck size={28} /></div>
+                  <p>No supplier classes found. Add your first supplier class to get started.</p>
+                  <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddSupplierClass}>
+                    <Plus size={16} /> Add Supplier Class
+                  </Button>
+                </div>
+              ) : (
+                <div className="cs-class-grid">
+                  {filteredSupplierClasses.map((sc) => (
+                    <div key={sc.id} className={`cs-class-card ${!sc.isActive ? 'cs-class-card--inactive' : ''}`}>
+                      <div className="cs-class-card__header">
+                        <div className="cs-class-card__title-row">
+                          <div className="cs-class-card__icon-wrap cs-class-card__icon-wrap--supplier">
+                            <Truck size={16} />
                           </div>
+                          <div className="cs-class-card__headings">
+                            <div className="cs-class-card__name-wrap">
+                              <span className="cs-class-card__name">{sc.name}</span>
+                              {sc.code && (
+                                <span className="cs-class-card__code" title={`Code: ${sc.code}`}>{sc.code}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
 
-                  )}
+                        <div className="cs-class-card__actions">
+                          <button
+                            className={`company-settings__badge company-settings__badge--sm ${sc.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}
+                            onClick={() => toggleSupplierClassActive(sc)}
+                            title={sc.isActive ? 'Deactivate' : 'Activate'}
+                          >
+                            {sc.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
+                          </button>
+                          <Button aria-label="Edit supplier class" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => openEditSupplierClass(sc)} title="Edit supplier class">
+                            <Edit3 size={13} />
+                          </Button>
+                          <Button aria-label="Delete supplier class" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => handleDeleteSupplierClass(sc)} title="Delete supplier class">
+                            <Trash2 size={13} />
+                          </Button>
+                        </div>
+                      </div>
 
+                      {sc.description && (
+                        <p className="cs-class-card__desc" title={sc.description}>
+                          {sc.description}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -6511,6 +6875,130 @@ export default function CompanySettingsPage() {
         </SettingsModal>
       )}
 
+      {/* ── Item Class Modal ── */}
+      {showItemClassModal && (
+        <SettingsModal className="settings-dialog--default" onClose={() => !actionLoading && setShowItemClassModal(false)}>
+          <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
+            <div className="company-settings__modal-header">
+              <span><Boxes size={18} /> {editingItemClass ? 'Edit Item Class' : 'Add Item Class'}</span>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setShowItemClassModal(false)}><X size={18} /></Button>
+            </div>
+            <div className="company-settings__modal-body">
+              {itemClassError && (
+                <div className="cs-modal-error" style={{ marginBottom: 12 }}>
+                  <MessageStrip type="error" compact>{itemClassError}</MessageStrip>
+                </div>
+              )}
+              <SettingsField className="company-settings__field">
+                <label>Item Class Name <span className="settings-required">*</span></label>
+                <Input
+                  value={itemClassName}
+                  onChange={(e) => { setItemClassName(e.target.value); setItemClassError(null); }}
+                  placeholder="e.g. IT Hardware, Networking, Furniture"
+                  className={itemClassError ? 'cs-input--error' : ''}
+                />
+              </SettingsField>
+              <SettingsField className="company-settings__field">
+                <label>Code / Identifier (Optional)</label>
+                <Input
+                  value={itemClassCode}
+                  onChange={(e) => setItemClassCode(e.target.value)}
+                  placeholder="e.g. IT-HW, NET, FURN"
+                />
+              </SettingsField>
+              <SettingsField className="company-settings__field">
+                <label>Description (Optional)</label>
+                <Textarea
+                  value={itemClassDesc}
+                  onChange={(e) => setItemClassDesc(e.target.value)}
+                  placeholder="Describe what items belong to this classification"
+                  rows={3}
+                />
+              </SettingsField>
+              <SettingsField className="company-settings__field">
+                <label>Linked Supplier Class (Optional)</label>
+                <Select
+                  value={itemClassSupplierClassId}
+                  onChange={(e) => {
+                    const scId = e.target.value;
+                    setItemClassSupplierClassId(scId);
+                    const found = supplierClasses.find((sc) => sc.id === scId);
+                    setItemClassSupplierClassName(found ? found.name : '');
+                  }}
+                >
+                  <option value="">No linked supplier class (Unlinked)</option>
+                  {supplierClasses.filter((sc) => sc.isActive).map((sc) => (
+                    <option key={sc.id} value={sc.id}>
+                      {sc.name}{sc.code ? ` (${sc.code})` : ''}
+                    </option>
+                  ))}
+                </Select>
+                <span className="cs-field__hint text-xs text-muted-foreground mt-1">
+                  Connects this Item Class to a Supplier Class for auto-shortlisting matching vendors in RFQs.
+                </span>
+              </SettingsField>
+            </div>
+            <div className="company-settings__modal-footer">
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={() => setShowItemClassModal(false)}>Cancel</Button>
+              <Button type="button" variant="default" size="default" className="settings-action" disabled={!itemClassName.trim() || actionLoading} onClick={handleSaveItemClass}>
+                <Save size={16} /> {actionLoading ? 'Saving…' : editingItemClass ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </SettingsModal>
+      )}
+
+      {/* ── Supplier Class Modal ── */}
+      {showSupplierClassModal && (
+        <SettingsModal className="settings-dialog--default" onClose={() => !actionLoading && setShowSupplierClassModal(false)}>
+          <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
+            <div className="company-settings__modal-header">
+              <span><Truck size={18} /> {editingSupplierClass ? 'Edit Supplier Class' : 'Add Supplier Class'}</span>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setShowSupplierClassModal(false)}><X size={18} /></Button>
+            </div>
+            <div className="company-settings__modal-body">
+              {supplierClassError && (
+                <div className="cs-modal-error" style={{ marginBottom: 12 }}>
+                  <MessageStrip type="error" compact>{supplierClassError}</MessageStrip>
+                </div>
+              )}
+              <SettingsField className="company-settings__field">
+                <label>Supplier Class Name <span className="settings-required">*</span></label>
+                <Input
+                  value={supplierClassName}
+                  onChange={(e) => { setSupplierClassName(e.target.value); setSupplierClassError(null); }}
+                  placeholder="e.g. Manufacturer / OEM, Authorized Distributor"
+                  className={supplierClassError ? 'cs-input--error' : ''}
+                />
+              </SettingsField>
+              <SettingsField className="company-settings__field">
+                <label>Code / Tier (Optional)</label>
+                <Input
+                  value={supplierClassCode}
+                  onChange={(e) => setSupplierClassCode(e.target.value)}
+                  placeholder="e.g. OEM, DIST, TIER-1"
+                />
+              </SettingsField>
+              <SettingsField className="company-settings__field">
+                <label>Description (Optional)</label>
+                <Textarea
+                  value={supplierClassDesc}
+                  onChange={(e) => setSupplierClassDesc(e.target.value)}
+                  placeholder="Describe requirements or qualifications for this vendor tier"
+                  rows={3}
+                />
+              </SettingsField>
+            </div>
+            <div className="company-settings__modal-footer">
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={() => setShowSupplierClassModal(false)}>Cancel</Button>
+              <Button type="button" variant="default" size="default" className="settings-action" disabled={!supplierClassName.trim() || actionLoading} onClick={handleSaveSupplierClass}>
+                <Save size={16} /> {actionLoading ? 'Saving…' : editingSupplierClass ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </SettingsModal>
+      )}
+
       {/* ── Delete Confirmation Modal ── */}
       {/* ── Delete Contract Type Confirmation Modal ── */}
       {deleteContractTypeTarget && (
@@ -6575,7 +7063,7 @@ export default function CompanySettingsPage() {
         <SettingsModal className="settings-dialog--default" onClose={cancelDelete}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
-              <span><Trash2 size={18} style={{ color: 'var(--danger-500)' }} /> Delete {deleteTarget.type === 'department' ? 'Department' : deleteTarget.type === 'category' ? 'Category' : deleteTarget.type === 'unit' ? 'Unit' : deleteTarget.type === 'paymentTerm' ? 'Payment Term' : deleteTarget.type === 'requiredDocument' ? 'Required Document' : 'Position'}?</span>
+              <span><Trash2 size={18} style={{ color: 'var(--danger-500)' }} /> Delete {deleteTarget.type === 'department' ? 'Department' : deleteTarget.type === 'category' ? 'Category' : deleteTarget.type === 'unit' ? 'Unit' : deleteTarget.type === 'paymentTerm' ? 'Payment Term' : deleteTarget.type === 'requiredDocument' ? 'Required Document' : deleteTarget.type === 'itemClass' ? 'Item Class' : deleteTarget.type === 'supplierClass' ? 'Supplier Class' : 'Position'}?</span>
               <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={cancelDelete}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
@@ -6593,7 +7081,11 @@ export default function CompanySettingsPage() {
                         ? 'This payment term will be removed. Existing quotations already using this term will not be affected. This action cannot be undone.'
                         : deleteTarget.type === 'requiredDocument'
                           ? 'This required document will be removed from the vendor onboarding form. Existing vendor documents of this type will not be affected. This action cannot be undone.'
-                          : 'This position will be removed from the system. Existing users assigned to this position will not be affected. This action cannot be undone.'}
+                          : deleteTarget.type === 'itemClass'
+                            ? 'This item class will be permanently removed. This action cannot be undone.'
+                            : deleteTarget.type === 'supplierClass'
+                              ? 'This supplier class will be permanently removed. This action cannot be undone.'
+                              : 'This position will be removed from the system. Existing users assigned to this position will not be affected. This action cannot be undone.'}
               </p>
             </div>
             <div className="company-settings__modal-footer">

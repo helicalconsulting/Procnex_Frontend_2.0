@@ -1492,3 +1492,25 @@
   border-bottom: 2px solid #eef1f5;
   margin-bottom: 8px;
 }
+
+/* ─── Match % Pill & Pop-Out Indicator ─── */
+.oq-match-pill {
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.oq-match-pill:focus-visible {
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--primary);
+}
+
+.oq-match-pill:hover {
+  transform: translateY(-1px);
+}
+
+.oq-match-pill:active {
+  transform: translateY(0);
+}
+

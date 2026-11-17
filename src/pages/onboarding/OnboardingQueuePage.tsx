@@ -38,7 +38,16 @@ import {
   AlertTriangle,
   FileCheck2,
   Tag,
+  ExternalLink,
+  Sparkles,
+  Maximize2,
+  Percent,
 } from 'lucide-react';
+import {
+  calculateVendorMatchAnalysis,
+  type VendorMatchAnalysis,
+  type VendorMatchCandidate,
+} from '../../utils/vendorMatching';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TablePagination } from '../../components/shared/TablePagination';
 import { downloadDocument as _downloadDocument } from '../../utils/download';
@@ -351,10 +360,71 @@ export default function OnboardingQueuePage() {
   const [snapshotTarget, setSnapshotTarget] = useState<QueueRow | null>(null);
   const [snapshotData, setSnapshotData] = useState<Record<string, unknown> | null>(null);
   const [signedPreviewDoc, setSignedPreviewDoc] = useState<VendorDocument | null>(null);
+  const [analysisTarget, setAnalysisTarget] = useState<{ row: QueueRow; analysis: VendorMatchAnalysis } | null>(null);
+  const [masterVendors, setMasterVendors] = useState<VendorMatchCandidate[]>([]);
   const signedModalBodyRef = useRef<HTMLDivElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
-  useBodyScrollLock(!!(approveTarget || rejectTarget || documentTarget || snapshotTarget || signedPreviewDoc));
+  useBodyScrollLock(!!(approveTarget || rejectTarget || documentTarget || snapshotTarget || signedPreviewDoc || analysisTarget));
   const [snapshotLoading, setSnapshotLoading] = useState(false);
+
+  // Load master vendors pool on mount for live duplication matching
+  useEffect(() => {
+    let isMounted = true;
+    procurementService.searchVendors('')
+      .then((results) => {
+        if (!isMounted || !results) return;
+        setMasterVendors(
+          results.map((v) => ({
+            id: v.id,
+            companyName: v.name,
+            contactEmail: v.email,
+            contactPhone: v.phone || v.contactPhone || undefined,
+            contactPerson: v.contactPerson || undefined,
+            status: v.status,
+          }))
+        );
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
+  // Compute live match% and duplication analysis across all queue vendors
+  const matchAnalyses = useMemo(() => {
+    const map = new Map<string | number, VendorMatchAnalysis>();
+    const queueCandidates: VendorMatchCandidate[] = requests.map((r) => ({
+      id: r.id,
+      vendorNo: r.vendorNo,
+      companyName: r.name,
+      contactEmail: r.email,
+      contactPerson: r.contactPerson,
+      contactPhone: r.phone,
+      category: r.category,
+      supplierType: r.supplierType,
+      status: r.status,
+    }));
+
+    const allCandidates: VendorMatchCandidate[] = [...masterVendors, ...queueCandidates];
+
+    requests.forEach((req) => {
+      const analysis = calculateVendorMatchAnalysis(
+        {
+          id: req.id,
+          vendorNo: req.vendorNo,
+          name: req.name,
+          email: req.email,
+          phone: req.phone,
+          contactPerson: req.contactPerson,
+          category: req.category,
+          supplierType: req.supplierType,
+          status: req.status,
+        },
+        allCandidates
+      );
+      map.set(req.id, analysis);
+    });
+
+    return map;
+  }, [requests, masterVendors]);
 
   // Immediately focus the preview modal body and handle immediate capture-phase wheel scrolling
   useEffect(() => {
@@ -715,7 +785,7 @@ export default function OnboardingQueuePage() {
       {/* Table Card matching RFQ Page */}
       <Card className="overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={5} columnWidths={['220px', '200px', '140px', '120px', '120px']} />
+          <TableSkeleton rows={5} columnWidths={['120px', '200px', '130px', '180px', '130px', '140px', '160px']} />
         ) : paginated.length > 0 ? (
           <>
             <div className="hidden overflow-x-auto lg:block">
@@ -726,6 +796,7 @@ export default function OnboardingQueuePage() {
                     <th className="px-5 py-3.5">Name</th>
                     <th className="px-5 py-3.5">P.No.</th>
                     <th className="px-5 py-3.5">Email</th>
+                    <th className="px-5 py-3.5">Match %</th>
                     <th className="px-5 py-3.5">Status</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
@@ -747,6 +818,52 @@ export default function OnboardingQueuePage() {
                           <Mail size={13} className="shrink-0" />
                           {req.email}
                         </span>
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        {(() => {
+                          const analysis = matchAnalyses.get(req.id) || {
+                            score: 0,
+                            duplicationRisk: 'LOW' as const,
+                            matchedVendor: null,
+                            isMultiVendorMatch: false,
+                            multiVendorSummary: '',
+                            breakdown: {
+                              name: { score: 0, weight: 0.4 },
+                              email: { score: 0, weight: 0.4 },
+                              person: { score: 0, weight: 0.1 },
+                              phone: { score: 0, weight: 0.1 },
+                            },
+                            totalCandidatesScanned: 0,
+                          };
+
+                          const isHigh = analysis.duplicationRisk === 'HIGH';
+                          const isMed = analysis.duplicationRisk === 'MEDIUM';
+
+                          return (
+                            <button
+                              type="button"
+                              className={cn(
+                                'oq-match-pill group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer select-none',
+                                isHigh && 'bg-rose-500/10 text-rose-600 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-500/60 shadow-xs',
+                                isMed && 'bg-amber-500/10 text-amber-600 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/60 shadow-xs',
+                                !isHigh && !isMed && 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/60 shadow-xs'
+                              )}
+                              onClick={() => setAnalysisTarget({ row: req, analysis })}
+                              title="Click to view full match & duplication analysis"
+                            >
+                              {isHigh ? (
+                                <AlertTriangle className="size-3.5 shrink-0 text-rose-600" />
+                              ) : isMed ? (
+                                <AlertTriangle className="size-3.5 shrink-0 text-amber-600" />
+                              ) : (
+                                <ShieldCheck className="size-3.5 shrink-0 text-emerald-600" />
+                              )}
+                              <span className="font-bold">{analysis.score}%</span>
+                              <span className="text-[11px] font-medium opacity-80">Match</span>
+                              <ExternalLink className="size-3 opacity-50 group-hover:opacity-100 transition-opacity ml-0.5" />
+                            </button>
+                          );
+                        })()}
                       </td>
                       <td className="px-5 py-3.5">
                         <Badge tone={onboardingStatusTone(req.status)} className="gap-1.5 font-semibold">
@@ -936,6 +1053,52 @@ export default function OnboardingQueuePage() {
                           P.No: {req.phone}
                         </p>
                       )}
+                      {(() => {
+                        const analysis = matchAnalyses.get(req.id) || {
+                          score: 0,
+                          duplicationRisk: 'LOW' as const,
+                          matchedVendor: null,
+                          isMultiVendorMatch: false,
+                          multiVendorSummary: '',
+                          breakdown: {
+                            name: { score: 0, weight: 0.4 },
+                            email: { score: 0, weight: 0.4 },
+                            person: { score: 0, weight: 0.1 },
+                            phone: { score: 0, weight: 0.1 },
+                          },
+                          totalCandidatesScanned: 0,
+                        };
+
+                        const isHigh = analysis.duplicationRisk === 'HIGH';
+                        const isMed = analysis.duplicationRisk === 'MEDIUM';
+
+                        return (
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              className={cn(
+                                'oq-match-pill group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer select-none',
+                                isHigh && 'bg-rose-500/10 text-rose-600 border border-rose-500/30',
+                                isMed && 'bg-amber-500/10 text-amber-600 border border-amber-500/30',
+                                !isHigh && !isMed && 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30'
+                              )}
+                              onClick={() => setAnalysisTarget({ row: req, analysis })}
+                              title="Click to view full match & duplication analysis"
+                            >
+                              {isHigh ? (
+                                <AlertTriangle className="size-3.5 shrink-0 text-rose-600" />
+                              ) : isMed ? (
+                                <AlertTriangle className="size-3.5 shrink-0 text-amber-600" />
+                              ) : (
+                                <ShieldCheck className="size-3.5 shrink-0 text-emerald-600" />
+                              )}
+                              <span className="font-bold">{analysis.score}%</span>
+                              <span className="text-[11px] font-medium opacity-80">Match Analysis</span>
+                              <ExternalLink className="size-3 opacity-60 ml-0.5" />
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <Badge tone={onboardingStatusTone(req.status)} className="shrink-0 gap-1 font-semibold">
                       <span className="size-1.5 rounded-full bg-current" />
@@ -965,6 +1128,17 @@ export default function OnboardingQueuePage() {
                       }}
                     >
                       <Eye className="size-3.5" /> View
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={() => {
+                        const analysis = matchAnalyses.get(req.id);
+                        if (analysis) setAnalysisTarget({ row: req, analysis });
+                      }}
+                    >
+                      <Sparkles className="size-3.5" /> Match %
                     </Button>
                     {req.documents.length > 0 && (
                       <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => openDocuments(req)}>
@@ -1154,6 +1328,19 @@ export default function OnboardingQueuePage() {
                               <div className="min-w-0">
                                 <div className="text-xs font-bold text-foreground truncate">{doc.documentType}</div>
                                 <div className="text-[12px] text-muted-foreground truncate">{doc.originalName}</div>
+                                {(doc.issueDate || doc.expiryDate || doc.expirationDate || doc.issuedAuthority || doc.issuingAuthority) && (
+                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-muted-foreground mt-1">
+                                    {doc.issueDate && (
+                                      <span>Issue: <strong className="text-foreground font-medium">{String(doc.issueDate).slice(0, 10)}</strong></span>
+                                    )}
+                                    {(doc.expiryDate || doc.expirationDate) && (
+                                      <span>Expiry: <strong className="text-foreground font-medium">{String(doc.expiryDate || doc.expirationDate).slice(0, 10)}</strong></span>
+                                    )}
+                                    {(doc.issuedAuthority || doc.issuingAuthority) && (
+                                      <span>Authority: <strong className="text-foreground font-medium">{doc.issuedAuthority || doc.issuingAuthority}</strong></span>
+                                    )}
+                                  </div>
+                                )}
                                 {doc.rejectionReason && <div className="text-[11px] text-destructive italic">{doc.rejectionReason}</div>}
                               </div>
                             </div>
@@ -1237,6 +1424,349 @@ export default function OnboardingQueuePage() {
             </DialogFooter>
           </DialogContent>
         )}
+      </Dialog>
+
+      {/* ── Vendor Match & Duplication Full Analysis Pop-Out Modal ── */}
+      <Dialog
+        open={Boolean(analysisTarget)}
+        onOpenChange={(open) => {
+          if (!open) setAnalysisTarget(null);
+        }}
+      >
+        {analysisTarget && (() => {
+          const { row: targetRow, analysis } = analysisTarget;
+          const isHigh = analysis.duplicationRisk === 'HIGH';
+          const isMed = analysis.duplicationRisk === 'MEDIUM';
+          const isLow = !isHigh && !isMed;
+
+          return (
+            <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto p-0 gap-0 border-border bg-background sm:rounded-2xl shadow-2xl">
+              {/* Header */}
+              <DialogHeader className="p-6 border-b border-border/80 bg-muted/30">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className={cn(
+                      'grid size-12 shrink-0 place-items-center rounded-2xl border transition-colors',
+                      isHigh && 'bg-rose-500/15 border-rose-500/30 text-rose-600',
+                      isMed && 'bg-amber-500/15 border-amber-500/30 text-amber-600',
+                      isLow && 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600'
+                    )}>
+                      {isHigh ? <AlertTriangle className="size-6" /> : isMed ? <AlertTriangle className="size-6" /> : <ShieldCheck className="size-6" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <DialogTitle className="text-xl font-bold text-foreground">
+                          {targetRow.name}
+                        </DialogTitle>
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-bold">
+                          {targetRow.vendorNo}
+                        </span>
+                        <Badge tone={onboardingStatusTone(targetRow.status)} className="capitalize font-semibold text-xs gap-1">
+                          <span className="size-1.5 rounded-full bg-current" />
+                          {targetRow.status}
+                        </Badge>
+                      </div>
+                      <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                        Live Database Duplication Scan • Evaluated against {analysis.totalCandidatesScanned} master & queue records
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Body */}
+              <div className="p-6 space-y-5">
+                {/* Score & Risk Rating Hero Banner */}
+                <div className={cn(
+                  'flex items-center justify-between p-5 rounded-xl border transition-all',
+                  isHigh && 'bg-rose-500/10 border-rose-500/25',
+                  isMed && 'bg-amber-500/10 border-amber-500/25',
+                  isLow && 'bg-emerald-500/10 border-emerald-500/25'
+                )}>
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      {analysis.matchedVendor ? 'Vendor Duplication Match' : 'Duplication Risk Rating'}
+                    </div>
+                    <div className={cn(
+                      'text-3xl font-extrabold mt-1 tracking-tight',
+                      isHigh && 'text-rose-600',
+                      isMed && 'text-amber-600',
+                      isLow && 'text-emerald-600'
+                    )}>
+                      {analysis.score}%
+                      <span className="text-sm font-semibold ml-2 opacity-90">
+                        {isHigh ? 'HIGH RISK' : isMed ? 'MEDIUM RISK' : 'LOW RISK (UNIQUE)'}
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-foreground mt-1">
+                      {analysis.matchedVendor ? (
+                        analysis.isMultiVendorMatch && analysis.multiVendorSummary ? (
+                          <span>Matched multiple records: <strong>{analysis.multiVendorSummary}</strong></span>
+                        ) : (
+                          <span>Top duplicate candidate: <strong>{analysis.matchedVendor.name}</strong></span>
+                        )
+                      ) : (
+                        <span>0% Duplication Risk · Clean & unique vendor credentials</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className={cn(
+                    'size-14 rounded-2xl flex items-center justify-center border shrink-0',
+                    isHigh && 'bg-rose-500/20 text-rose-600 border-rose-500/40',
+                    isMed && 'bg-amber-500/20 text-amber-600 border-amber-500/40',
+                    isLow && 'bg-emerald-500/20 text-emerald-600 border-emerald-500/40'
+                  )}>
+                    {isHigh ? <AlertTriangle size={28} /> : isMed ? <AlertTriangle size={28} /> : <ShieldCheck size={28} />}
+                  </div>
+                </div>
+
+                {/* Cross-Vendor Conflict Alert */}
+                {analysis.isMultiVendorMatch && (
+                  <div className="flex items-start gap-3 p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-sm text-foreground">
+                    <AlertTriangle className="size-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-rose-700 dark:text-rose-400">Cross-Vendor Match Conflict:</strong> Company Name matches <strong>"{analysis.breakdown.name.matchedVendor}"</strong> ({analysis.breakdown.name.score}%), while Vendor Email matches <strong>"{analysis.breakdown.email.matchedVendor}"</strong> ({analysis.breakdown.email.score}%). Review both entries carefully.
+                    </div>
+                  </div>
+                )}
+
+                {/* 4-Factor Weighted Breakdown Grid */}
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2.5">
+                    Priority-Weighted Factor Breakdown
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Company Name */}
+                    <div className="p-3.5 rounded-xl border border-border bg-card shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-foreground">Company Name</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 font-semibold">Weight 40%</span>
+                        </div>
+                        <span className={cn(
+                          'text-xs font-bold',
+                          analysis.breakdown.name.score >= 60 ? 'text-rose-600' : analysis.breakdown.name.score > 0 ? 'text-amber-600' : 'text-emerald-600'
+                        )}>
+                          {analysis.breakdown.name.score}%
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        Target: <span className="text-foreground font-medium">{targetRow.name}</span>
+                      </div>
+                      {analysis.breakdown.name.matchedVendor && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          Matched: <span className="text-foreground font-medium">{analysis.breakdown.name.matchedVendor}</span>
+                        </div>
+                      )}
+                      <div className="text-[11px] text-muted-foreground italic border-t border-border/50 pt-1.5">
+                        {analysis.breakdown.name.explanation}
+                      </div>
+                    </div>
+
+                    {/* Email */}
+                    <div className="p-3.5 rounded-xl border border-border bg-card shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-foreground">Vendor Email</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 font-semibold">Weight 40%</span>
+                        </div>
+                        <span className={cn(
+                          'text-xs font-bold',
+                          analysis.breakdown.email.score >= 60 ? 'text-rose-600' : analysis.breakdown.email.score > 0 ? 'text-amber-600' : 'text-emerald-600'
+                        )}>
+                          {analysis.breakdown.email.score}%
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        Target: <span className="text-foreground font-medium">{targetRow.email}</span>
+                      </div>
+                      {analysis.breakdown.email.matchedValue && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          Matched: <span className="text-foreground font-medium">{analysis.breakdown.email.matchedValue}</span>
+                        </div>
+                      )}
+                      <div className="text-[11px] text-muted-foreground italic border-t border-border/50 pt-1.5">
+                        {analysis.breakdown.email.explanation}
+                      </div>
+                    </div>
+
+                    {/* Contact Person */}
+                    <div className="p-3.5 rounded-xl border border-border bg-card shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-foreground">Contact Person</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-semibold">Weight 10%</span>
+                        </div>
+                        <span className={cn(
+                          'text-xs font-bold',
+                          analysis.breakdown.person.score >= 60 ? 'text-rose-600' : analysis.breakdown.person.score > 0 ? 'text-amber-600' : 'text-emerald-600'
+                        )}>
+                          {analysis.breakdown.person.score}%
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        Target: <span className="text-foreground font-medium">{targetRow.contactPerson || '—'}</span>
+                      </div>
+                      {analysis.breakdown.person.matchedValue && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          Matched: <span className="text-foreground font-medium">{analysis.breakdown.person.matchedValue}</span>
+                        </div>
+                      )}
+                      <div className="text-[11px] text-muted-foreground italic border-t border-border/50 pt-1.5">
+                        {analysis.breakdown.person.explanation}
+                      </div>
+                    </div>
+
+                    {/* Phone Number */}
+                    <div className="p-3.5 rounded-xl border border-border bg-card shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-foreground">Phone Number</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-semibold">Weight 10%</span>
+                        </div>
+                        <span className={cn(
+                          'text-xs font-bold',
+                          analysis.breakdown.phone.score >= 60 ? 'text-rose-600' : analysis.breakdown.phone.score > 0 ? 'text-amber-600' : 'text-emerald-600'
+                        )}>
+                          {analysis.breakdown.phone.score}%
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        Target: <span className="text-foreground font-medium">{targetRow.phone || '—'}</span>
+                      </div>
+                      {analysis.breakdown.phone.matchedValue && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          Matched: <span className="text-foreground font-medium">{analysis.breakdown.phone.matchedValue}</span>
+                        </div>
+                      )}
+                      <div className="text-[11px] text-muted-foreground italic border-t border-border/50 pt-1.5">
+                        {analysis.breakdown.phone.explanation}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Side-by-Side Comparison (if a match exists) */}
+                {analysis.matchedVendor && (
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <div className="bg-muted/40 px-4 py-2.5 border-b border-border text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Candidate Comparison
+                    </div>
+                    <div className="divide-y divide-border/60 text-xs">
+                      <div className="grid grid-cols-2 p-3 bg-muted/15 font-semibold text-muted-foreground">
+                        <div>Current Queue Record</div>
+                        <div>Matched Database Record</div>
+                      </div>
+                      <div className="grid grid-cols-2 p-3 gap-2">
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Company Name</div>
+                          <div className="font-bold text-foreground text-sm">{targetRow.name}</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Matched Company Name</div>
+                          <div className="font-bold text-foreground text-sm">{analysis.matchedVendor.name}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 p-3 gap-2">
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Email</div>
+                          <div className="font-medium text-foreground">{targetRow.email}</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Matched Email</div>
+                          <div className="font-medium text-foreground">{analysis.matchedVendor.email || '—'}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 p-3 gap-2">
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Phone</div>
+                          <div className="font-mono text-foreground">{targetRow.phone || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Matched Phone</div>
+                          <div className="font-mono text-foreground">{analysis.matchedVendor.phone || '—'}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 p-3 gap-2">
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Contact Person</div>
+                          <div className="text-foreground">{targetRow.contactPerson || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-muted-foreground">Matched Contact Person</div>
+                          <div className="text-foreground">{analysis.matchedVendor.contactPerson || '—'}</div>
+                        </div>
+                      </div>
+                      {analysis.matchedVendor.vendorNo && (
+                        <div className="grid grid-cols-2 p-3 gap-2">
+                          <div>
+                            <div className="text-[11px] text-muted-foreground">Vendor #</div>
+                            <div className="font-mono font-bold text-primary">{targetRow.vendorNo}</div>
+                          </div>
+                          <div>
+                            <div className="text-[11px] text-muted-foreground">Matched Vendor #</div>
+                            <div className="font-mono font-bold text-primary">{analysis.matchedVendor.vendorNo}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Queue Status Notice */}
+                <div className="p-3.5 rounded-xl border border-border bg-muted/20 text-xs flex items-center justify-between gap-3">
+                  <div>
+                    <span className="font-semibold text-foreground">Current Queue Status: </span>
+                    <Badge tone={onboardingStatusTone(targetRow.status)} className="capitalize text-xs font-semibold ml-1">
+                      {targetRow.status}
+                    </Badge>
+                    <span className="text-muted-foreground ml-2">
+                      {targetRow.status === 'pending'
+                        ? isHigh
+                          ? '• Caution: High duplicate score detected. Verify records before approving.'
+                          : '• Pending review by procurement officer.'
+                        : targetRow.status === 'approved'
+                          ? '• Vendor has already been approved in the system.'
+                          : '• Vendor registration was rejected.'}
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground shrink-0">
+                    Docs: <strong>{targetRow.documentSummary.uploaded}/{targetRow.documentSummary.required || 7}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <DialogFooter className="p-4 border-t border-border bg-muted/25 flex flex-row items-center justify-between sm:justify-between">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const req = targetRow;
+                    setAnalysisTarget(null);
+                    setSnapshotTarget(req);
+                    setSnapshotLoading(true);
+                    setSnapshotData(null);
+                    procurementService.getVendorProfile(String(req.id))
+                      .then((d) => setSnapshotData(d))
+                      .catch(() => setSnapshotData(null))
+                      .finally(() => setSnapshotLoading(false));
+                  }}
+                  className="gap-1.5"
+                >
+                  <Eye className="size-3.5" /> View Registration Form
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setAnalysisTarget(null)}
+                >
+                  Close Analysis
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          );
+        })()}
       </Dialog>
 
       {/* Vendor Profile Snapshot Modal */}
@@ -1352,6 +1882,18 @@ export default function OnboardingQueuePage() {
                     const rawDocs = (snapshotData.documents as Array<Record<string, unknown>>) ||
                       (snapshotTarget.documents as Array<Record<string, unknown>>) || [];
 
+                    const submittedDocs = rawDocs.filter((d) => {
+                      const hasContent = Boolean(
+                        d.publicUrl ||
+                        d.dataUrl ||
+                        d.contentSnapshot ||
+                        d.fileName ||
+                        d.originalName
+                      );
+                      const status = String(d.status || '').toUpperCase();
+                      return hasContent && status !== 'NOT_SUBMITTED' && status !== 'MISSING';
+                    });
+
                     return (
                       <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
                         <div className="flex items-center justify-between border-b border-border/50 pb-2">
@@ -1359,86 +1901,91 @@ export default function OnboardingQueuePage() {
                             <FileCheck2 className="size-4" /> Uploaded Registration Documents
                           </div>
                           <span className="text-[11px] font-medium text-muted-foreground">
-                            Trade License, VAT Certificate &amp; Emirates ID
+                            {submittedDocs.length} {submittedDocs.length === 1 ? 'document' : 'documents'} submitted
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          {[
-                            { key: 'trade_license', title: 'Trade License' },
-                            { key: 'vat_certificate', title: 'VAT Certificate' },
-                            { key: 'emirates_id', title: 'Emirates ID' },
-                          ].map((expected) => {
-                            const match = rawDocs.find((d) => {
-                              const raw = String(d.documentType || d.type || d.label || '').toLowerCase();
+                        {submittedDocs.length === 0 ? (
+                          <div className="py-6 text-center text-xs text-muted-foreground bg-muted/15 rounded-lg border border-dashed border-border/70">
+                            No documents submitted by vendor
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            {submittedDocs.map((doc, idx) => {
+                              const rawType = String(doc.label || doc.documentType || doc.type || '').trim();
+                              const title = rawType
+                                ? rawType.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                                : `Document ${idx + 1}`;
+                              const fileName = String(doc.originalName || doc.fileName || `${title}.pdf`);
+                              const fileUrl = String(doc.publicUrl || doc.dataUrl || '');
+                              const isSigned = Boolean(doc.contentSnapshot || doc.signedBy);
+
                               return (
-                                raw.includes(expected.key) ||
-                                raw.includes(expected.title.toLowerCase()) ||
-                                (expected.key === 'emirates_id' && raw.includes('emirates')) ||
-                                (expected.key === 'vat_certificate' && (raw.includes('vat') || raw.includes('tax'))) ||
-                                (expected.key === 'trade_license' && (raw.includes('trade') || raw.includes('license') || raw.includes('commercial')))
-                              );
-                            });
-
-                            const fileName = match ? String(match.originalName || match.fileName || `${expected.title}.pdf`) : null;
-                            const fileUrl = match ? String(match.publicUrl || match.dataUrl || '') : '';
-
-                            return (
-                              <div
-                                key={expected.key}
-                                className={cn(
-                                  'p-3 rounded-lg border text-xs flex flex-col justify-between space-y-2',
-                                  match
-                                    ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20'
-                                    : 'border-border/60 bg-muted/20 opacity-75'
-                                )}
-                              >
-                                <div>
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-bold text-foreground">{expected.title}</span>
-                                    {match ? (
-                                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
-                                        <Check size={11} /> Uploaded
+                                <div
+                                  key={String(doc.id || idx)}
+                                  className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 text-xs flex flex-col justify-between space-y-2.5 transition-shadow hover:shadow-xs"
+                                >
+                                  <div>
+                                    <div className="flex items-center justify-between gap-1.5">
+                                      <span className="font-bold text-foreground truncate" title={title}>
+                                        {title}
                                       </span>
-                                    ) : (
-                                      <span className="text-[10px] text-muted-foreground">Not submitted</span>
+                                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
+                                        <Check size={11} /> {isSigned ? 'Signed' : 'Uploaded'}
+                                      </span>
+                                    </div>
+                                    {fileName && (
+                                      <p className="mt-1 text-[11px] text-foreground/80 truncate font-mono" title={fileName}>
+                                        {fileName}
+                                      </p>
+                                    )}
+                                    {doc.signedBy && (
+                                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                                        Signed by {String(doc.signedBy)}
+                                      </p>
                                     )}
                                   </div>
-                                  {fileName && (
-                                    <p className="mt-1 text-[11px] text-foreground/80 truncate font-mono" title={fileName}>
-                                      {fileName}
-                                    </p>
-                                  )}
-                                </div>
 
-                                {match && fileUrl && (
-                                  <div className="pt-1">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7 w-full text-[11px] gap-1.5 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                      onClick={() => {
-                                        if (fileUrl.startsWith('data:') || fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-                                          const win = window.open();
-                                          if (win) {
-                                            win.document.write(
-                                              `<iframe src="${fileUrl}" frameborder="0" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`
-                                            );
-                                          } else {
-                                            window.open(fileUrl, '_blank', 'noopener,noreferrer');
-                                          }
-                                        }
-                                      }}
-                                    >
-                                      <Eye className="size-3" /> View Document
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                                  {fileUrl ? (
+                                    <div className="pt-1 flex items-center gap-1.5">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 flex-1 text-[11px] gap-1.5 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                        onClick={() => viewDocument(fileUrl)}
+                                      >
+                                        <Eye className="size-3" /> View Document
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        className="h-7 w-7 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
+                                        onClick={() => downloadDocument(fileUrl, fileName)}
+                                        title="Download Document"
+                                      >
+                                        <Download className="size-3.5" />
+                                      </Button>
+                                    </div>
+                                  ) : doc.contentSnapshot ? (
+                                    <div className="pt-1">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 w-full text-[11px] gap-1.5 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                        onClick={() => setSignedPreviewDoc(doc as any)}
+                                      >
+                                        <Eye className="size-3" /> Preview Signed
+                                      </Button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -1836,6 +2383,7 @@ const ONBOARDING_QUEUE_COLUMNS: LandingColumn[] = [
   { key: 'name', label: 'Name', defaultVisible: true, required: true },
   { key: 'phone', label: 'P.No.', defaultVisible: true },
   { key: 'email', label: 'Email', defaultVisible: true },
+  { key: 'matchScore', label: 'Match %', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
 ];

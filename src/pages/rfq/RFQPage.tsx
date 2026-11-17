@@ -14,7 +14,7 @@ import {
   ArrowUpDown, ChevronLeft, ChevronRight, CalendarDays,
   ClipboardList, AlertTriangle, Clock, CheckCircle2,
   X, XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare, PenLine,
-  Filter,
+  Filter, Layers,
 } from 'lucide-react';
 import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -207,9 +207,9 @@ const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     key: 'department',
-    label: 'Department',
+    label: 'Supplier Class',
     defaultVisible: false,
-    render: (rfq) => <span className="text-sm text-muted-foreground">{rfq.department || '—'}</span>,
+    render: (rfq) => <span className="text-sm text-muted-foreground">{(rfq as any).supplierClass || rfq.department || '—'}</span>,
   },
   {
     key: 'closingDate',
@@ -289,7 +289,7 @@ export default function RFQPage() {
     }
     return 'ALL';
   });
-  const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
+  const [supplierClassFilter, setSupplierClassFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
@@ -503,7 +503,7 @@ export default function RFQPage() {
         comment: targetComment || undefined,
         details: [
           { label: 'Created By', value: targetRfq.creator },
-          { label: 'Department', value: targetRfq.department || 'Procurement' },
+          { label: 'Supplier Class', value: (targetRfq as any).supplierClass || targetRfq.department || 'Procurement' },
         ],
       });
 
@@ -655,31 +655,32 @@ export default function RFQPage() {
 
   const perPage = 8;
 
-  const [companyDepartments, setCompanyDepartments] = useState<string[]>([]);
+  const [companySupplierClasses, setCompanySupplierClasses] = useState<string[]>([]);
   useEffect(() => {
     companySettingsService
-      .listDepartments()
-      .then((deps) => {
+      .listSupplierClasses(false)
+      .then((classes) => {
         const names = Array.from(
           new Set(
-            (deps || [])
-              .filter((d) => d && d.isActive !== false && d.name?.trim())
-              .map((d) => d.name.trim())
+            (classes || [])
+              .filter((c) => c && c.isActive !== false && c.name?.trim())
+              .map((c) => c.name.trim())
           )
         );
-        if (names.length > 0) setCompanyDepartments(names);
+        if (names.length > 0) setCompanySupplierClasses(names);
       })
       .catch(() => {});
   }, []);
 
-  const departmentOptions = useMemo(() => {
+  const supplierClassOptions = useMemo(() => {
     const set = new Set<string>();
-    companyDepartments.forEach((d) => set.add(d));
+    companySupplierClasses.forEach((sc) => set.add(sc));
     enrichedRfqList.forEach((r) => {
-      if (r.department && r.department.trim()) set.add(r.department.trim());
+      const cls = ((r as any).supplierClass || r.department || '').trim();
+      if (cls && cls !== '—') set.add(cls);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  }, [companyDepartments, enrichedRfqList]);
+  }, [companySupplierClasses, enrichedRfqList]);
 
   const filtered = useMemo(() => {
     let list = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
@@ -703,8 +704,11 @@ export default function RFQPage() {
         });
       }
     }
-    if (departmentFilter !== 'ALL') {
-      list = list.filter((r) => (r.department || '').toLowerCase() === departmentFilter.toLowerCase());
+    if (supplierClassFilter !== 'ALL') {
+      list = list.filter((r) => {
+        const val = ((r as any).supplierClass || r.department || '').trim().toLowerCase();
+        return val === supplierClassFilter.toLowerCase();
+      });
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -712,11 +716,12 @@ export default function RFQPage() {
         r.rfqNumber.toLowerCase().includes(q) ||
         r.title.toLowerCase().includes(q) ||
         (typeof r.creator === 'string' ? r.creator : (r.creator as any)?.fullName || '').toLowerCase().includes(q) ||
-        (r.department || '').toLowerCase().includes(q)
+        (r.department || '').toLowerCase().includes(q) ||
+        ((r as any).supplierClass || '').toLowerCase().includes(q)
       );
     }
     return list;
-  }, [enrichedRfqList, statusFilter, departmentFilter, search]);
+  }, [enrichedRfqList, statusFilter, supplierClassFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -902,34 +907,34 @@ export default function RFQPage() {
             </select>
           </div>
 
-          {/* Department Filter Dropdown */}
-          <div className="relative min-w-[190px]">
-            <Building2 size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          {/* Supplier Class Filter Dropdown */}
+          <div className="relative min-w-[200px]">
+            <Layers size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <select
               className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-              value={departmentFilter}
+              value={supplierClassFilter}
               onChange={(e) => {
-                setDepartmentFilter(e.target.value);
+                setSupplierClassFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              aria-label="Filter by department"
+              aria-label="Filter by supplier class"
             >
-              <option value="ALL">All Departments</option>
-              {departmentOptions.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
+              <option value="ALL">All Supplier Classes</option>
+              {supplierClassOptions.map((sc) => (
+                <option key={sc} value={sc}>
+                  {sc}
                 </option>
               ))}
             </select>
           </div>
 
-          {(statusFilter !== 'ALL' || departmentFilter !== 'ALL' || search) && (
+          {(statusFilter !== 'ALL' || supplierClassFilter !== 'ALL' || search) && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
                 setStatusFilter('ALL');
-                setDepartmentFilter('ALL');
+                setSupplierClassFilter('ALL');
                 setSearch('');
                 setCurrentPage(1);
               }}

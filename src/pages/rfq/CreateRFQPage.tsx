@@ -4,7 +4,7 @@ import { useServiceData } from '../../hooks/useServiceData';
 import { rfqService, type CreateRfqPayload, type EvalCategoryDTO } from '../../services/rfqService';
 import { erpService, type ERPStockItem } from '../../services/erpService';
 import { vendorService } from '../../services/vendorService';
-import { companySettingsService, type Unit, type FormFieldConfig } from '../../services/companySettingsService';
+import { companySettingsService, type Unit, type FormFieldConfig, type ItemClass } from '../../services/companySettingsService';
 import {
   ArrowLeft,
   FileText,
@@ -39,11 +39,14 @@ interface LineItem {
   id: string | number;
   itemCode?: string;
   itemName: string;
+  itemClass?: string;
   description: string;
   quantity: string;
   unit: string;
   expectedDate: string;
-}  interface VendorOption {
+}
+
+interface VendorOption {
   id: string;
   name: string;
   email: string;
@@ -79,6 +82,13 @@ function vendorMatchesDepartment(vendor: VendorOption, department: DepartmentOpt
     const expected = normalizeMatchValue(entry);
     return category === expected || category.includes(expected) || (dept.length > 2 && category.includes(dept));
   });
+}
+
+function vendorMatchesSupplierClass(vendor: VendorOption, targetClass: string | null) {
+  if (!targetClass) return false;
+  const vendorCat = normalizeMatchValue(vendor.category || '');
+  const target = normalizeMatchValue(targetClass);
+  return vendorCat === target || vendorCat.includes(target) || target.includes(vendorCat);
 }
 
 function cloneCats(cats: EvalCategory[]): EvalCategory[] {
@@ -158,6 +168,27 @@ export default function CreateRFQPage() {
     [],
     { cacheTtlMs: 120000 }
   );
+
+  // Dynamic supplier classes from backend
+  const { data: supplierClasses } = useServiceData(
+    () => companySettingsService.listSupplierClasses(false).then((classes) =>
+      classes.map((c) => ({
+        id: c.id,
+        name: c.name,
+        code: c.code,
+      }))
+    ),
+    [] as { id: string; name: string; code?: string }[],
+    [],
+    { cacheTtlMs: 60000 }
+  );
+  // Dynamic item classes from backend
+  const { data: itemClasses } = useServiceData(
+    () => companySettingsService.listItemClasses(false),
+    [] as ItemClass[],
+    [],
+    { cacheTtlMs: 60000 }
+  );
   // Dynamic units from backend
   const { data: unitOptions } = useServiceData(
     () => companySettingsService.listUnits().then((units) => units.map((u) => u.name)),
@@ -224,6 +255,11 @@ export default function CreateRFQPage() {
       setTitle(rfq.title);
       setDescription(rfq.description);
       setPriority(rfq.priority || 'Medium');
+      const initialSupplierClass = (rfq as any).supplierClass || rfq.department || '';
+      setSupplierClass(initialSupplierClass);
+      if ((rfq as any).itemClass) {
+        setSelectedItemClass((rfq as any).itemClass);
+      }
       setDepartment(rfq.department || '');
       setClosingDate(rfq.closingDate || '');
       // Load Bid Security data
@@ -587,13 +623,27 @@ export default function CreateRFQPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('Medium');
+  const [supplierClass, setSupplierClass] = useState('');
+  const [selectedItemClass, setSelectedItemClass] = useState('');
   const [department, setDepartment] = useState('');
   const [closingDate, setClosingDate] = useState('');
 
   // Form state — Line Items
   const [items, setItems] = useState<LineItem[]>([
-    { id: 1, itemCode: '', itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
+    { id: 1, itemCode: '', itemName: '', itemClass: '', description: '', quantity: '', unit: '', expectedDate: '' },
   ]);
+
+  const handleItemClassChange = useCallback((newClass: string) => {
+    setSelectedItemClass(newClass);
+    if (!newClass) return;
+    const matched = itemClasses.find(
+      (ic) => ic.name.toLowerCase() === newClass.trim().toLowerCase()
+    );
+    if (matched?.supplierClassName) {
+      setSupplierClass(matched.supplierClassName);
+      setDepartment(matched.supplierClassName);
+    }
+  }, [itemClasses]);
 
   // ── Prefill from Requisition Consolidation Workbench ──
   useEffect(() => {
@@ -609,7 +659,22 @@ export default function CreateRFQPage() {
 
     if (prefill?.fromConsolidation) {
       if (prefill.title) setTitle(prefill.title);
-      if (prefill.department) setDepartment(prefill.department);
+      if (prefill.department) {
+        setDepartment(prefill.department);
+      }
+      if (prefill.supplierClass) {
+        setSupplierClass(prefill.supplierClass);
+      }
+      const resolvedItemClass =
+        prefill.itemClass ||
+        prefill.items?.find((it: any) => it.itemClass)?.itemClass ||
+        prefill.items?.find((it: any) => it.category)?.category ||
+        prefill.supplierType ||
+        '';
+
+      if (resolvedItemClass) {
+        setSelectedItemClass(resolvedItemClass);
+      }
       setDescription(prefill.description ? String(prefill.description).trim() : '');
       if (prefill.closingDate || prefill.deliveryDate || prefill.date) {
         const dStr = String(prefill.closingDate || prefill.deliveryDate || prefill.date).slice(0, 10);
@@ -622,11 +687,20 @@ export default function CreateRFQPage() {
         setSourceRequisitionIds(prefill.requisitionIds);
       }
       if (Array.isArray(prefill.items) && prefill.items.length > 0) {
+        const firstItemClass =
+          prefill.items.find((it: any) => it.itemClass)?.itemClass ||
+          prefill.items.find((it: any) => it.category)?.category ||
+          resolvedItemClass;
+
+        if (firstItemClass && !resolvedItemClass) {
+          setSelectedItemClass(firstItemClass);
+        }
         setItems(
           prefill.items.map((it: any, idx: number) => ({
             id: `item-${Date.now()}-${idx + 1}`,
             itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
             itemName: it.itemName || '',
+            itemClass: it.itemClass || it.category || firstItemClass || '',
             description: it.description || '',
             quantity: String(it.quantity || 1),
             unit: it.unit || 'pcs',
@@ -639,6 +713,63 @@ export default function CreateRFQPage() {
       } catch {}
     }
   }, [editId, location.state]);
+
+  // When itemClasses are loaded or selectedItemClass is set, auto-match supplierClass if unselected or default
+  useEffect(() => {
+    if (!itemClasses || itemClasses.length === 0) return;
+
+    // 1. If an Item Class is selected, auto-match and populate Supplier Class
+    if (selectedItemClass) {
+      const matched = itemClasses.find(
+        (ic) => ic.name.toLowerCase() === selectedItemClass.trim().toLowerCase()
+      );
+      if (matched?.supplierClassName && (!supplierClass || supplierClass !== matched.supplierClassName)) {
+        setSupplierClass(matched.supplierClassName);
+        setDepartment(matched.supplierClassName);
+      }
+      return;
+    }
+
+    // 2. If no item class is selected yet and RFQ was created from Requisition (or has items):
+    if (sourceRequisitionIds.length > 0 || items.some((it) => it.itemName?.trim())) {
+      // Check if any item already carries an itemClass or category
+      const existingCls = items.find((it) => it.itemClass)?.itemClass;
+      let matched = existingCls
+        ? itemClasses.find((ic) => ic.name.toLowerCase() === existingCls.trim().toLowerCase())
+        : null;
+
+      // Or check if any item name fuzzy-matches an item class name
+      if (!matched) {
+        for (const it of items) {
+          const name = (it.itemName || '').toLowerCase().trim();
+          if (!name) continue;
+          const found = itemClasses.find(
+            (ic) =>
+              name.includes(ic.name.toLowerCase().trim()) ||
+              ic.name.toLowerCase().trim().includes(name)
+          );
+          if (found) {
+            matched = found;
+            break;
+          }
+        }
+      }
+
+      // If still not matched, fallback to first active item class
+      if (!matched) {
+        matched = itemClasses.find((ic) => ic.isActive) || itemClasses[0];
+      }
+
+      if (matched) {
+        setSelectedItemClass(matched.name);
+        if (matched.supplierClassName) {
+          setSupplierClass(matched.supplierClassName);
+          setDepartment(matched.supplierClassName);
+        }
+      }
+    }
+  }, [selectedItemClass, supplierClass, itemClasses, sourceRequisitionIds.length, items]);
+
   const [erpStockItems, setErpStockItems] = useState<ERPStockItem[]>([]);
 
   useEffect(() => {
@@ -683,14 +814,19 @@ export default function CreateRFQPage() {
   // Form state — Vendors
   const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
   const selectedDepartment = useMemo(
-    () => departments.find((d) => d.name === department) || null,
-    [departments, department]
+    () => departments.find((d) => d.name === department || d.name === supplierClass) || null,
+    [departments, department, supplierClass]
   );
 
-  const departmentVendors = useMemo(
-    () => availableVendors.filter((vendor) => vendorMatchesDepartment(vendor, selectedDepartment)),
-    [availableVendors, selectedDepartment]
-  );
+  const departmentVendors = useMemo(() => {
+    const target = supplierClass || department;
+    if (!target) return [];
+    return availableVendors.filter((vendor) => {
+      if (vendorMatchesSupplierClass(vendor, target)) return true;
+      if (selectedDepartment && vendorMatchesDepartment(vendor, selectedDepartment)) return true;
+      return false;
+    });
+  }, [availableVendors, supplierClass, department, selectedDepartment]);
 
   useEffect(() => {
     const visibleVendorIds = new Set(departmentVendors.map((vendor) => vendor.id));
@@ -766,8 +902,10 @@ export default function CreateRFQPage() {
       description: description.trim() || undefined,
       priority,
       requisitionIds: sourceRequisitionIds.length > 0 ? sourceRequisitionIds : undefined,
-      department: department || undefined,
+      department: supplierClass || department || undefined,
       departmentId: selectedDepartment?.id,
+      supplierClass: supplierClass || undefined,
+      itemClass: selectedItemClass || undefined,
       closingDate: closingDate || undefined,
       currency: companyDefaultCurrency,
       rfqType: rfqMode === 'TENDER' ? 'TENDER' : 'RFQ',
@@ -778,6 +916,7 @@ export default function CreateRFQPage() {
       items: validItems.map((i) => ({
         itemCode: i.itemCode?.trim() || undefined,
         itemName: i.itemName.trim(),
+        itemClass: i.itemClass || selectedItemClass || undefined,
         description: i.description.trim() || undefined,
         quantity: parseInt(i.quantity, 10) || 1,
         unit: i.unit,
@@ -843,7 +982,7 @@ export default function CreateRFQPage() {
       bidBondMinCurrency: bidBondEnabled && bidBondMinCurrency ? bidBondMinCurrency : null,
       bidBondMinValidity: bidBondEnabled && bidBondMinValidity ? parseInt(bidBondMinValidity, 10) : null,
     };
-  }, [title, description, priority, department, selectedDepartment, closingDate, companyDefaultCurrency, items, selectedVendors, evalCategories, rfqMode, customFields, infoExtraFields, simpleWeightages, bidSecurityMinValue, bidSecurityMinCurrency, bidSecurityMinValidity, bidBondMinValue, bidBondMinCurrency, bidBondMinValidity, rfqApprovalStartPoint, quotationApprovalMode, quotationXUserRole]);
+  }, [title, description, priority, supplierClass, selectedItemClass, department, selectedDepartment, closingDate, companyDefaultCurrency, items, selectedVendors, evalCategories, rfqMode, customFields, infoExtraFields, simpleWeightages, bidSecurityMinValue, bidSecurityMinCurrency, bidSecurityMinValidity, bidBondMinValue, bidBondMinCurrency, bidBondMinValidity, rfqApprovalStartPoint, quotationApprovalMode, quotationXUserRole]);
 
 
   const saveEvalCategories = useCallback(async (rfqId: string) => {
@@ -1152,16 +1291,47 @@ export default function CreateRFQPage() {
 
             <div className="create-rfq__field">
               <label className="create-rfq__label">
-                Department <span className="create-rfq__label-required">*</span>
+                Item Class
               </label>
               <select
                 className="create-rfq__select"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
+                value={selectedItemClass}
+                onChange={(e) => handleItemClassChange(e.target.value)}
               >
-                <option value="">Select department</option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.name}>{dept.name}</option>
+                <option value="">Select item class (optional)</option>
+                {itemClasses.filter((ic) => ic.isActive).map((ic) => (
+                  <option key={ic.id} value={ic.name}>
+                    {ic.name}{ic.supplierClassName ? ` → (${ic.supplierClassName})` : ''}
+                  </option>
+                ))}
+              </select>
+              {selectedItemClass && (() => {
+                const matched = itemClasses.find((ic) => ic.name.toLowerCase() === selectedItemClass.trim().toLowerCase());
+                return matched?.supplierClassName ? (
+                  <span className="create-rfq__hint text-xs text-primary font-medium mt-1">
+                    ⚡ Auto-matched Supplier Class: <strong>{matched.supplierClassName}</strong>
+                  </span>
+                ) : null;
+              })()}
+            </div>
+
+            <div className="create-rfq__field">
+              <label className="create-rfq__label">
+                Supplier Class <span className="create-rfq__label-required">*</span>
+              </label>
+              <select
+                className="create-rfq__select"
+                value={supplierClass}
+                onChange={(e) => {
+                  setSupplierClass(e.target.value);
+                  setDepartment(e.target.value);
+                }}
+              >
+                <option value="">Select supplier class</option>
+                {supplierClasses.map((sc) => (
+                  <option key={sc.id} value={sc.name}>
+                    {sc.name} {sc.code ? `(${sc.code})` : ''}
+                  </option>
                 ))}
               </select>
             </div>
@@ -2183,19 +2353,19 @@ export default function CreateRFQPage() {
               Select the vendors you want to invite for this RFQ. They will receive a notification to submit their quotation.
             </p>
             {vendorsLoading && <CardSkeleton count={2} />}
-            {!vendorsLoading && !department && (
+            {!vendorsLoading && !supplierClass && !department && (
               <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
-                Select a department in RFQ Details to see matching vendors.
+                Select a supplier class in RFQ Details to see matching vendors.
               </p>
             )}
-            {!vendorsLoading && department && availableVendors.length === 0 && (
+            {!vendorsLoading && (supplierClass || department) && availableVendors.length === 0 && (
               <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
                 No vendors in the system. Add vendors first, then create an RFQ.
               </p>
             )}
-            {!vendorsLoading && department && availableVendors.length > 0 && departmentVendors.length === 0 && (
+            {!vendorsLoading && (supplierClass || department) && availableVendors.length > 0 && departmentVendors.length === 0 && (
               <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
-                No vendors found for {department}. Update vendor categories on the Vendors page or choose another department.
+                No vendors found for {supplierClass || department}. Update supplier class on the Vendors page or choose another supplier class.
               </p>
             )}
             <div className="create-rfq__vendors-grid">

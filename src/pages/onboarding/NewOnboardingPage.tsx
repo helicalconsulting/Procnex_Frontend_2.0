@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { procurementService, type VendorInvitationRow, type VendorSearchResult } from '../../services/procurementService';
-import { companySettingsService, type RequiredDocument, type DocumentTemplate, type Category, type FormFieldConfig } from '../../services/companySettingsService';
+import { companySettingsService, type RequiredDocument, type DocumentTemplate, type Category, type FormFieldConfig, type SupplierClass } from '../../services/companySettingsService';
 import PhoneInput from '../../components/shared/PhoneInput';
 import VendorSuggestDropdown from '../../components/shared/VendorSuggestDropdown';
 import VendorDetailModal from '../../components/shared/VendorDetailModal';
@@ -201,20 +201,40 @@ export default function NewOnboardingPage() {
   const [contactCountryCode, setContactCountryCode] = useState('+254');
   const [contactPhone, setContactPhone] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [supplierClasses, setSupplierClasses] = useState<SupplierClass[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [supplierType, setSupplierType] = useState('');
 
-  // Load vendor categories from Company Settings
+  // Load supplier classes and vendor categories from Company Settings
   useEffect(() => {
-    (async () => {
+    let mounted = true;
+    const loadClassesAndCategories = async () => {
       try {
-        const cats = await companySettingsService.listCategories();
-        setCategories(cats.filter((c) => c.isActive !== false));
+        const [cats, sClasses] = await Promise.all([
+          companySettingsService.listCategories().catch(() => [] as Category[]),
+          companySettingsService.listSupplierClasses(false).catch(() => [] as SupplierClass[]),
+        ]);
+        if (!mounted) return;
+        setCategories((cats || []).filter((c) => c.isActive !== false));
+        setSupplierClasses((sClasses || []).filter((c) => c.isActive !== false));
       } catch {
         // ignore
       }
-    })();
+    };
+    loadClassesAndCategories();
+
+    const onClassesChanged = () => {
+      companySettingsService.listSupplierClasses(false).then((sc) => {
+        if (mounted) setSupplierClasses((sc || []).filter((c) => c.isActive !== false));
+      }).catch(() => {});
+    };
+    window.addEventListener('supplierClassesChanged', onClassesChanged);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('supplierClassesChanged', onClassesChanged);
+    };
   }, []);
 
   const [notes, setNotes] = useState('');
@@ -1382,34 +1402,53 @@ export default function NewOnboardingPage() {
 
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {/* Vendor Category */}
+                  {/* Supplier Class / Vendor Category */}
                   <div className="onb-form-field">
-                    <label className="onb-form-field__label" htmlFor="onb-category">Vendor Category</label>
+                    <label className="onb-form-field__label" htmlFor="onb-category">Supplier Class</label>
                     <div className="onb-form-field__input-wrap">
                       <Tag size={16} className="onb-form-field__icon" />
                       <Select
                         id="onb-category"
-                        value={selectedCategoryId || (categories.some((c) => c.name === selectedCategory) ? categories.find((c) => c.name === selectedCategory)?.id : '')}
+                        value={
+                          selectedCategoryId ||
+                          (supplierClasses.find((sc) => sc.name === selectedCategory)?.id ||
+                           categories.find((c) => c.name === selectedCategory)?.id ||
+                           '')
+                        }
                         onChange={(e) => {
                           const val = e.target.value;
-                          const catObj = categories.find((c) => c.id === val);
-                          if (catObj) {
-                            setSelectedCategory(catObj.name);
-                            setSelectedCategoryId(catObj.id);
+                          const classObj = supplierClasses.find((sc) => sc.id === val);
+                          if (classObj) {
+                            setSelectedCategory(classObj.name);
+                            setSelectedCategoryId(classObj.id);
                           } else {
-                            setSelectedCategory('');
-                            setSelectedCategoryId(null);
+                            const catObj = categories.find((c) => c.id === val);
+                            if (catObj) {
+                              setSelectedCategory(catObj.name);
+                              setSelectedCategoryId(catObj.id);
+                            } else {
+                              setSelectedCategory('');
+                              setSelectedCategoryId(null);
+                            }
                           }
                         }}
                         className="onb-form-field__input"
                         style={{ cursor: 'pointer' }}
                       >
-                        <option value="">Select Vendor Category (optional)</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </option>
-                        ))}
+                        <option value="">Select Supplier Class (optional)</option>
+                        {supplierClasses.length > 0 ? (
+                          supplierClasses.map((sc) => (
+                            <option key={sc.id} value={sc.id}>
+                              {sc.name}{sc.code ? ` (${sc.code})` : ''}
+                            </option>
+                          ))
+                        ) : (
+                          categories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))
+                        )}
                       </Select>
                     </div>
                   </div>
@@ -1770,7 +1809,7 @@ export default function NewOnboardingPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/40">
-                <span className="text-muted-foreground">Category</span>
+                <span className="text-muted-foreground">Supplier Class</span>
                 <span className="font-medium text-foreground">
                   {selectedCategory || 'Not specified'}
                 </span>
@@ -2811,7 +2850,7 @@ export default function NewOnboardingPage() {
                   )}
                   {detailInvitation.category && (
                     <div>
-                      <div className="onb-detail-info-grid__label">Vendor Category</div>
+                      <div className="onb-detail-info-grid__label">Supplier Class</div>
                       <div className="onb-detail-info-grid__value">{detailInvitation.category}</div>
                     </div>
                   )}

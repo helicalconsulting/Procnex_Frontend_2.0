@@ -27,6 +27,7 @@ export interface PurchaseRequisition {
   department?: string;
   departmentId?: string;
   description?: string;
+  justification?: string;
   requesterId?: string;
   requesterName?: string;
   requesterEmail?: string;

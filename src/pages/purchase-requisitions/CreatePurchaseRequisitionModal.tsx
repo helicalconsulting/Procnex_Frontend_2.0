@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { adminService, type UserWithRoles } from '../../services/adminService';
-import { companySettingsService } from '../../services/companySettingsService';
+import { companySettingsService, type ItemClass } from '../../services/companySettingsService';
 import { useAuth } from '../../context/AuthContext';
 import PriorityBadge from '../../components/shared/PriorityBadge';
 
@@ -92,8 +92,18 @@ export default function CreatePurchaseRequisitionModal({
     },
   ]);
 
+  const [itemClassesList, setItemClassesList] = useState<ItemClass[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync Item Classes dynamically from Company Settings
+  useEffect(() => {
+    const handleUpdate = () => {
+      companySettingsService.listItemClasses(false).then(setItemClassesList).catch(() => {});
+    };
+    window.addEventListener('itemClassesChanged', handleUpdate);
+    return () => window.removeEventListener('itemClassesChanged', handleUpdate);
+  }, []);
 
   // Fetch departments from Company Settings & all company users when modal is opened
   useEffect(() => {
@@ -107,6 +117,23 @@ export default function CreatePurchaseRequisitionModal({
       }
       setLoadingDepts(true);
       setLoadingUsers(true);
+
+      // Load Item Classes from Company Settings
+      companySettingsService
+        .listItemClasses(false)
+        .then((classes) => {
+          if (isMounted) {
+            setItemClassesList(classes);
+            if (classes.length > 0) {
+              setItems((prev) =>
+                prev.map((it) =>
+                  !it.itemClass ? { ...it, itemClass: classes[0].name } : it
+                )
+              );
+            }
+          }
+        })
+        .catch(() => {});
 
       // Load Company Settings Departments
       companySettingsService
@@ -172,14 +199,15 @@ export default function CreatePurchaseRequisitionModal({
     });
   }, [usersList, user]);
 
-  const effectiveDepartment = department === '__OTHER__' ? customDepartment : department;
+  const effectiveDepartment = department || user?.department || 'Information Technology';
 
   const handleAddItem = () => {
+    const defaultClass = itemClassesList[0]?.name || 'IT Hardware';
     setItems((prev) => [
       ...prev,
       {
         itemName: '',
-        itemClass: 'IT Hardware',
+        itemClass: defaultClass,
         preferredSupplier: '',
         description: '',
         quantity: 1,
@@ -262,7 +290,10 @@ export default function CreatePurchaseRequisitionModal({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-[860px] md:max-w-[880px] max-h-[90vh] overflow-y-auto"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -291,31 +322,13 @@ export default function CreatePurchaseRequisitionModal({
               <label className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-1.5">
                 <Building className="size-3.5 text-muted-foreground" /> Department
               </label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                disabled={loadingDepts}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden"
-              >
-                {loadingDepts ? (
-                  <option value="">Loading company departments...</option>
-                ) : (
-                  departmentOptions.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))
-                )}
-                <option value="__OTHER__">+ Custom Department…</option>
-              </select>
-              {department === '__OTHER__' && (
-                <Input
-                  className="mt-2 text-xs"
-                  placeholder="Type department name..."
-                  value={customDepartment}
-                  onChange={(e) => setCustomDepartment(e.target.value)}
-                />
-              )}
+              <Input
+                className="text-xs bg-muted/50 cursor-not-allowed text-foreground font-medium select-none"
+                value={department || user?.department || 'Information Technology'}
+                readOnly
+                tabIndex={-1}
+                title="Department is assigned to your profile and cannot be changed"
+              />
             </div>
 
             <div>
@@ -426,10 +439,10 @@ export default function CreatePurchaseRequisitionModal({
               {items.map((item, idx) => (
                 <div
                   key={idx}
-                  className="rounded-xl border border-border/70 bg-card p-3 space-y-2 relative group"
+                  className="rounded-xl border border-border/70 bg-card p-3 relative group"
                 >
                   <div className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-12 sm:col-span-6">
+                    <div className="col-span-12 sm:col-span-5">
                       <Input
                         placeholder="Item Name (e.g. Cisco Wi-Fi Router, Laptop)"
                         className="text-xs font-medium"
@@ -438,7 +451,32 @@ export default function CreatePurchaseRequisitionModal({
                         required
                       />
                     </div>
-                    <div className="col-span-6 sm:col-span-3">
+                    <div className="col-span-12 sm:col-span-3">
+                      <select
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                        value={item.itemClass || (itemClassesList[0]?.name || 'IT Hardware')}
+                        onChange={(e) => handleItemChange(idx, 'itemClass', e.target.value)}
+                        aria-label="Select Item Class"
+                      >
+                        {itemClassesList.length === 0 ? (
+                          <option value="IT Hardware">IT Hardware</option>
+                        ) : (
+                          itemClassesList
+                            .filter((cls) => cls.isActive !== false)
+                            .map((cls) => (
+                              <option key={cls.id || cls.name} value={cls.name}>
+                                {cls.name} {cls.code ? `(${cls.code})` : ''}
+                              </option>
+                            ))
+                        )}
+                        {/* Preserve custom / existing itemClass if not in the current active list */}
+                        {item.itemClass &&
+                          !itemClassesList.some((c) => c.name === item.itemClass) && (
+                            <option value={item.itemClass}>{item.itemClass}</option>
+                          )}
+                      </select>
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
                       <Input
                         type="number"
                         min="1"
@@ -455,7 +493,7 @@ export default function CreatePurchaseRequisitionModal({
                         required
                       />
                     </div>
-                    <div className="col-span-6 sm:col-span-3 flex items-center gap-1">
+                    <div className="col-span-6 sm:col-span-2 flex items-center gap-1">
                       <Input
                         placeholder="Unit (pcs)"
                         className="text-xs text-center flex-1"
@@ -474,43 +512,9 @@ export default function CreatePurchaseRequisitionModal({
                       )}
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-12 gap-2">
-                    <div className="col-span-12 sm:col-span-4">
-                      <Input
-                        placeholder="Item Class / Category (e.g. IT Hardware)"
-                        className="text-xs"
-                        list="suggested-classes-list"
-                        value={item.itemClass || ''}
-                        onChange={(e) => handleItemChange(idx, 'itemClass', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-span-12 sm:col-span-4">
-                      <Input
-                        placeholder="Preferred Supplier (optional)"
-                        className="text-xs"
-                        value={item.preferredSupplier || ''}
-                        onChange={(e) => handleItemChange(idx, 'preferredSupplier', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-span-12 sm:col-span-4">
-                      <Input
-                        placeholder="Specifications / Reason (optional)"
-                        className="text-xs"
-                        value={item.description}
-                        onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                      />
-                    </div>
-                  </div>
                 </div>
               ))}
             </div>
-
-            <datalist id="suggested-classes-list">
-              {SUGGESTED_ITEM_CLASSES.map((cls) => (
-                <option key={cls} value={cls} />
-              ))}
-            </datalist>
           </div>
 
           {/* Justification / Notes */}

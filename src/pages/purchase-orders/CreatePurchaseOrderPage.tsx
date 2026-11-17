@@ -70,6 +70,67 @@ interface POItem {
   unit: string;
   unitPrice: number | string;
   taxPercent: number | string;
+  itemClass?: string;
+  category?: string;
+}
+
+function normalizeMatch(str: string = ''): string {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function vendorMatchesItemClass(
+  vendor: VendorOption,
+  itemClassName: string,
+  itemClassesList: Array<{ id: string; name: string; supplierClassName?: string }>
+): boolean {
+  if (!itemClassName || !itemClassName.trim()) return true;
+
+  const targetNorm = normalizeMatch(itemClassName);
+  if (!targetNorm) return true;
+
+  // Find linked supplierClassName if configured for this item class
+  const matchedItemClassObj = itemClassesList.find(
+    (ic) => normalizeMatch(ic.name) === targetNorm || normalizeMatch(ic.name).includes(targetNorm) || targetNorm.includes(normalizeMatch(ic.name))
+  );
+  const linkedSupplierClassNorm = matchedItemClassObj?.supplierClassName
+    ? normalizeMatch(matchedItemClassObj.supplierClassName)
+    : '';
+
+  // Gather all category / class strings for this vendor
+  const vendorFields: string[] = [
+    vendor.category || '',
+    (vendor as any).categoryName || '',
+    (vendor as any).supplierType || '',
+    (vendor as any).categoryRef?.name || '',
+    (vendor as any).categoryRef?.department?.name || '',
+    (vendor as any).customFields?.supplierClass || '',
+    (vendor as any).customFields?.category || '',
+  ];
+
+  if (Array.isArray((vendor as any).customFields?.itemClasses)) {
+    vendorFields.push(...(vendor as any).customFields.itemClasses);
+  }
+  if (typeof (vendor as any).customFields?.itemClasses === 'string') {
+    vendorFields.push((vendor as any).customFields.itemClasses);
+  }
+
+  return vendorFields.some((field) => {
+    if (!field || !field.trim()) return false;
+    const fNorm = normalizeMatch(field);
+    if (!fNorm) return false;
+
+    // Direct match with item class name
+    if (fNorm === targetNorm || fNorm.includes(targetNorm) || targetNorm.includes(fNorm)) {
+      return true;
+    }
+
+    // Match with linked supplier class name
+    if (linkedSupplierClassNorm && (fNorm === linkedSupplierClassNorm || fNorm.includes(linkedSupplierClassNorm) || linkedSupplierClassNorm.includes(fNorm))) {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 export default function CreatePurchaseOrderPage() {
@@ -223,9 +284,12 @@ export default function CreatePurchaseOrderPage() {
   }, [editId]);
 
 
-  // Supplier Info
+  // Supplier & Item Class Info
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [loadingVendors, setLoadingVendors] = useState(false);
+  const [selectedItemClass, setSelectedItemClass] = useState<string>('');
+  const [itemClasses, setItemClasses] = useState<Array<{ id: string; name: string; supplierClassName?: string }>>([]);
+  const [isItemClassFilterActive, setIsItemClassFilterActive] = useState<boolean>(true);
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [supplierCode, setSupplierCode] = useState('');
   const [supplierName, setSupplierName] = useState('');
@@ -269,16 +333,33 @@ export default function CreatePurchaseOrderPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ── Fetch Categories dynamically from Company Settings DB ──
+  // ── Fetch Item Classes & Supplier Classes dynamically from Company Settings DB ──
   useEffect(() => {
-    apiRequest<{ categories?: Array<{ id: string; name: string }>; data?: Array<{ id: string; name: string }> }>('/company-settings/categories')
-      .then((res) => {
-        const list = res.categories || res.data || [];
-        const names = list.map((c) => c.name).filter(Boolean);
-        setCategoriesList(names);
-        if (names.length > 0) {
-          setSupplierType(names[0]);
+    companySettingsService
+      .listItemClasses(false)
+      .then((classes) => {
+        if (Array.isArray(classes)) {
+          setItemClasses(classes);
         }
+      })
+      .catch(() => {});
+
+    companySettingsService
+      .listSupplierClasses(false)
+      .then((classes) => {
+        const names = (classes || []).map((c) => c.name).filter(Boolean);
+        if (names.length > 0) {
+          setCategoriesList(names);
+          setSupplierType(names[0]);
+          return;
+        }
+        return apiRequest<{ categories?: Array<{ id: string; name: string }>; data?: Array<{ id: string; name: string }> }>('/company-settings/categories')
+          .then((res) => {
+            const list = res.categories || res.data || [];
+            const n = list.map((c) => c.name).filter(Boolean);
+            setCategoriesList(n);
+            if (n.length > 0) setSupplierType(n[0]);
+          });
       })
       .catch(() => {});
   }, []);
@@ -312,7 +393,12 @@ export default function CreatePurchaseOrderPage() {
 
     if (prefill?.fromConsolidation) {
       if (prefill.prNumbers) setPrNo(prefill.prNumbers);
-      if (prefill.supplierType) setSupplierType(prefill.supplierType);
+      const incomingClass = prefill.itemClass || prefill.supplierType || (prefill.items?.[0] as any)?.itemClass || (prefill.items?.[0] as any)?.category || '';
+      if (incomingClass) {
+        setSelectedItemClass(incomingClass);
+        setIsItemClassFilterActive(true);
+        setSupplierType(incomingClass);
+      }
       if (Array.isArray(prefill.requisitionIds)) {
         setSourceRequisitionIds(prefill.requisitionIds);
       }
@@ -328,6 +414,7 @@ export default function CreatePurchaseOrderPage() {
             unit: it.unit || 'pcs',
             unitPrice: Number(it.unitPrice) || 0,
             taxPercent: Number(it.taxPercent) || 0,
+            itemClass: it.itemClass || it.category || incomingClass || '',
           }))
         );
       }
@@ -480,11 +567,29 @@ export default function CreatePurchaseOrderPage() {
       .finally(() => setLoadingVendors(false));
   }, []);
 
-  // ── Predictive Vendor Filter (by Code, Name, Email, Phone, Category) ──
+  // ── Match linked supplier class from company settings ──
+  const matchedSupplierClass = useMemo(() => {
+    if (!selectedItemClass) return '';
+    const norm = normalizeMatch(selectedItemClass);
+    const found = itemClasses.find(
+      (ic) => normalizeMatch(ic.name) === norm || normalizeMatch(ic.name).includes(norm) || norm.includes(normalizeMatch(ic.name))
+    );
+    return found?.supplierClassName || '';
+  }, [selectedItemClass, itemClasses]);
+
+  // ── Filter Vendors by Item Class (and linked Supplier Class) ──
+  const filteredVendors = useMemo(() => {
+    if (!selectedItemClass || !isItemClassFilterActive) {
+      return vendors;
+    }
+    return vendors.filter((v) => vendorMatchesItemClass(v, selectedItemClass, itemClasses));
+  }, [vendors, selectedItemClass, isItemClassFilterActive, itemClasses]);
+
+  // ── Predictive Vendor Filter (by Code, Name, Email, Phone, Category within filteredVendors) ──
   const searchedVendors = useMemo(() => {
-    if (!vendorSearchQuery.trim()) return vendors;
+    if (!vendorSearchQuery.trim()) return filteredVendors;
     const q = vendorSearchQuery.toLowerCase().trim();
-    return vendors.filter((v) => {
+    return filteredVendors.filter((v) => {
       const name = (v.name || '').toLowerCase();
       const code = ((v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`).toLowerCase();
       const email = (v.email || '').toLowerCase();
@@ -492,7 +597,7 @@ export default function CreatePurchaseOrderPage() {
       const cat = ((v as any).category || (v as any).categoryName || (v as any).supplierType || '').toLowerCase();
       return name.includes(q) || code.includes(q) || email.includes(q) || phone.includes(q) || cat.includes(q);
     });
-  }, [vendors, vendorSearchQuery]);
+  }, [filteredVendors, vendorSearchQuery]);
 
   const handleSelectVendorOption = (v: VendorOption) => {
     const code = (v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
@@ -587,6 +692,10 @@ export default function CreatePurchaseOrderPage() {
           if (rfq) {
             if (rfq.currency) setCurrency(rfq.currency);
             if (rfq.paymentTerms) setPaymentTerms(rfq.paymentTerms);
+            if ((rfq as any).itemClass) {
+              setSelectedItemClass((rfq as any).itemClass);
+              setIsItemClassFilterActive(true);
+            }
             const awardedQuotation = rfq.quotations?.find((q: any) => q.status === 'ACCEPTED' || q.status === 'SHORTLISTED') || rfq.quotations?.[0];
             const awardedVendor = awardedQuotation?.vendor || rfq.vendors?.[0];
             if (awardedVendor) {
@@ -1072,7 +1181,8 @@ export default function CreatePurchaseOrderPage() {
         currency,
         status: statusPayload,
         requisitionIds: sourceRequisitionIds.length > 0 ? sourceRequisitionIds : undefined,
-        supplierType,
+        supplierType: supplierType || selectedItemClass,
+        itemClass: selectedItemClass || supplierType || undefined,
         supplierCode,
         supplierAddress,
         supplierTaxId,
@@ -1100,6 +1210,7 @@ export default function CreatePurchaseOrderPage() {
             unitPrice: price,
             taxPercent: tax,
             totalPrice: qty * price * (1 + tax / 100),
+            itemClass: (i as any).itemClass || selectedItemClass || undefined,
           };
         }),
         companyName: companyName || brandingCompanyName || 'Organization',
@@ -1501,6 +1612,70 @@ export default function CreatePurchaseOrderPage() {
             flexDirection: 'column',
             gap: '8px'
           }}>
+            {selectedItemClass && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+                padding: '9px 13px',
+                background: isItemClassFilterActive ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)' : 'rgba(100, 116, 139, 0.12)',
+                border: `1px solid ${isItemClassFilterActive ? 'var(--primary-500, #0a6ed1)' : 'rgba(100, 116, 139, 0.3)'}`,
+                borderRadius: '8px',
+                marginBottom: '4px',
+                fontSize: '13px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <Layers size={16} style={{ color: isItemClassFilterActive ? 'var(--primary-500, #0a6ed1)' : 'var(--text-secondary)' }} />
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {isItemClassFilterActive ? (
+                      <>
+                        Filtered for Item Class: <strong style={{ color: 'var(--primary-500, #0a6ed1)' }}>{selectedItemClass}</strong>
+                        {matchedSupplierClass ? (
+                          <span style={{ color: 'var(--text-secondary)', marginLeft: '6px' }}>
+                            (Linked Supplier Class: <strong>{matchedSupplierClass}</strong>)
+                          </span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        Showing all vendors (Item Class filter paused)
+                      </span>
+                    )}
+                  </span>
+                  <span style={{
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    background: isItemClassFilterActive ? 'var(--primary-500, #0a6ed1)' : 'rgba(100, 116, 139, 0.25)',
+                    color: isItemClassFilterActive ? '#ffffff' : 'var(--text-secondary)'
+                  }}>
+                    {filteredVendors.length} vendor{filteredVendors.length === 1 ? '' : 's'} available
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsItemClassFilterActive(!isItemClassFilterActive)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--primary-500, #0a6ed1)',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      padding: 0
+                    }}
+                  >
+                    {isItemClassFilterActive ? 'Show all vendors' : `Re-apply filter (${selectedItemClass})`}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <label style={{
               display: 'flex',
               alignItems: 'center',
@@ -1594,8 +1769,36 @@ export default function CreatePurchaseOrderPage() {
                       Loading vendors from master database...
                     </div>
                   ) : searchedVendors.length === 0 ? (
-                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '14.5px' }}>
-                      No matching vendors found for "{vendorSearchQuery}"
+                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '14.5px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span>
+                        {vendorSearchQuery
+                          ? `No matching vendors found for "${vendorSearchQuery}"`
+                          : selectedItemClass && isItemClassFilterActive
+                          ? `No vendors found belonging to Item Class "${selectedItemClass}".`
+                          : 'No matching vendors found.'}
+                      </span>
+                      {selectedItemClass && isItemClassFilterActive && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsItemClassFilterActive(false);
+                          }}
+                          style={{
+                            alignSelf: 'flex-start',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--primary-500, #0a6ed1)',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            padding: 0
+                          }}
+                        >
+                          Show all vendors instead
+                        </button>
+                      )}
                     </div>
                   ) : (
                     searchedVendors.map((v) => {

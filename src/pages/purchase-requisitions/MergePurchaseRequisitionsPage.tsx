@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
   Sparkles,
   Building,
   Check,
+  ChevronDown,
   ChevronRight,
   Filter,
   Eye,
@@ -137,6 +138,35 @@ export default function MergePurchaseRequisitionsPage() {
   const [showPoModal, setShowPoModal] = useState(false);
   const [convertingPo, setConvertingPo] = useState(false);
 
+  // Dropdown States & Refs for compact selector UI
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+  const itemDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setIsUserDropdownOpen(false);
+      }
+      if (itemDropdownRef.current && !itemDropdownRef.current.contains(event.target as Node)) {
+        setIsItemDropdownOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsUserDropdownOpen(false);
+        setIsItemDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   // Fetch pending requisitions
   const fetchRequisitions = useCallback(async () => {
     setLoading(true);
@@ -220,6 +250,11 @@ export default function MergePurchaseRequisitionsPage() {
       setSelectedUserKey(firstActionable.key);
     }
   }, [mergeMode, selectedUserKey, uniqueUsers]);
+
+  // Reset category filter when requester changes
+  useEffect(() => {
+    setSelectedCategoryFilter('ALL');
+  }, [selectedUserKey]);
 
   // Selected User Object
   const currentUserObj = useMemo(() => {
@@ -446,11 +481,17 @@ export default function MergePurchaseRequisitionsPage() {
       id: `item-${Date.now()}-${idx + 1}`,
       itemCode: `ITEM-${String(idx + 1).padStart(3, '0')}`,
       itemName: it.itemName,
+      itemClass: (it as any).itemClass || (it as any).category || (selectedRequisitionItems[0] as any)?.itemClass || '',
       description: '',
       quantity: String(it.totalQuantity),
       unit: it.unit || 'pcs',
       expectedDate: resolvedDate || '',
     }));
+
+    const resolvedItemClass = consolidatedItems.find((it) => it.itemClass)?.itemClass ||
+      (selectedRequisitionItems[0] as any)?.itemClass ||
+      (selectedRequisitionItems[0] as any)?.supplierType ||
+      '';
 
     const prefillData = {
       fromConsolidation: true,
@@ -458,6 +499,7 @@ export default function MergePurchaseRequisitionsPage() {
       prNumbers: selectedRequisitionItems.map((r) => r.prNumber || r.id).filter(Boolean),
       title: defaultTitle,
       department: rfqDepartment,
+      itemClass: resolvedItemClass || undefined,
       description: '',
       closingDate: resolvedDate,
       date: resolvedDate,
@@ -479,7 +521,7 @@ export default function MergePurchaseRequisitionsPage() {
       .map((r) => r.prNumber || r.id)
       .filter(Boolean)
       .join(', ');
-    const firstClass = selectedRequisitionItems[0]?.items?.[0]?.itemClass || 'General';
+
     const consolidatedItems = consolidatedSummary.items.map((it, idx) => ({
       id: String(idx + 1),
       itemCode: `ITEM-${String(idx + 1).padStart(3, '0')}`,
@@ -489,13 +531,22 @@ export default function MergePurchaseRequisitionsPage() {
       unit: it.unit || 'pcs',
       unitPrice: it.avgEstimatedPrice,
       taxPercent: 0,
+      itemClass: (it as any).itemClass || (it as any).category || (selectedRequisitionItems[0] as any)?.itemClass || '',
     }));
+
+    const resolvedItemClass =
+      consolidatedItems.find((it) => it.itemClass)?.itemClass ||
+      (selectedRequisitionItems[0] as any)?.itemClass ||
+      selectedRequisitionItems[0]?.items?.[0]?.itemClass ||
+      (selectedRequisitionItems[0] as any)?.supplierType ||
+      'General';
 
     const prefillData = {
       fromConsolidation: true,
       requisitionIds: selectedPrIds,
       prNumbers: prNumbersString,
-      supplierType: firstClass,
+      itemClass: resolvedItemClass,
+      supplierType: resolvedItemClass,
       items: consolidatedItems,
     };
 
@@ -689,9 +740,9 @@ export default function MergePurchaseRequisitionsPage() {
           {mergeMode === 'USER' && (
             <div className="space-y-5">
               {/* User Selector Card */}
-              <Card className="p-4 space-y-3.5">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
+              <Card className="p-4 relative z-30">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="space-y-0.5">
                     <label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                       <Users className="size-4 text-primary" /> Select Requester / User
                     </label>
@@ -700,78 +751,150 @@ export default function MergePurchaseRequisitionsPage() {
                     </p>
                   </div>
 
-                  {/* Search user by name */}
-                  <div className="relative w-full sm:w-72">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                    <Input
-                      placeholder="Type name (e.g. Jai, Ashu)…"
-                      value={userSearchTerm}
-                      onChange={(e) => setUserSearchTerm(e.target.value)}
-                      className="h-9 pl-8 text-xs rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                {/* Horizontal scrollable user list */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 border-t border-border/50">
-                  {filteredUsers.length === 0 ? (
-                    <span className="text-xs text-muted-foreground italic py-2">
-                      No requesters matching &quot;{userSearchTerm}&quot;
-                    </span>
-                  ) : (
-                    filteredUsers.map((u) => {
-                      const isSelected = selectedUserKey === u.key;
-                      return (
-                        <button
-                          key={u.key}
-                          type="button"
-                          onClick={() => {
-                            setSelectedUserKey(u.key);
-                            setSelectedCategoryFilter('ALL');
-                          }}
-                          className={cn(
-                            'shrink-0 px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2.5 border',
-                            isSelected
-                              ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                              : 'bg-muted/30 border-border/70 hover:bg-muted/60 text-foreground'
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              'size-6 rounded-full grid place-items-center text-[11px] font-bold',
-                              isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/10 text-primary'
-                            )}
-                          >
-                            {u.name.charAt(0).toUpperCase()}
+                  {/* Dropdown for Requester */}
+                  <div className="relative w-full md:w-80 lg:w-96 shrink-0" ref={userDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserDropdownOpen((prev) => !prev);
+                        setIsItemDropdownOpen(false);
+                      }}
+                      className={cn(
+                        'w-full min-h-[46px] px-3.5 py-2 rounded-xl border transition-all flex items-center justify-between gap-3 text-left shadow-xs cursor-pointer',
+                        isUserDropdownOpen
+                          ? 'border-primary ring-2 ring-primary/20 bg-accent/30'
+                          : 'border-border/80 bg-card hover:bg-muted/40 hover:border-primary/40'
+                      )}
+                      aria-haspopup="listbox"
+                      aria-expanded={isUserDropdownOpen}
+                    >
+                      {currentUserObj ? (
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="size-7 rounded-full bg-primary/10 text-primary font-bold text-xs grid place-items-center shrink-0">
+                            {currentUserObj.name.charAt(0).toUpperCase()}
                           </div>
-                          <div className="text-left">
-                            <span className="font-semibold flex items-center gap-1.5">
-                              {u.name}
-                              {u.isMine && (
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-xs text-foreground truncate max-w-[150px] sm:max-w-[180px]">
+                                {currentUserObj.name}
+                              </span>
+                              {currentUserObj.isMine && (
                                 <Badge
                                   variant="outline"
-                                  className={cn(
-                                    'text-[9.5px] py-0 px-1 border-amber-500/40',
-                                    isSelected ? 'bg-amber-400/20 text-amber-100 border-amber-300/40' : 'text-amber-600 dark:text-amber-400 bg-amber-500/10'
-                                  )}
+                                  className="text-[9px] py-0 px-1 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 shrink-0"
                                 >
-                                  You (Requester)
+                                  You
                                 </Badge>
                               )}
-                            </span>
-                            <span
-                              className={cn(
-                                'text-[10px] block',
-                                isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                              )}
-                            >
-                              {u.department} • {u.prs.length} PR{u.prs.length > 1 ? 's' : ''}
+                            </div>
+                            <span className="text-[10.5px] text-muted-foreground block truncate">
+                              {currentUserObj.department} • {currentUserObj.prs.length} PR{currentUserObj.prs.length > 1 ? 's' : ''}
                             </span>
                           </div>
-                        </button>
-                      );
-                    })
-                  )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                          <User className="size-4" />
+                          <span>Select a requester...</span>
+                        </div>
+                      )}
+                      <ChevronDown
+                        className={cn(
+                          'size-4 text-muted-foreground transition-transform duration-200 shrink-0',
+                          isUserDropdownOpen && 'rotate-180'
+                        )}
+                      />
+                    </button>
+
+                    {/* Popover Menu */}
+                    {isUserDropdownOpen && (
+                      <div className="absolute right-0 left-0 md:left-auto md:w-96 top-full mt-1.5 rounded-xl bg-card border border-border shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                        {/* Search Input inside Dropdown */}
+                        <div className="p-2.5 border-b border-border/60 bg-muted/20">
+                          <div className="relative">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                            <Input
+                              type="text"
+                              autoFocus
+                              placeholder="Search requester name, dept, email..."
+                              value={userSearchTerm}
+                              onChange={(e) => setUserSearchTerm(e.target.value)}
+                              className="h-8 pl-8 pr-2.5 text-xs bg-background rounded-lg border-border/70 focus-visible:ring-1"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+
+                        {/* List of Requesters */}
+                        <div className="max-h-64 overflow-y-auto divide-y divide-border/40 py-1">
+                          {filteredUsers.length === 0 ? (
+                            <div className="px-4 py-5 text-xs text-muted-foreground text-center italic">
+                              No requesters matching &quot;{userSearchTerm}&quot;
+                            </div>
+                          ) : (
+                            filteredUsers.map((u) => {
+                              const isSelected = selectedUserKey === u.key;
+                              return (
+                                <button
+                                  key={u.key}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedUserKey(u.key);
+                                    setSelectedCategoryFilter('ALL');
+                                    setIsUserDropdownOpen(false);
+                                  }}
+                                  className={cn(
+                                    'w-full px-3.5 py-2.5 text-left flex items-center justify-between gap-2.5 transition-colors cursor-pointer',
+                                    isSelected
+                                      ? 'bg-primary/10 text-primary'
+                                      : 'hover:bg-muted/60 text-foreground'
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div
+                                      className={cn(
+                                        'size-7 rounded-full grid place-items-center text-xs font-bold shrink-0',
+                                        isSelected
+                                          ? 'bg-primary text-primary-foreground'
+                                          : 'bg-primary/10 text-primary'
+                                      )}
+                                    >
+                                      {u.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={cn('text-xs truncate max-w-[180px]', isSelected ? 'font-bold' : 'font-medium')}>
+                                          {u.name}
+                                        </span>
+                                        {u.isMine && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[9px] py-0 px-1 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10"
+                                          >
+                                            You
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <span className="text-[10px] text-muted-foreground block truncate">
+                                        {u.department} • {u.prs.length} PR{u.prs.length > 1 ? 's' : ''}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {isSelected && <Check className="size-4 text-primary shrink-0" />}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* Footer Info */}
+                        <div className="px-3.5 py-2 border-t border-border/50 bg-muted/15 text-[10.5px] text-muted-foreground flex items-center justify-between">
+                          <span>{uniqueUsers.length} requester{uniqueUsers.length !== 1 ? 's' : ''} with active PRs</span>
+                          {userSearchTerm && <span>{filteredUsers.length} found</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Card>
 
@@ -791,27 +914,25 @@ export default function MergePurchaseRequisitionsPage() {
               {/* User PRs Content */}
               {currentUserObj && (
                 <div className="space-y-4">
-                  {/* Category Filter Pills (Product Class Filter) */}
+                  {/* Category Filter Dropdown (Product Class Filter) */}
                   <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/20 border border-border/60 rounded-xl p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
-                        <Filter className="size-3.5" /> Item Class:
-                      </span>
-                      {currentUserCategories.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setSelectedCategoryFilter(cat)}
-                          className={cn(
-                            'px-3 py-1 text-xs font-medium rounded-full transition-all',
-                            selectedCategoryFilter === cat
-                              ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                              : 'bg-muted/50 hover:bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {cat === 'ALL' ? 'All Classes' : cat}
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-2.5">
+                      <label htmlFor="item-class-filter-select" className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                        <Filter className="size-3.5 text-primary" /> Item Class:
+                      </label>
+                      <select
+                        id="item-class-filter-select"
+                        value={selectedCategoryFilter}
+                        onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                        className="h-8 min-w-[190px] rounded-lg border border-input bg-card px-3 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 cursor-pointer"
+                        aria-label="Filter by Item Class"
+                      >
+                        {currentUserCategories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat === 'ALL' ? 'All Classes' : cat}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Batch select visible button */}
@@ -923,16 +1044,6 @@ export default function MergePurchaseRequisitionsPage() {
                             ))}
                           </div>
 
-                          {/* Est Total */}
-                          <div className="flex items-center justify-between border-t border-border/50 pt-2 text-xs">
-                            <span className="text-muted-foreground">Est. Total:</span>
-                            <span className="font-bold text-foreground tabular-nums">
-                              {formatAmount(
-                                Number(pr.grandTotal || pr.totalAmount || 0),
-                                pr.currency || companyDefaultCurrency
-                              )}
-                            </span>
-                          </div>
                         </div>
                       );
                     })}
@@ -948,9 +1059,9 @@ export default function MergePurchaseRequisitionsPage() {
           {mergeMode === 'ITEM' && (
             <div className="space-y-5">
               {/* Item Selector Card */}
-              <Card className="p-4 space-y-3.5">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
+              <Card className="p-4 relative z-30">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="space-y-0.5">
                     <label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                       <Boxes className="size-4 text-primary" /> Select Item / Product Demand
                     </label>
@@ -959,62 +1070,139 @@ export default function MergePurchaseRequisitionsPage() {
                     </p>
                   </div>
 
-                  {/* Search item by name */}
-                  <div className="relative w-full sm:w-72">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                    <Input
-                      placeholder="Type item name (e.g. Wi-Fi, Laptop)…"
-                      value={itemSearchTerm}
-                      onChange={(e) => setItemSearchTerm(e.target.value)}
-                      className="h-9 pl-8 text-xs rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                {/* Horizontal scrollable items catalogue */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 border-t border-border/50">
-                  {filteredItems.length === 0 ? (
-                    <span className="text-xs text-muted-foreground italic py-2">
-                      No items matching &quot;{itemSearchTerm}&quot;
-                    </span>
-                  ) : (
-                    filteredItems.map((item) => {
-                      const isSelected = selectedItemKey === item.key;
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => setSelectedItemKey(item.key)}
-                          className={cn(
-                            'shrink-0 px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2.5 border',
-                            isSelected
-                              ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                              : 'bg-muted/30 border-border/70 hover:bg-muted/60 text-foreground'
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              'size-6 rounded-full grid place-items-center text-[11px] font-bold',
-                              isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/10 text-primary'
-                            )}
-                          >
+                  {/* Dropdown for Item */}
+                  <div className="relative w-full md:w-80 lg:w-96 shrink-0" ref={itemDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsItemDropdownOpen((prev) => !prev);
+                        setIsUserDropdownOpen(false);
+                      }}
+                      className={cn(
+                        'w-full min-h-[46px] px-3.5 py-2 rounded-xl border transition-all flex items-center justify-between gap-3 text-left shadow-xs cursor-pointer',
+                        isItemDropdownOpen
+                          ? 'border-primary ring-2 ring-primary/20 bg-accent/30'
+                          : 'border-border/80 bg-card hover:bg-muted/40 hover:border-primary/40'
+                      )}
+                      aria-haspopup="listbox"
+                      aria-expanded={isItemDropdownOpen}
+                    >
+                      {currentItemObj ? (
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="size-7 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0">
                             <Package className="size-3.5" />
                           </div>
-                          <div className="text-left">
-                            <span className="font-semibold block truncate max-w-[150px]">{item.itemName}</span>
-                            <span
-                              className={cn(
-                                'text-[10px] block',
-                                isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                              )}
-                            >
-                              {item.totalQty} {item.unit} • {item.prs.length} Requisitions
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-xs text-foreground truncate max-w-[150px] sm:max-w-[180px]">
+                                {currentItemObj.itemName}
+                              </span>
+                              <Badge variant="outline" className="text-[9.5px] py-0 px-1 bg-muted/40 shrink-0">
+                                {currentItemObj.itemClass}
+                              </Badge>
+                            </div>
+                            <span className="text-[10.5px] text-muted-foreground block truncate">
+                              {currentItemObj.totalQty} {currentItemObj.unit} • {currentItemObj.prs.length} Requisition{currentItemObj.prs.length > 1 ? 's' : ''}
                             </span>
                           </div>
-                        </button>
-                      );
-                    })
-                  )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                          <Package className="size-4" />
+                          <span>Select an item...</span>
+                        </div>
+                      )}
+                      <ChevronDown
+                        className={cn(
+                          'size-4 text-muted-foreground transition-transform duration-200 shrink-0',
+                          isItemDropdownOpen && 'rotate-180'
+                        )}
+                      />
+                    </button>
+
+                    {/* Popover Menu */}
+                    {isItemDropdownOpen && (
+                      <div className="absolute right-0 left-0 md:left-auto md:w-96 top-full mt-1.5 rounded-xl bg-card border border-border shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                        {/* Search Input inside Dropdown */}
+                        <div className="p-2.5 border-b border-border/60 bg-muted/20">
+                          <div className="relative">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                            <Input
+                              type="text"
+                              autoFocus
+                              placeholder="Search item name or class..."
+                              value={itemSearchTerm}
+                              onChange={(e) => setItemSearchTerm(e.target.value)}
+                              className="h-8 pl-8 pr-2.5 text-xs bg-background rounded-lg border-border/70 focus-visible:ring-1"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+
+                        {/* List of Items */}
+                        <div className="max-h-64 overflow-y-auto divide-y divide-border/40 py-1">
+                          {filteredItems.length === 0 ? (
+                            <div className="px-4 py-5 text-xs text-muted-foreground text-center italic">
+                              No items matching &quot;{itemSearchTerm}&quot;
+                            </div>
+                          ) : (
+                            filteredItems.map((item) => {
+                              const isSelected = selectedItemKey === item.key;
+                              return (
+                                <button
+                                  key={item.key}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedItemKey(item.key);
+                                    setIsItemDropdownOpen(false);
+                                  }}
+                                  className={cn(
+                                    'w-full px-3.5 py-2.5 text-left flex items-center justify-between gap-2.5 transition-colors cursor-pointer',
+                                    isSelected
+                                      ? 'bg-primary/10 text-primary'
+                                      : 'hover:bg-muted/60 text-foreground'
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div
+                                      className={cn(
+                                        'size-7 rounded-full grid place-items-center shrink-0',
+                                        isSelected
+                                          ? 'bg-primary text-primary-foreground'
+                                          : 'bg-primary/10 text-primary'
+                                      )}
+                                    >
+                                      <Package className="size-3.5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={cn('text-xs truncate max-w-[180px]', isSelected ? 'font-bold' : 'font-medium')}>
+                                          {item.itemName}
+                                        </span>
+                                        <Badge variant="outline" className="text-[9.5px] py-0 px-1 bg-muted/40">
+                                          {item.itemClass}
+                                        </Badge>
+                                      </div>
+                                      <span className="text-[10px] text-muted-foreground block truncate">
+                                        {item.totalQty} {item.unit} • {item.prs.length} Requisition{item.prs.length > 1 ? 's' : ''}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {isSelected && <Check className="size-4 text-primary shrink-0" />}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* Footer Info */}
+                        <div className="px-3.5 py-2 border-t border-border/50 bg-muted/15 text-[10.5px] text-muted-foreground flex items-center justify-between">
+                          <span>{uniqueItems.length} demanded item{uniqueItems.length !== 1 ? 's' : ''}</span>
+                          {itemSearchTerm && <span>{filteredItems.length} found</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Card>
 

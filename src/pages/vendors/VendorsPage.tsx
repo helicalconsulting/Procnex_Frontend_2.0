@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
 import { vendorService } from '../../services/vendorService';
-import { companySettingsService, type Category } from '../../services/companySettingsService';
+import { companySettingsService, type Category, type SupplierClass } from '../../services/companySettingsService';
 import PhoneInput from '../../components/shared/PhoneInput';
 import type { VendorTableRow } from '../../types/viewModels';
 import { useAuth } from '../../context/AuthContext';
@@ -159,7 +159,7 @@ const ALL_COLUMNS: VendorColumnDef[] = [
     ),
   },
   {
-    key: 'category', label: 'Category', defaultVisible: true, width: COL_META.category.width, align: 'left',
+    key: 'category', label: 'Supplier Class', defaultVisible: true, width: COL_META.category.width, align: 'left',
     render: (v) => (
       <Badge tone="info" className="max-w-full whitespace-normal font-semibold leading-snug">
         {v.category}
@@ -303,6 +303,12 @@ export default function VendorsPage() {
   const { data: categories } = useServiceData(
     () => companySettingsService.listCategories(),
     [] as Category[],
+    [],
+    { cacheTtlMs: 120000 }
+  );
+  const { data: supplierClasses } = useServiceData(
+    () => companySettingsService.listSupplierClasses(false),
+    [] as SupplierClass[],
     [],
     { cacheTtlMs: 120000 }
   );
@@ -508,6 +514,10 @@ export default function VendorsPage() {
 
   const availableCategories = useMemo(() => {
     const names = new Set<string>();
+    (supplierClasses || []).filter((sc) => sc?.isActive !== false).forEach((sc) => {
+      const sName = typeof sc?.name === 'string' ? sc.name : '';
+      if (sName) names.add(sName);
+    });
     categories.filter((c) => c?.isActive).forEach((c) => {
       const cName = typeof c?.name === 'string' ? c.name : (c?.name ? String(c.name) : '');
       if (cName) names.add(cName);
@@ -517,7 +527,7 @@ export default function VendorsPage() {
       if (vCat) names.add(vCat);
     });
     return Array.from(names).sort((a, b) => String(a).localeCompare(String(b)));
-  }, [categories, displayVendors]);
+  }, [categories, supplierClasses, displayVendors]);
 
   const categoryCounts = useMemo(() => {
     let list = displayVendors;
@@ -673,16 +683,17 @@ export default function VendorsPage() {
       setFPhone(rawPhone);
     }
     setFContact(vendor.contactPerson === vendor.name ? '' : vendor.contactPerson);
-    // Try to find the categoryId from the loaded categories list
+    // Try to find the categoryId from the loaded supplier classes or categories list
+    const matchedSc = (supplierClasses || []).find((sc) => sc.name === (vendor.category === 'General' ? '' : vendor.category));
     const matchedCat = categories.find((c) => c.name === (vendor.category === 'General' ? '' : vendor.category));
     setFCategory(vendor.category === 'General' ? '' : vendor.category);
-    setFCategoryId(matchedCat?.id);
+    setFCategoryId(matchedSc?.id || matchedCat?.id);
     setFLocation(vendor.location === '—' ? '' : vendor.location);
     setFWebsite(vendor.website === '—' ? '' : vendor.website);
     setFMobileAccess(Boolean(vendor.isMobileAccessEnabled));
     setPageMsg(null);
     setShowModal(true);
-  }, [categories]);
+  }, [categories, supplierClasses]);
 
   useLayoutEffect(() => {
     if (showModal && nameInputRef.current) {
@@ -885,7 +896,7 @@ export default function VendorsPage() {
             name="vendor_search_query"
             className="h-11 rounded-xl pl-10"
             type="text"
-            placeholder="Search by name, email, category, contact, or location..."
+            placeholder="Search by name, email, supplier class, contact, or location..."
             autoComplete="off"
             aria-label="Search vendors"
             value={search}
@@ -903,9 +914,9 @@ export default function VendorsPage() {
                 setCategoryFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              aria-label="Filter by category"
+              aria-label="Filter by supplier class"
             >
-              <option value="">All Categories</option>
+              <option value="">All Supplier Classes</option>
               {availableCategories.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat} ({categoryCounts[cat] || 0})
@@ -1257,16 +1268,27 @@ export default function VendorsPage() {
                     />
                   </div>
                   <div className="vendors-modal__field">
-                    <label htmlFor="vendor-category" className="vendors-modal__label">Category</label>
+                    <label htmlFor="vendor-category" className="vendors-modal__label">Supplier Class</label>
                     <select
                       id="vendor-category"
                       name="vendor_category"
                       className="vendors-modal__select"
                       value={fCategory}
-                      onChange={(e) => { setFCategory(e.target.value); const matched = categories.find(c => c.name === e.target.value); setFCategoryId(matched?.id); }}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFCategory(val);
+                        const matchedClass = (supplierClasses || []).find((sc) => sc.name === val);
+                        setFCategoryId(matchedClass?.id);
+                      }}
                     >
-                      <option value="">Select category</option>
-                      {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      <option value="">Select supplier class</option>
+                      {supplierClasses && supplierClasses.length > 0 && (
+                        supplierClasses.map((sc) => (
+                          <option key={sc.id} value={sc.name}>
+                            {sc.name}{sc.code ? ` (${sc.code})` : ''}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
                 </div>
@@ -2122,7 +2144,7 @@ export default function VendorsPage() {
                         <span className="font-semibold text-foreground truncate">{detailVendor.contactPerson}</span>
                       </div>
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Category</span>
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Supplier Class</span>
                         <span className="font-semibold text-foreground truncate">{detailVendor.category}</span>
                       </div>
                       <div className="flex flex-col gap-0.5 col-span-2">

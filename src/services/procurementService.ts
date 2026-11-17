@@ -41,6 +41,11 @@ export interface VendorDocument {
   status: 'PENDING' | 'VERIFIED' | 'REJECTED';
   uploadedAt: string;
   rejectionReason?: string | null;
+  issueDate?: string | Date | null;
+  expiryDate?: string | Date | null;
+  expirationDate?: string | Date | null;
+  issuingAuthority?: string | null;
+  issuedAuthority?: string | null;
   // Signed NDA/MNDA onboarding document fields
   contentSnapshot?: string;
   signedBy?: string | null;
@@ -119,6 +124,9 @@ export interface UploadedRegistrationDoc {
   fileSize: number;
   mimeType: string;
   dataUrl?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  issuedAuthority?: string;
   uploadedAt: string;
 }
 
@@ -247,6 +255,11 @@ function mapSelfRegisteredToOnboarding(reg: SelfRegisteredVendorRecord): Onboard
     publicUrl: doc.dataUrl || '',
     mimeType: doc.mimeType,
     fileSize: doc.fileSize,
+    issueDate: doc.issueDate || null,
+    expiryDate: doc.expiryDate || null,
+    expirationDate: doc.expiryDate || null,
+    issuingAuthority: doc.issuedAuthority || null,
+    issuedAuthority: doc.issuedAuthority || null,
     status: 'PENDING',
     uploadedAt: doc.uploadedAt || reg.submittedAt,
   }));
@@ -567,6 +580,11 @@ async function apiGetVendorDocuments(vendorId: string) {
       publicUrl: doc.dataUrl || '',
       mimeType: doc.mimeType,
       fileSize: doc.fileSize,
+      issueDate: doc.issueDate || null,
+      expiryDate: doc.expiryDate || null,
+      expirationDate: doc.expiryDate || null,
+      issuingAuthority: doc.issuedAuthority || null,
+      issuedAuthority: doc.issuedAuthority || null,
       status: 'PENDING',
       uploadedAt: doc.uploadedAt || selfReg.submittedAt,
     }));

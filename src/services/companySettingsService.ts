@@ -86,6 +86,51 @@ export interface Category {
   department?: { id: string; name: string };
 }
 
+export interface ItemClass {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  supplierClassId?: string | null;
+  supplierClassName?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupplierClass {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const DEFAULT_ITEM_CLASSES: ItemClass[] = [
+  { id: 'ic-1', name: 'IT Hardware', code: 'IT-HW', description: 'Computers, servers, storage & IT equipment', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-2', name: 'Networking', code: 'NET', description: 'Routers, switches, access points, cabling & telecom', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-3', name: 'Office Supplies', code: 'OFF-SUP', description: 'Stationery, paper, printing consumables & desk items', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-4', name: 'Electronics', code: 'ELEC', description: 'AV gear, displays, peripherals & electronic accessories', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-5', name: 'Software / Licenses', code: 'SW-LIC', description: 'SaaS subscriptions, enterprise licenses & cloud tools', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-6', name: 'Furniture', code: 'FURN', description: 'Ergonomic chairs, desks, workstations & storage', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-7', name: 'Facilities & Maintenance', code: 'FAC-MNT', description: 'HVAC, electrical, plumbing & facility upkeep', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-8', name: 'Stationery', code: 'STAT', description: 'Office paper, notebooks, pens & consumables', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-9', name: 'Raw Materials', code: 'RAW-MAT', description: 'Production & manufacturing feedstocks', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'ic-10', name: 'General', code: 'GEN', description: 'General operational procurement', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+];
+
+export const DEFAULT_SUPPLIER_CLASSES: SupplierClass[] = [
+  { id: 'sc-1', name: 'Manufacturer / OEM', code: 'OEM', description: 'Original Equipment Manufacturer or primary producer', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'sc-2', name: 'Authorized Distributor', code: 'AUTH-DIST', description: 'Officially certified product distributor or channel partner', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'sc-3', name: 'Wholesaler / Trader', code: 'WHOLESALE', description: 'Stockist, bulk trader or commercial merchant', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'sc-4', name: 'Service Provider', code: 'SERV-PROV', description: 'Consulting, software services, SLA or maintenance vendor', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'sc-5', name: 'Contractor', code: 'CONTR', description: 'Turnkey projects, civil, mechanical or electrical contractor', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'sc-6', name: 'Consulting & Advisory', code: 'CONSULT', description: 'Strategic advisory, legal, financial or technical audit', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'sc-7', name: 'Tier 1 Supplier', code: 'TIER-1', description: 'Direct strategic supplier with long-term framework MSA', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+];
+
 // ─── Mock Data ──────────────────────────────────────────────
 
 const MOCK_DEPARTMENTS: Department[] = [];
@@ -1533,7 +1578,259 @@ async function apiSaveContractOcrText(type: string, ocrText: string): Promise<vo
   });
 }
 
+// ─── Item Classes & Supplier Classes Storage ───────────────────
+const ITEM_CLASSES_STORAGE_KEY = 'procnex_company_item_classes';
+const SUPPLIER_CLASSES_STORAGE_KEY = 'procnex_company_supplier_classes';
+
+async function listItemClasses(includeInactive = false, companyCode?: string): Promise<ItemClass[]> {
+  try {
+    const cc = companyCode || getActiveCompanyCode();
+    const data = await apiRequest<{ itemClasses: ItemClass[] }>(
+      `/company-settings/item-classes?includeInactive=${includeInactive}`,
+      {
+        cacheTtlMs: 0,
+        headers: cc ? { 'x-company-code': cc } : undefined,
+      }
+    );
+    const list = data?.itemClasses || [];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ITEM_CLASSES_STORAGE_KEY, JSON.stringify(list));
+    }
+    return list;
+  } catch {
+    try {
+      const cc = companyCode || getActiveCompanyCode();
+      const publicData = await apiRequest<{ itemClasses: ItemClass[] }>(
+        `/public/item-classes?companyCode=${encodeURIComponent(cc || 'HFL')}`,
+        { cacheTtlMs: 0 }
+      );
+      if (publicData?.itemClasses) return publicData.itemClasses;
+    } catch {
+      // ignore
+    }
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(ITEM_CLASSES_STORAGE_KEY) : null;
+    let list: ItemClass[] = raw ? JSON.parse(raw) : [];
+    if (!includeInactive) list = list.filter((c) => c.isActive !== false);
+    return list;
+  }
+}
+
+async function createItemClass(data: { name: string; code?: string; description?: string; supplierClassId?: string; supplierClassName?: string }): Promise<ItemClass> {
+  try {
+    const res = await apiRequest<{ data?: ItemClass } | ItemClass>('/company-settings/item-classes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    const created: ItemClass = (res as any)?.data || (res as any);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('itemClassesChanged', { detail: { itemClasses: [created] } }));
+    }
+    return created;
+  } catch {
+    const current = await listItemClasses(true);
+    const newClass: ItemClass = {
+      id: `ic-${Date.now()}`,
+      name: data.name.trim(),
+      code: data.code?.trim() || undefined,
+      description: data.description?.trim() || undefined,
+      supplierClassId: data.supplierClassId || undefined,
+      supplierClassName: data.supplierClassName || undefined,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = [...current, newClass];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ITEM_CLASSES_STORAGE_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('itemClassesChanged', { detail: { itemClasses: updated } }));
+    }
+    return newClass;
+  }
+}
+
+async function updateItemClass(id: string, data: Partial<ItemClass>): Promise<ItemClass> {
+  try {
+    const res = await apiRequest<{ data?: ItemClass } | ItemClass>(`/company-settings/item-classes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    const updated: ItemClass = (res as any)?.data || (res as any);
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(ITEM_CLASSES_STORAGE_KEY);
+        if (raw) {
+          const parsed: ItemClass[] = JSON.parse(raw);
+          const idx = parsed.findIndex((c) => c.id === id);
+          if (idx !== -1) {
+            parsed[idx] = { ...parsed[idx], ...updated };
+            localStorage.setItem(ITEM_CLASSES_STORAGE_KEY, JSON.stringify(parsed));
+          }
+        }
+      } catch {}
+      window.dispatchEvent(new CustomEvent('itemClassesChanged', { detail: { itemClasses: [updated] } }));
+    }
+    return updated;
+  } catch {
+    const current = await listItemClasses(true);
+    const idx = current.findIndex((c) => c.id === id);
+    if (idx === -1) throw new Error('Item class not found');
+    current[idx] = {
+      ...current[idx],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ITEM_CLASSES_STORAGE_KEY, JSON.stringify(current));
+      window.dispatchEvent(new CustomEvent('itemClassesChanged', { detail: { itemClasses: current } }));
+    }
+    return current[idx];
+  }
+}
+
+async function deleteItemClass(id: string): Promise<void> {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(ITEM_CLASSES_STORAGE_KEY);
+      if (raw) {
+        const parsed: ItemClass[] = JSON.parse(raw);
+        localStorage.setItem(ITEM_CLASSES_STORAGE_KEY, JSON.stringify(parsed.filter((c) => c.id !== id)));
+      }
+    } catch {}
+  }
+  await apiRequest(`/company-settings/item-classes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('itemClassesChanged', { detail: { deletedId: id } }));
+  }
+}
+
+async function listSupplierClasses(includeInactive = false, companyCode?: string): Promise<SupplierClass[]> {
+  try {
+    const cc = companyCode || getActiveCompanyCode();
+    const data = await apiRequest<{ supplierClasses: SupplierClass[] }>(
+      `/company-settings/supplier-classes?includeInactive=${includeInactive}`,
+      {
+        cacheTtlMs: 0,
+        headers: cc ? { 'x-company-code': cc } : undefined,
+      }
+    );
+    const list = data?.supplierClasses || [];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SUPPLIER_CLASSES_STORAGE_KEY, JSON.stringify(list));
+    }
+    return list;
+  } catch {
+    try {
+      const cc = companyCode || getActiveCompanyCode();
+      const publicData = await apiRequest<{ supplierClasses: SupplierClass[] }>(
+        `/public/supplier-classes?companyCode=${encodeURIComponent(cc || 'HFL')}`,
+        { cacheTtlMs: 0 }
+      );
+      if (publicData?.supplierClasses) return publicData.supplierClasses;
+    } catch {
+      // ignore
+    }
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(SUPPLIER_CLASSES_STORAGE_KEY) : null;
+    let list: SupplierClass[] = raw ? JSON.parse(raw) : [];
+    if (!includeInactive) list = list.filter((c) => c.isActive !== false);
+    return list;
+  }
+}
+
+async function createSupplierClass(data: { name: string; code?: string; description?: string }): Promise<SupplierClass> {
+  try {
+    const res = await apiRequest<{ data?: SupplierClass } | SupplierClass>('/company-settings/supplier-classes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    const created: SupplierClass = (res as any)?.data || (res as any);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('supplierClassesChanged', { detail: { supplierClasses: [created] } }));
+    }
+    return created;
+  } catch {
+    const current = await listSupplierClasses(true);
+    const newClass: SupplierClass = {
+      id: `sc-${Date.now()}`,
+      name: data.name.trim(),
+      code: data.code?.trim() || undefined,
+      description: data.description?.trim() || undefined,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = [...current, newClass];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SUPPLIER_CLASSES_STORAGE_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('supplierClassesChanged', { detail: { supplierClasses: updated } }));
+    }
+    return newClass;
+  }
+}
+
+async function updateSupplierClass(id: string, data: Partial<SupplierClass>): Promise<SupplierClass> {
+  try {
+    const res = await apiRequest<{ data?: SupplierClass } | SupplierClass>(`/company-settings/supplier-classes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    const updated: SupplierClass = (res as any)?.data || (res as any);
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(SUPPLIER_CLASSES_STORAGE_KEY);
+        if (raw) {
+          const parsed: SupplierClass[] = JSON.parse(raw);
+          const idx = parsed.findIndex((c) => c.id === id);
+          if (idx !== -1) {
+            parsed[idx] = { ...parsed[idx], ...updated };
+            localStorage.setItem(SUPPLIER_CLASSES_STORAGE_KEY, JSON.stringify(parsed));
+          }
+        }
+      } catch {}
+      window.dispatchEvent(new CustomEvent('supplierClassesChanged', { detail: { supplierClasses: [updated] } }));
+    }
+    return updated;
+  } catch {
+    const current = await listSupplierClasses(true);
+    const idx = current.findIndex((c) => c.id === id);
+    if (idx === -1) throw new Error('Supplier class not found');
+    current[idx] = {
+      ...current[idx],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SUPPLIER_CLASSES_STORAGE_KEY, JSON.stringify(current));
+      window.dispatchEvent(new CustomEvent('supplierClassesChanged', { detail: { supplierClasses: current } }));
+    }
+    return current[idx];
+  }
+}
+
+async function deleteSupplierClass(id: string): Promise<void> {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(SUPPLIER_CLASSES_STORAGE_KEY);
+      if (raw) {
+        const parsed: SupplierClass[] = JSON.parse(raw);
+        localStorage.setItem(SUPPLIER_CLASSES_STORAGE_KEY, JSON.stringify(parsed.filter((c) => c.id !== id)));
+      }
+    } catch {}
+  }
+  await apiRequest(`/company-settings/supplier-classes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('supplierClassesChanged', { detail: { deletedId: id } }));
+  }
+}
+
 export const companySettingsService = {
+  listItemClasses,
+  createItemClass,
+  updateItemClass,
+  deleteItemClass,
+  listSupplierClasses,
+  createSupplierClass,
+  updateSupplierClass,
+  deleteSupplierClass,
   listDepartments: USE_MOCK ? mockListDepartments : apiListDepartments,
   listCategories: USE_MOCK ? mockListCategories : apiListCategories,
   createDepartment: USE_MOCK ? mockCreateDepartment : apiCreateDepartment,

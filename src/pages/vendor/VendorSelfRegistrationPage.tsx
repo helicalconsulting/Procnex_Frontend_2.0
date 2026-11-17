@@ -18,6 +18,8 @@ import {
   Sun,
   Moon,
   Loader2,
+  Calendar,
+  Sparkles,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { motionTransition } from '../../lib/motion';
@@ -32,6 +34,7 @@ import {
   type SelfRegisteredVendorRecord,
   type UploadedRegistrationDoc,
 } from '../../services/procurementService';
+import { scanDocumentWithOcr } from '../../services/ocrService';
 import { Card } from '../../components/ui/card';
 import { Input, Select, Textarea } from '../../components/ui/input';
 import { Button, buttonVariants } from '../../components/ui/button';
@@ -46,6 +49,9 @@ interface UploadedFileItem {
   fileSize: number;
   mimeType: string;
   dataUrl?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  issuedAuthority?: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -160,6 +166,9 @@ export default function VendorSelfRegistrationPage() {
     fileName: '',
     fileSize: 0,
     mimeType: '',
+    issueDate: '',
+    expiryDate: '',
+    issuedAuthority: '',
   });
 
   const [vatCertificate, setVatCertificate] = useState<UploadedFileItem>({
@@ -169,6 +178,9 @@ export default function VendorSelfRegistrationPage() {
     fileName: '',
     fileSize: 0,
     mimeType: '',
+    issueDate: '',
+    expiryDate: '',
+    issuedAuthority: '',
   });
 
   const [emiratesId, setEmiratesId] = useState<UploadedFileItem>({
@@ -178,11 +190,18 @@ export default function VendorSelfRegistrationPage() {
     fileName: '',
     fileSize: 0,
     mimeType: '',
+    issueDate: '',
+    expiryDate: '',
+    issuedAuthority: '',
   });
 
   const tradeLicenseRef = useRef<HTMLInputElement>(null);
   const vatCertificateRef = useRef<HTMLInputElement>(null);
   const emiratesIdRef = useRef<HTMLInputElement>(null);
+
+  // OCR scanning and detection status per document
+  const [scanningDocs, setScanningDocs] = useState<Record<string, boolean>>({});
+  const [ocrMsg, setOcrMsg] = useState<Record<string, string>>({});
 
   // Dropdown data
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
@@ -204,6 +223,18 @@ export default function VendorSelfRegistrationPage() {
     setCategoriesLoading(true);
 
     const loadCategories = async () => {
+      try {
+        const sClasses = await companySettingsService.listSupplierClasses(false);
+        if (!mounted) return;
+        const activeClasses = (sClasses || []).filter((c: any) => c.isActive !== false);
+        if (activeClasses.length > 0) {
+          setCategories(activeClasses.map((c: any) => ({ id: c.id, name: c.name })));
+          return;
+        }
+      } catch {
+        // fallback to categories
+      }
+
       try {
         const cats = await companySettingsService.listCategories(undefined, activeCompany);
         if (!mounted) return;
@@ -316,6 +347,17 @@ export default function VendorSelfRegistrationPage() {
     return () => clearTimeout(timer);
   }, [contactEmail, activeCompany]);
 
+  const handleDocMetaChange = (
+    docType: 'trade_license' | 'vat_certificate' | 'emirates_id',
+    field: 'issueDate' | 'expiryDate' | 'issuedAuthority',
+    value: string
+  ) => {
+    const updater = (prev: UploadedFileItem) => ({ ...prev, [field]: value });
+    if (docType === 'trade_license') setTradeLicense(updater);
+    else if (docType === 'vat_certificate') setVatCertificate(updater);
+    else if (docType === 'emirates_id') setEmiratesId(updater);
+  };
+
   const handleFileChange = (
     docType: 'trade_license' | 'vat_certificate' | 'emirates_id',
     e: React.ChangeEvent<HTMLInputElement>
@@ -335,6 +377,13 @@ export default function VendorSelfRegistrationPage() {
         ? 'VAT Certificate'
         : 'Emirates ID';
 
+    const currentDoc =
+      docType === 'trade_license'
+        ? tradeLicense
+        : docType === 'vat_certificate'
+        ? vatCertificate
+        : emiratesId;
+
     // Synchronously set initial doc item so fileName is instantly available for validation
     const docItem: UploadedFileItem = {
       type: docType,
@@ -344,6 +393,9 @@ export default function VendorSelfRegistrationPage() {
       fileSize: file.size,
       mimeType: file.type || 'application/octet-stream',
       dataUrl: '',
+      issueDate: currentDoc.issueDate || '',
+      expiryDate: currentDoc.expiryDate || '',
+      issuedAuthority: currentDoc.issuedAuthority || '',
     };
 
     if (docType === 'trade_license') setTradeLicense(docItem);
@@ -366,22 +418,74 @@ export default function VendorSelfRegistrationPage() {
         ...docItem,
         dataUrl,
       };
-      if (docType === 'trade_license') setTradeLicense(fullItem);
-      else if (docType === 'vat_certificate') setVatCertificate(fullItem);
-      else if (docType === 'emirates_id') setEmiratesId(fullItem);
+      if (docType === 'trade_license') {
+        setTradeLicense((prev) => ({ ...prev, ...fullItem, issueDate: prev.issueDate || docItem.issueDate, expiryDate: prev.expiryDate || docItem.expiryDate, issuedAuthority: prev.issuedAuthority || docItem.issuedAuthority }));
+      } else if (docType === 'vat_certificate') {
+        setVatCertificate((prev) => ({ ...prev, ...fullItem, issueDate: prev.issueDate || docItem.issueDate, expiryDate: prev.expiryDate || docItem.expiryDate, issuedAuthority: prev.issuedAuthority || docItem.issuedAuthority }));
+      } else if (docType === 'emirates_id') {
+        setEmiratesId((prev) => ({ ...prev, ...fullItem, issueDate: prev.issueDate || docItem.issueDate, expiryDate: prev.expiryDate || docItem.expiryDate, issuedAuthority: prev.issuedAuthority || docItem.issuedAuthority }));
+      }
     };
     reader.readAsDataURL(file);
+
+    // Run client-side OCR (with server fallback for PDFs & complex documents)
+    setScanningDocs((prev) => ({ ...prev, [docType]: true }));
+    setOcrMsg((prev) => ({ ...prev, [docType]: '' }));
+
+    scanDocumentWithOcr(file)
+      .then((result) => {
+        let detectedCount = 0;
+        const updater = (prev: UploadedFileItem) => {
+          const nextIssue = result.issueDate || prev.issueDate || '';
+          const nextExpiry = result.expirationDate || prev.expiryDate || '';
+          const nextAuth = result.issuingAuthority || prev.issuedAuthority || '';
+          if (result.issueDate && !prev.issueDate) detectedCount++;
+          if (result.expirationDate && !prev.expiryDate) detectedCount++;
+          if (result.issuingAuthority && !prev.issuedAuthority) detectedCount++;
+          return {
+            ...prev,
+            issueDate: nextIssue,
+            expiryDate: nextExpiry,
+            issuedAuthority: nextAuth,
+          };
+        };
+        if (docType === 'trade_license') setTradeLicense(updater);
+        else if (docType === 'vat_certificate') setVatCertificate(updater);
+        else if (docType === 'emirates_id') setEmiratesId(updater);
+
+        if (result.issueDate || result.expirationDate || result.issuingAuthority) {
+          const fieldsFound: string[] = [];
+          if (result.issueDate) fieldsFound.push('Issue Date');
+          if (result.expirationDate) fieldsFound.push('Expiry Date');
+          if (result.issuingAuthority) fieldsFound.push('Authority');
+          setOcrMsg((prev) => ({
+            ...prev,
+            [docType]: `✨ Auto-detected ${fieldsFound.join(' & ')} from document. Please review.`,
+          }));
+          setTimeout(() => {
+            setOcrMsg((prev) => ({ ...prev, [docType]: '' }));
+          }, 8000);
+        }
+      })
+      .catch((ocrErr) => {
+        console.warn('Document OCR scan skipped or failed:', ocrErr);
+      })
+      .finally(() => {
+        setScanningDocs((prev) => ({ ...prev, [docType]: false }));
+      });
   };
 
   const handleFileRemove = (docType: 'trade_license' | 'vat_certificate' | 'emirates_id') => {
+    setScanningDocs((prev) => ({ ...prev, [docType]: false }));
+    setOcrMsg((prev) => ({ ...prev, [docType]: '' }));
     if (docType === 'trade_license') {
-      setTradeLicense({ type: 'trade_license', label: 'Trade License', file: null, fileName: '', fileSize: 0, mimeType: '' });
+      setTradeLicense({ type: 'trade_license', label: 'Trade License', file: null, fileName: '', fileSize: 0, mimeType: '', issueDate: '', expiryDate: '', issuedAuthority: '' });
       if (tradeLicenseRef.current) tradeLicenseRef.current.value = '';
     } else if (docType === 'vat_certificate') {
-      setVatCertificate({ type: 'vat_certificate', label: 'VAT Certificate', file: null, fileName: '', fileSize: 0, mimeType: '' });
+      setVatCertificate({ type: 'vat_certificate', label: 'VAT Certificate', file: null, fileName: '', fileSize: 0, mimeType: '', issueDate: '', expiryDate: '', issuedAuthority: '' });
       if (vatCertificateRef.current) vatCertificateRef.current.value = '';
     } else if (docType === 'emirates_id') {
-      setEmiratesId({ type: 'emirates_id', label: 'Emirates ID', file: null, fileName: '', fileSize: 0, mimeType: '' });
+      setEmiratesId({ type: 'emirates_id', label: 'Emirates ID', file: null, fileName: '', fileSize: 0, mimeType: '', issueDate: '', expiryDate: '', issuedAuthority: '' });
       if (emiratesIdRef.current) emiratesIdRef.current.value = '';
     }
   };
@@ -529,6 +633,9 @@ export default function VendorSelfRegistrationPage() {
           fileSize: tradeLicense.fileSize,
           mimeType: tradeLicense.mimeType,
           dataUrl: tradeLicense.dataUrl,
+          issueDate: tradeLicense.issueDate?.trim() || undefined,
+          expiryDate: tradeLicense.expiryDate?.trim() || undefined,
+          issuedAuthority: tradeLicense.issuedAuthority?.trim() || undefined,
           uploadedAt: new Date().toISOString(),
         },
         {
@@ -538,6 +645,9 @@ export default function VendorSelfRegistrationPage() {
           fileSize: vatCertificate.fileSize,
           mimeType: vatCertificate.mimeType,
           dataUrl: vatCertificate.dataUrl,
+          issueDate: vatCertificate.issueDate?.trim() || undefined,
+          expiryDate: vatCertificate.expiryDate?.trim() || undefined,
+          issuedAuthority: vatCertificate.issuedAuthority?.trim() || undefined,
           uploadedAt: new Date().toISOString(),
         },
         {
@@ -547,6 +657,9 @@ export default function VendorSelfRegistrationPage() {
           fileSize: emiratesId.fileSize,
           mimeType: emiratesId.mimeType,
           dataUrl: emiratesId.dataUrl,
+          issueDate: emiratesId.issueDate?.trim() || undefined,
+          expiryDate: emiratesId.expiryDate?.trim() || undefined,
+          issuedAuthority: emiratesId.issuedAuthority?.trim() || undefined,
           uploadedAt: new Date().toISOString(),
         },
       ];
@@ -971,7 +1084,7 @@ export default function VendorSelfRegistrationPage() {
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground flex items-center justify-between" htmlFor="reg-category">
                       <span>
-                        Vendor Category <span className="text-rose-500">*</span>
+                        Supplier Class <span className="text-rose-500">*</span>
                       </span>
                     </label>
                     <div className="relative">
@@ -988,7 +1101,7 @@ export default function VendorSelfRegistrationPage() {
                         }}
                         className={`pl-9 cursor-pointer ${errors.category ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                       >
-                        <option value="">{categoriesLoading ? 'Loading categories...' : 'Select Vendor Category *'}</option>
+                        <option value="">{categoriesLoading ? 'Loading classes...' : 'Select Supplier Class *'}</option>
                         {categories.map((cat) => (
                           <option key={cat.id} value={cat.id}>
                             {cat.name}
@@ -1067,68 +1180,134 @@ export default function VendorSelfRegistrationPage() {
                 <span className="text-[11px] text-muted-foreground">PDF, JPG, or PNG (Max 5MB each)</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-3.5">
                 {/* 1. Trade License */}
-                <div className={`p-4 rounded-xl border border-dashed flex flex-col justify-between space-y-3 transition-colors ${
+                <div className={`p-4 sm:p-5 rounded-xl border border-dashed transition-colors ${
                   errors.trade_license
                     ? 'border-destructive/80 bg-destructive/5'
                     : 'border-border/80 bg-slate-50/50 dark:bg-slate-900/40'
                 }`}>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-foreground">
-                        Trade License <span className="text-rose-500">*</span>
-                      </span>
-                      {tradeLicense.fileName && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="size-3" /> Ready
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-bold text-foreground">
+                          Trade License <span className="text-rose-500">*</span>
                         </span>
+                        {tradeLicense.fileName && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 className="size-3" /> Ready
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Valid Trade License or Commercial Registry
+                      </p>
+                    </div>
+
+                    <input
+                      ref={tradeLicenseRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      className="hidden"
+                      onChange={(e) => handleFileChange('trade_license', e)}
+                    />
+
+                    <div className="shrink-0">
+                      {tradeLicense.fileName ? (
+                        <div className="p-2 sm:px-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center gap-2.5">
+                          <FileCheck2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="truncate max-w-[200px] sm:max-w-[280px]">
+                            <p className="text-xs font-semibold text-foreground truncate">{tradeLicense.fileName}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatBytes(tradeLicense.fileSize)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleFileRemove('trade_license')}
+                            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1"
+                            title="Remove file"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto gap-1.5 text-xs border-dashed hover:border-primary hover:text-primary"
+                          onClick={() => tradeLicenseRef.current?.click()}
+                        >
+                          <UploadCloud className="size-3.5" /> Upload Trade License
+                        </Button>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Valid Trade License or Commercial Registry
-                    </p>
                   </div>
 
-                  <input
-                    ref={tradeLicenseRef}
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    className="hidden"
-                    onChange={(e) => handleFileChange('trade_license', e)}
-                  />
+                  {/* OCR Scanning indicator */}
+                  {scanningDocs.trade_license && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs font-medium text-primary animate-pulse">
+                      <Loader2 className="size-3.5 animate-spin shrink-0" />
+                      <span>Scanning document with OCR to detect Date of Issue & Expiry...</span>
+                    </div>
+                  )}
 
-                  {tradeLicense.fileName ? (
-                    <div className="p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <FileCheck2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <div className="truncate">
-                          <p className="text-xs font-semibold text-foreground truncate">{tradeLicense.fileName}</p>
-                          <p className="text-[10px] text-muted-foreground">{formatBytes(tradeLicense.fileSize)}</p>
+                  {/* OCR Auto-detected success badge */}
+                  {ocrMsg.trade_license && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+                      <Sparkles className="size-3.5 shrink-0" />
+                      <span>{ocrMsg.trade_license}</span>
+                    </div>
+                  )}
+
+                  {/* Metadata fields in a 3-column horizontal row */}
+                  {tradeLicense.fileName && (
+                    <div className="mt-3.5 pt-3 border-t border-border/60">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Issue Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={tradeLicense.issueDate || ''}
+                            onChange={(e) => handleDocMetaChange('trade_license', 'issueDate', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Expiry Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={tradeLicense.expiryDate || ''}
+                            onChange={(e) => handleDocMetaChange('trade_license', 'expiryDate', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Issued Authority
+                          </label>
+                          <Input
+                            type="text"
+                            placeholder="e.g. DED / Economy Dept"
+                            value={tradeLicense.issuedAuthority || ''}
+                            onChange={(e) => handleDocMetaChange('trade_license', 'issuedAuthority', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleFileRemove('trade_license')}
-                        className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Remove file"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                      {tradeLicense.issueDate && tradeLicense.expiryDate && tradeLicense.expiryDate <= tradeLicense.issueDate && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-2">
+                          Warning: Expiry date should be after issue date.
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs border-dashed hover:border-primary hover:text-primary"
-                      onClick={() => tradeLicenseRef.current?.click()}
-                    >
-                      <UploadCloud className="size-3.5" /> Upload Trade License
-                    </Button>
                   )}
+
                   {errors.trade_license && (
-                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in">
+                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in mt-2">
                       <AlertCircle className="size-3.5 shrink-0" />
                       {errors.trade_license}
                     </p>
@@ -1136,66 +1315,132 @@ export default function VendorSelfRegistrationPage() {
                 </div>
 
                 {/* 2. VAT Certificate */}
-                <div className={`p-4 rounded-xl border border-dashed flex flex-col justify-between space-y-3 transition-colors ${
+                <div className={`p-4 sm:p-5 rounded-xl border border-dashed transition-colors ${
                   errors.vat_certificate
                     ? 'border-destructive/80 bg-destructive/5'
                     : 'border-border/80 bg-slate-50/50 dark:bg-slate-900/40'
                 }`}>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-foreground">
-                        VAT Certificate <span className="text-rose-500">*</span>
-                      </span>
-                      {vatCertificate.fileName && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="size-3" /> Ready
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-bold text-foreground">
+                          VAT Certificate <span className="text-rose-500">*</span>
                         </span>
+                        {vatCertificate.fileName && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 className="size-3" /> Ready
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Tax Registration Number (TRN) / VAT Certificate
+                      </p>
+                    </div>
+
+                    <input
+                      ref={vatCertificateRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      className="hidden"
+                      onChange={(e) => handleFileChange('vat_certificate', e)}
+                    />
+
+                    <div className="shrink-0">
+                      {vatCertificate.fileName ? (
+                        <div className="p-2 sm:px-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center gap-2.5">
+                          <FileCheck2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="truncate max-w-[200px] sm:max-w-[280px]">
+                            <p className="text-xs font-semibold text-foreground truncate">{vatCertificate.fileName}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatBytes(vatCertificate.fileSize)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleFileRemove('vat_certificate')}
+                            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1"
+                            title="Remove file"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto gap-1.5 text-xs border-dashed hover:border-primary hover:text-primary"
+                          onClick={() => vatCertificateRef.current?.click()}
+                        >
+                          <UploadCloud className="size-3.5" /> Upload VAT Certificate
+                        </Button>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Tax Registration Number (TRN) / VAT Certificate
-                    </p>
                   </div>
 
-                  <input
-                    ref={vatCertificateRef}
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    className="hidden"
-                    onChange={(e) => handleFileChange('vat_certificate', e)}
-                  />
+                  {/* OCR Scanning indicator */}
+                  {scanningDocs.vat_certificate && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs font-medium text-primary animate-pulse">
+                      <Loader2 className="size-3.5 animate-spin shrink-0" />
+                      <span>Scanning document with OCR to detect Date of Issue & Expiry...</span>
+                    </div>
+                  )}
 
-                  {vatCertificate.fileName ? (
-                    <div className="p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <FileCheck2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <div className="truncate">
-                          <p className="text-xs font-semibold text-foreground truncate">{vatCertificate.fileName}</p>
-                          <p className="text-[10px] text-muted-foreground">{formatBytes(vatCertificate.fileSize)}</p>
+                  {/* OCR Auto-detected success badge */}
+                  {ocrMsg.vat_certificate && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+                      <Sparkles className="size-3.5 shrink-0" />
+                      <span>{ocrMsg.vat_certificate}</span>
+                    </div>
+                  )}
+
+                  {/* Metadata fields in a 3-column horizontal row */}
+                  {vatCertificate.fileName && (
+                    <div className="mt-3.5 pt-3 border-t border-border/60">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Issue Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={vatCertificate.issueDate || ''}
+                            onChange={(e) => handleDocMetaChange('vat_certificate', 'issueDate', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Expiry Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={vatCertificate.expiryDate || ''}
+                            onChange={(e) => handleDocMetaChange('vat_certificate', 'expiryDate', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Issued Authority
+                          </label>
+                          <Input
+                            type="text"
+                            placeholder="e.g. Federal Tax Authority (FTA)"
+                            value={vatCertificate.issuedAuthority || ''}
+                            onChange={(e) => handleDocMetaChange('vat_certificate', 'issuedAuthority', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleFileRemove('vat_certificate')}
-                        className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Remove file"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                      {vatCertificate.issueDate && vatCertificate.expiryDate && vatCertificate.expiryDate <= vatCertificate.issueDate && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-2">
+                          Warning: Expiry date should be after issue date.
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs border-dashed hover:border-primary hover:text-primary"
-                      onClick={() => vatCertificateRef.current?.click()}
-                    >
-                      <UploadCloud className="size-3.5" /> Upload VAT Certificate
-                    </Button>
                   )}
+
                   {errors.vat_certificate && (
-                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in">
+                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in mt-2">
                       <AlertCircle className="size-3.5 shrink-0" />
                       {errors.vat_certificate}
                     </p>
@@ -1203,66 +1448,132 @@ export default function VendorSelfRegistrationPage() {
                 </div>
 
                 {/* 3. Emirates ID */}
-                <div className={`p-4 rounded-xl border border-dashed flex flex-col justify-between space-y-3 transition-colors ${
+                <div className={`p-4 sm:p-5 rounded-xl border border-dashed transition-colors ${
                   errors.emirates_id
                     ? 'border-destructive/80 bg-destructive/5'
                     : 'border-border/80 bg-slate-50/50 dark:bg-slate-900/40'
                 }`}>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-foreground">
-                        Emirates ID <span className="text-rose-500">*</span>
-                      </span>
-                      {emiratesId.fileName && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="size-3" /> Ready
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-bold text-foreground">
+                          Emirates ID <span className="text-rose-500">*</span>
                         </span>
+                        {emiratesId.fileName && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 className="size-3" /> Ready
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Emirates ID of authorized signatory or owner
+                      </p>
+                    </div>
+
+                    <input
+                      ref={emiratesIdRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      className="hidden"
+                      onChange={(e) => handleFileChange('emirates_id', e)}
+                    />
+
+                    <div className="shrink-0">
+                      {emiratesId.fileName ? (
+                        <div className="p-2 sm:px-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center gap-2.5">
+                          <FileCheck2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="truncate max-w-[200px] sm:max-w-[280px]">
+                            <p className="text-xs font-semibold text-foreground truncate">{emiratesId.fileName}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatBytes(emiratesId.fileSize)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleFileRemove('emirates_id')}
+                            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1"
+                            title="Remove file"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto gap-1.5 text-xs border-dashed hover:border-primary hover:text-primary"
+                          onClick={() => emiratesIdRef.current?.click()}
+                        >
+                          <UploadCloud className="size-3.5" /> Upload Emirates ID
+                        </Button>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Emirates ID of authorized signatory or owner
-                    </p>
                   </div>
 
-                  <input
-                    ref={emiratesIdRef}
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    className="hidden"
-                    onChange={(e) => handleFileChange('emirates_id', e)}
-                  />
+                  {/* OCR Scanning indicator */}
+                  {scanningDocs.emirates_id && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs font-medium text-primary animate-pulse">
+                      <Loader2 className="size-3.5 animate-spin shrink-0" />
+                      <span>Scanning document with OCR to detect Date of Issue & Expiry...</span>
+                    </div>
+                  )}
 
-                  {emiratesId.fileName ? (
-                    <div className="p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <FileCheck2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <div className="truncate">
-                          <p className="text-xs font-semibold text-foreground truncate">{emiratesId.fileName}</p>
-                          <p className="text-[10px] text-muted-foreground">{formatBytes(emiratesId.fileSize)}</p>
+                  {/* OCR Auto-detected success badge */}
+                  {ocrMsg.emirates_id && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+                      <Sparkles className="size-3.5 shrink-0" />
+                      <span>{ocrMsg.emirates_id}</span>
+                    </div>
+                  )}
+
+                  {/* Metadata fields in a 3-column horizontal row */}
+                  {emiratesId.fileName && (
+                    <div className="mt-3.5 pt-3 border-t border-border/60">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Issue Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={emiratesId.issueDate || ''}
+                            onChange={(e) => handleDocMetaChange('emirates_id', 'issueDate', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Expiry Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={emiratesId.expiryDate || ''}
+                            onChange={(e) => handleDocMetaChange('emirates_id', 'expiryDate', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                            Issued Authority
+                          </label>
+                          <Input
+                            type="text"
+                            placeholder="e.g. ICP / Federal Authority"
+                            value={emiratesId.issuedAuthority || ''}
+                            onChange={(e) => handleDocMetaChange('emirates_id', 'issuedAuthority', e.target.value)}
+                            className="h-9 text-xs bg-background/80"
+                          />
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleFileRemove('emirates_id')}
-                        className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Remove file"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                      {emiratesId.issueDate && emiratesId.expiryDate && emiratesId.expiryDate <= emiratesId.issueDate && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-2">
+                          Warning: Expiry date should be after issue date.
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs border-dashed hover:border-primary hover:text-primary"
-                      onClick={() => emiratesIdRef.current?.click()}
-                    >
-                      <UploadCloud className="size-3.5" /> Upload Emirates ID
-                    </Button>
                   )}
+
                   {errors.emirates_id && (
-                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in">
+                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium animate-in fade-in mt-2">
                       <AlertCircle className="size-3.5 shrink-0" />
                       {errors.emirates_id}
                     </p>

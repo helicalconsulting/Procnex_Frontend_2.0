@@ -91,8 +91,18 @@ export function ScrollableTabList({
         onScroll={updateScrollState}
         onKeyDown={handleKeyDown}
         onFocusCapture={(event) => {
-          if ((event.target as HTMLElement).getAttribute('role') === 'tab') {
-            (event.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+          const tab = event.target as HTMLElement;
+          if (tab.getAttribute('role') === 'tab' && scrollerRef.current) {
+            const scroller = scrollerRef.current;
+            const tabLeft = tab.offsetLeft;
+            const tabRight = tabLeft + tab.offsetWidth;
+            const scrollerLeft = scroller.scrollLeft;
+            const scrollerRight = scrollerLeft + scroller.clientWidth;
+            if (tabLeft < scrollerLeft) {
+              scroller.scrollTo({ left: tabLeft, behavior: 'smooth' });
+            } else if (tabRight > scrollerRight) {
+              scroller.scrollTo({ left: tabRight - scroller.clientWidth, behavior: 'smooth' });
+            }
           }
         }}
         {...props}

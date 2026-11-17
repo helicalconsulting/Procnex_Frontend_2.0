@@ -18,12 +18,15 @@ export interface CreateRfqPayload {
   priority?: string;
   department?: string;
   departmentId?: string;
+  supplierClass?: string;
+  itemClass?: string;
   closingDate?: string;
   currency?: string;
   requisitionIds?: string[];
   items: Array<{
     itemCode?: string;
     itemName: string;
+    itemClass?: string;
     description?: string;
     quantity: number;
     unit?: string;

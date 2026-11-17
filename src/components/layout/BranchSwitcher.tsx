@@ -171,14 +171,14 @@ export const BranchSwitcher: React.FC = () => {
           className={cn(
             "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shadow-xs border",
             currentBranch
-              ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20"
+              ? "bg-primary text-white border-transparent hover:bg-primary/90"
               : "bg-slate-100 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200/80"
           )}
           title="Super Admin: Switch Active Branch"
         >
-          <Building2 size={13} className="text-amber-500 shrink-0" />
+          <Building2 size={13} className={currentBranch ? "text-white shrink-0" : "text-amber-500 shrink-0"} />
           <span className="max-w-[140px] truncate">{currentLabel}</span>
-          <ChevronDown size={12} className={cn("transition-transform duration-200 opacity-70", isOpen && "rotate-180")} />
+          <ChevronDown size={12} className={cn("transition-transform duration-200", currentBranch ? "text-white/90" : "opacity-70", isOpen && "rotate-180")} />
         </button>
 
         {isOpen && (
