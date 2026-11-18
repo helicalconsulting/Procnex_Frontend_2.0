@@ -106,9 +106,21 @@ export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef
       }
     }, [contentHtml, layoutModel, onContentHtmlChange]);
 
-    const pages = model?.pages || [];
+    const pages = (model?.pages && model.pages.length > 0) ? model.pages : [
+      {
+        pageIndex: 0,
+        width: 595.28,
+        height: 841.89,
+        rotation: 0,
+        coordinateUnit: 'pt' as const,
+        previewImageUrl: originalFileUrl || null,
+        processingStatus: 'COMPLETED' as const,
+        extractionMethod: 'ocr' as const,
+        elements: [],
+      }
+    ];
     const totalPages = pages.length > 0 ? pages.length : 1;
-    const currentPage: CanonicalPage | undefined = pages[activePageIndex];
+    const currentPage: CanonicalPage | undefined = pages[activePageIndex] || pages[0];
 
     // Page dimensions
     const pageWidthPt = currentPage?.width || 595.28;
@@ -895,7 +907,29 @@ export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef
                 )}
               </>
             ) : (
-              <>{currentPage.elements.map(renderReconstructedElement)}</>
+              (currentPage?.elements && currentPage.elements.length > 0) ? (
+                <>{currentPage.elements.map(renderReconstructedElement)}</>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    color: '#64748b',
+                    fontSize: 13,
+                    padding: 32,
+                    textAlign: 'center',
+                  }}
+                >
+                  <FileText size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
+                  <div>No text elements on this page yet.</div>
+                  <div style={{ fontSize: 12, marginTop: 6, color: '#94a3b8' }}>
+                    Use the toolbar above to add <strong>+ Text Block</strong>, <strong>+ Checkbox</strong>, or drop a signature.
+                  </div>
+                </div>
+              )
             )}
           </div>
         </div>

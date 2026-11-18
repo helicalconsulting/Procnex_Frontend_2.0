@@ -156,3 +156,41 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
     '\n<p><!-- pagebreak --></p>\n<div class="mce-pagebreak" data-mce-placeholder="true" style="page-break-after: always; margin: 2rem 0; border-top: 2px dashed #94a3b8; text-align: center; font-size: 11px; color: #64748b; padding-top: 4px;">--- Page Break ---</div>\n'
   );
 }
+
+export function createFallbackLayoutModel(
+  fileUrl?: string | null,
+  rawText?: string | null
+): CanonicalDocument {
+  const text = (rawText || '').trim();
+  const lines = text ? text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
+  return {
+    version: '1.0',
+    pageCount: 1,
+    plainText: text,
+    pages: [
+      {
+        pageIndex: 0,
+        width: 595.28,
+        height: Math.max(841.89, 80 + lines.length * 24),
+        rotation: 0,
+        coordinateUnit: 'pt',
+        previewImageUrl: fileUrl || null,
+        processingStatus: 'COMPLETED',
+        extractionMethod: 'ocr',
+        elements: lines.map((line, idx) => ({
+          id: `p0_el_${idx}`,
+          pageIndex: 0,
+          type: 'text',
+          bbox: { x: 50, y: 50 + idx * 24, width: 495, height: 20 },
+          readingOrder: idx + 1,
+          source: 'ocr',
+          text: line,
+          fontSize: idx === 0 ? 13 : 10.5,
+          fontWeight: idx === 0 ? 'bold' : 'normal',
+          alignment: idx === 0 ? 'center' : 'left',
+          fontFamily: 'Arial, sans-serif',
+        })),
+      },
+    ],
+  };
+}

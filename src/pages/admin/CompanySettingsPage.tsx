@@ -41,7 +41,7 @@ import { useAuth } from '../../context/AuthContext';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
 import { ALL_PLACEHOLDERS, PLACEHOLDER_CATEGORIES } from '../../utils/placeholderResolver';
-import { canonicalModelToHtml } from '../../utils/documentModelToHtml';
+import { canonicalModelToHtml, createFallbackLayoutModel } from '../../utils/documentModelToHtml';
 
 // ─── Predictive Match Analysis ──────────────────────────────
 interface PredictiveMatchResult {
@@ -2130,18 +2130,24 @@ export default function CompanySettingsPage() {
         // Fetch from backend (which lazily generates layoutModel if missing for uploaded files)
         try {
           const result = await companySettingsService.getContractTemplate(type);
-          if (result?.template?.layoutModel) {
-            setEditedContractLayoutModel(result.template.layoutModel);
+          let lm = result?.template?.layoutModel || tmpl?.layoutModel;
+          const attachedFileUrl = result?.template?.fileUrl || tmpl?.fileUrl;
+          if (!lm && attachedFileUrl) {
+            lm = createFallbackLayoutModel(attachedFileUrl, result?.template?.ocrText || tmpl?.ocrText);
+          }
+
+          if (lm) {
+            setEditedContractLayoutModel(lm);
             setEditorMode('fixed');
-          } else if (result?.template) {
+          } else {
             setEditedContractLayoutModel(null);
             setEditorMode('flowing');
           }
 
           if (result?.template?.content?.trim()) {
             setEditedContractContent(result.template.content);
-          } else if (result?.template?.layoutModel) {
-            setEditedContractContent(canonicalModelToHtml(result.template.layoutModel));
+          } else if (lm) {
+            setEditedContractContent(canonicalModelToHtml(lm));
           } else if (result?.defaultContent) {
             setEditedContractContent(result.defaultContent);
           } else if (tmpl?.content) {
@@ -2158,9 +2164,11 @@ export default function CompanySettingsPage() {
             setEditorMode('flowing');
           }
         } catch { /* ignore */
+          const attachedFileUrl = tmpl?.fileUrl;
+          const lm = tmpl?.layoutModel || (attachedFileUrl ? createFallbackLayoutModel(attachedFileUrl, tmpl?.ocrText) : null);
           setEditedContractName(tmpl?.name || type);
-          setEditedContractLayoutModel(tmpl?.layoutModel || null);
-          setEditorMode(tmpl?.layoutModel ? 'fixed' : 'flowing');
+          setEditedContractLayoutModel(lm);
+          setEditorMode(lm ? 'fixed' : 'flowing');
         }
       }
     };
@@ -6381,16 +6389,29 @@ export default function CompanySettingsPage() {
                                       if (!selectedContractType) return;
                                       try {
                                         await companySettingsService.saveContractTemplate(selectedContractType, {
-                                          name: editedContractName,
-                                          content: editedContractContent,
+                                          name: (editedContractName || selectedContractTemplate?.name || selectedContractType).trim(),
+                                          content: editedContractContent || ' ',
                                           description: editedContractDescription || null,
                                           isActive: editedContractIsActive,
                                           fileUrl: null,
                                           fileName: null,
                                           fileType: null,
+                                          layoutModel: null,
                                         });
+                                        setEditedContractLayoutModel(null);
                                         setContractTemplateDirty(false);
                                         await fetchContractTemplates();
+                                        setContractTemplates(prev => prev.map(t =>
+                                          t.type === selectedContractType ? {
+                                            ...t,
+                                            fileUrl: null,
+                                            fileName: null,
+                                            fileType: null,
+                                            ocrStatus: null,
+                                            ocrText: null,
+                                            layoutModel: null,
+                                          } : t
+                                        ));
                                         setPageMsg('Uploaded document removed from template.');
                                       } catch (err) {
                                         setPageMsg(err instanceof Error ? err.message : 'Failed to remove document');
@@ -6416,14 +6437,17 @@ export default function CompanySettingsPage() {
                                         const result = await companySettingsService.uploadContractTemplateFile(selectedContractType, file);
                                         const extractedText = (result as any).ocrText;
                                         const cleanHtml = (result as any).html;
-                                        const layoutModel = (result as any).layoutModel;
+                                        let layoutModel = (result as any).layoutModel;
                                         const ocrStatus = (result as any).ocrStatus || (extractedText || layoutModel ? 'COMPLETED' : null);
+
+                                        // Baseline fallback layoutModel: if layoutModel is missing or has no pages, build one
+                                        if ((!layoutModel || !layoutModel.pages || layoutModel.pages.length === 0) && (result.fileUrl || extractedText)) {
+                                          layoutModel = createFallbackLayoutModel(result.fileUrl, extractedText);
+                                        }
 
                                         if (layoutModel) {
                                           setEditedContractLayoutModel(layoutModel);
                                           setEditorMode('fixed');
-                                        } else {
-                                          setEditedContractLayoutModel(null);
                                         }
 
                                         const contentToSave = cleanHtml || (extractedText ? textToHtml(extractedText) : editedContractContent);
@@ -6477,10 +6501,14 @@ export default function CompanySettingsPage() {
                               <FileSignature size={14} /> Contract Template Content
                             </div>
 
-                            {editedContractLayoutModel ? (
+                            {(editedContractLayoutModel || selectedContractTemplate?.fileUrl) ? (
                               <FixedLayoutDocumentViewer
                                 ref={fixedViewerRef}
-                                layoutModel={editedContractLayoutModel}
+                                layoutModel={
+                                  editedContractLayoutModel ||
+                                  (selectedContractTemplate as any)?.layoutModel ||
+                                  createFallbackLayoutModel(selectedContractTemplate?.fileUrl, selectedContractTemplate?.ocrText)
+                                }
                                 originalFileUrl={selectedContractTemplate?.fileUrl}
                                 originalFileName={selectedContractTemplate?.fileName}
                                 fileType={selectedContractTemplate?.fileType}
