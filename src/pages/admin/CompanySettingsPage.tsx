@@ -243,6 +243,29 @@ function PredictiveMatchCard({
   );
 }
 
+// ─── Utility: Clean spaced-out OCR text & artifacts ───────────
+function cleanSpacedText(str: string): string {
+  if (!str) return '';
+  return str
+    // Collapse single-letter runs separated by space (e.g. "T o b e m a d e o n" -> "To be made on", "A n n e x u r e" -> "Annexure")
+    .replace(/(?<=\b[A-Za-z])\s+(?=[A-Za-z]\b)/g, '')
+    // Fix common OCR broken words where letters were split
+    .replace(/\bAnn\s+e\s*xu\s*r\s*e\b/gi, 'Annexure')
+    .replace(/\bD\s*r\s*af\s*t\b/gi, 'Draft')
+    .replace(/\bFo\s*r\s*m\s*a\s*t\b/gi, 'Format')
+    .replace(/\bContr\s*ac\s*t\b/gi, 'Contract')
+    .replace(/\bAg\s*r\s*e\s*e\s*m\s*e\s*n\s*t\b/gi, 'Agreement')
+    .replace(/\bte\s*a\s*c\s*hing\b/gi, 'teaching')
+    .replace(/\bs\s*e\s*rvic\s*e\s*s\b/gi, 'services')
+    .replace(/\bs\s*e\s*le\s*c\s*ted\b/gi, 'selected')
+    .replace(/\bG\s*ov\s*e\s*rnme\s*nt\b/gi, 'Government')
+    .replace(/\bH\s*igher\b/gi, 'Higher')
+    .replace(/\bS\s*e\s*c\s*onda\s*r\s*y\b/gi, 'Secondary')
+    .replace(/\bS\s*c\s*hools\b/gi, 'Schools')
+    .replace(/\bdist\s*ric\s*ts\b/gi, 'districts')
+    .replace(/\bC\s*hha\s*t{1,2}isga\s*r\s*h\b/gi, 'Chhattisgarh');
+}
+
 // ─── Utility: Convert structured plain text to HTML ─────────
 // Converts extracted OCR plain text into rich, beautifully formatted HTML
 // matching enterprise SRM software standards (headings, bold clause titles,
@@ -250,7 +273,7 @@ function PredictiveMatchCard({
 function textToHtml(text: string): string {
   if (!text || !text.trim()) return '';
 
-  const rawLines = text.split(/\r?\n/);
+  const rawLines = text.split(/\r?\n/).map((l) => cleanSpacedText(l));
   const htmlBlocks: string[] = [];
   let currentListItems: string[] = [];
   let listType: 'ul' | 'ol' | null = null;
@@ -378,6 +401,25 @@ function textToHtml(text: string): string {
           let rowRest = rowMatch[2].trim();
           let rowCol3 = '';
 
+          // Lookahead for continuation lines of this row before the next numbered row
+          let subIdx = nextIdx + 1;
+          while (subIdx < rawLines.length) {
+            const subLine = rawLines[subIdx].trim();
+            if (!subLine) {
+              subIdx++;
+              continue;
+            }
+            if (
+              /^\d+[\.\)]?\s+/.test(subLine) ||
+              /^(?:Total|Subtotal|Note:|ANNEXURE|ARTICLE|SECTION|\bIN\s+WITNESS\b|This\s+checklist)/i.test(subLine)
+            ) {
+              break;
+            }
+            rowRest += ' ' + subLine;
+            subIdx++;
+          }
+          nextIdx = subIdx;
+
           // Check if rowRest ends with a status or separate column (e.g. "Yes", "No", "10%", "$500")
           const endValueMatch =
             rowRest.match(/\s{2,}(Yes\b|No\b|N\/A\b|\d+(?:\.\d+)?%|\$?\d[\d,.]*)$/i) ||
@@ -392,7 +434,6 @@ function textToHtml(text: string): string {
             col2: rowRest,
             col3: rowCol3 || (headerCol3 ? '' : undefined),
           });
-          nextIdx++;
         } else if (/^(?:Total|Subtotal|Note:|ANNEXURE|ARTICLE|SECTION|\bIN\s+WITNESS\b)/i.test(nextLine)) {
           break;
         } else if (candidateRows.length > 0 && candidateRows.length < 2) {
@@ -783,32 +824,16 @@ function textToHtml(text: string): string {
       continue;
     }
 
-    // ── Pattern 9: Bullet points or Scope Items ──
-    const isExplicitBullet = /^[•●▪\-\*\+]\s*(.*)/.test(trimmed);
+    // ── Pattern 9: Explicit Bullet Points Only ──
+    const isExplicitBullet = /^[•●▪]\s*(.*)/.test(trimmed) || /^\s*[\-\*]\s+[A-Za-z0-9]/.test(trimmed);
     if (isExplicitBullet) {
-      const bulletContent = trimmed.replace(/^[•●▪\-\*\+]\s*/, '');
-      if (listType !== 'ul') {
-        flushList();
-      }
-      listType = 'ul';
-      currentListItems.push(bulletContent);
-      i++;
-      continue;
-    }
-
-    // Short scope items without terminal punctuation (e.g. "Boundary wall", "Gate", "Septic tank")
-    if (trimmed.length < 65 && !trimmed.endsWith('.') && !trimmed.includes(':') && !trimmed.includes('(')) {
-      const prevLine = i > 0 ? rawLines[i - 1].trim() : '';
-      const nextLine = i + 1 < rawLines.length ? rawLines[i + 1].trim() : '';
-      if (
-        (prevLine && prevLine.length < 65 && !prevLine.endsWith('.')) ||
-        (nextLine && nextLine.length < 65 && !nextLine.endsWith('.'))
-      ) {
+      const bulletContent = trimmed.replace(/^[•●▪]\s*|^\s*[\-\*]\s+/, '');
+      if (bulletContent.trim()) {
         if (listType !== 'ul') {
           flushList();
         }
         listType = 'ul';
-        currentListItems.push(escaped);
+        currentListItems.push(bulletContent);
         i++;
         continue;
       }
@@ -6623,6 +6648,25 @@ export default function CompanySettingsPage() {
                                     </button>
                                   </div>
                                 )}
+
+                                {/* Clean & Re-align Formatting Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const raw = selectedContractTemplate?.ocrText || editedContractContent;
+                                    if (raw) {
+                                      const cleaned = textToHtml(raw);
+                                      setEditedContractContent(cleaned);
+                                      setContractTemplateDirty(true);
+                                      setPageMsg('Document alignment, spacing, and table grids cleaned & formatted!');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 bg-indigo-950/70 text-indigo-300 border border-indigo-800 hover:bg-indigo-900/80 hover:text-white"
+                                  title="Clean OCR spacing, fix broken words, and reconstruct table grids"
+                                >
+                                  <Sparkles size={13} />
+                                  Clean & Re-align
+                                </button>
 
                                 {/* Full Screen Toggle */}
                                 <button
