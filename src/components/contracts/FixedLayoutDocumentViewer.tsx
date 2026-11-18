@@ -126,6 +126,11 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
 
       // 3. Fallback to originalFileUrl (works for both images and PDFs)
       if (resolvedFileUrl) {
+        if (isFilePdf && resolvedFileUrl.startsWith('https://res.cloudinary.com')) {
+          const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+          const proxyUrl = `${backendBase}/api/vendors/pdf-view?url=${encodeURIComponent(resolvedFileUrl)}`;
+          return { url: proxyUrl, isPdf: true };
+        }
         return { url: resolvedFileUrl, isPdf: isFilePdf };
       }
 

@@ -2093,7 +2093,7 @@ export default function CompanySettingsPage() {
       setSelectedContractType(type);
       setContractTemplateDirty(false);
       const tmpl = contractTemplates.find(t => t.type === type);
-      if (tmpl && tmpl.content) {
+      if (tmpl && tmpl.content && tmpl.layoutModel) {
         setEditedContractContent(tmpl.content);
         setEditedContractName(tmpl.name || type);
         setEditedContractDescription(tmpl?.description || '');
@@ -2101,20 +2101,29 @@ export default function CompanySettingsPage() {
         setEditedContractLayoutModel(tmpl.layoutModel || null);
         setEditorMode(tmpl.layoutModel ? 'fixed' : 'flowing');
       } else {
-        // No saved template with content — fetch default content from backend
+        // Fetch from backend (which lazily generates layoutModel if missing for uploaded files)
         try {
           const result = await companySettingsService.getContractTemplate(type);
-          if (result?.defaultContent) {
-            setEditedContractContent(result.defaultContent);
-          } else if (result?.template?.content) {
-            setEditedContractContent(result.template.content);
+          if (result?.template?.layoutModel) {
+            setEditedContractLayoutModel(result.template.layoutModel);
+            setEditorMode('fixed');
+          } else if (result?.template) {
+            setEditedContractLayoutModel(null);
+            setEditorMode('flowing');
           }
+
+          if (result?.template?.content) {
+            setEditedContractContent(result.template.content);
+          } else if (result?.defaultContent) {
+            setEditedContractContent(result.defaultContent);
+          } else if (tmpl?.content) {
+            setEditedContractContent(tmpl.content);
+          }
+
           if (result?.template) {
             setEditedContractName(result.template.name || type);
             setEditedContractDescription(result.template.description || '');
             setEditedContractIsActive(result.template.isActive ?? true);
-            setEditedContractLayoutModel(result.template.layoutModel || null);
-            setEditorMode(result.template.layoutModel ? 'fixed' : 'flowing');
           } else {
             setEditedContractName(type);
             setEditedContractLayoutModel(null);
