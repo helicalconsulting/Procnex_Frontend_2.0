@@ -1356,6 +1356,7 @@ export interface ContractTemplate {
   ocrText?: string | null;
   ocrStatus?: string | null;
   ocrProcessedAt?: string | null;
+  layoutModel?: any;
 }
 
 export interface ContractTemplateInput {
@@ -1366,6 +1367,7 @@ export interface ContractTemplateInput {
   fileUrl?: string | null;
   fileName?: string | null;
   fileType?: string | null;
+  layoutModel?: any;
 }
 
 type ContractTemplateType = string;
@@ -1489,7 +1491,18 @@ function validateContractUploadFile(file: File): string | null {
 
 // ─── Contract Template File Upload ──────────────────────────────────────
 
-async function apiUploadContractTemplateFile(type: string, file: File): Promise<{ fileUrl: string; fileName: string; fileType: string }> {
+export interface ContractUploadResult {
+  fileUrl: string;
+  fileName: string;
+  fileType: string;
+  ocrStatus?: string | null;
+  ocrText?: string | null;
+  html?: string | null;
+  layoutModel?: any;
+  extractionId?: string | null;
+}
+
+async function apiUploadContractTemplateFile(type: string, file: File): Promise<ContractUploadResult> {
   // Client-side validation first
   const validationError = validateContractUploadFile(file);
   if (validationError) {
@@ -1500,7 +1513,6 @@ async function apiUploadContractTemplateFile(type: string, file: File): Promise<
   const formData = new FormData();
   formData.append('file', file);
   const token = localStorage.getItem('heliflow_token');
-  console.log('[ContractUpload] Starting upload:', { type, fileName: file.name, fileSize: file.size, fileType: file.type });
 
   const res = await fetch(`${API_BASE}/company-settings/contract-templates/${encodeURIComponent(type)}/upload`, {
     method: 'POST',
@@ -1533,11 +1545,10 @@ async function apiUploadContractTemplateFile(type: string, file: File): Promise<
     throw new Error(errCode ? `${errMsg} (${errCode})` : errMsg);
   }
 
-  console.log('[ContractUpload] Upload successful:', { fileUrl: json.data?.fileUrl, fileName: json.data?.fileName });
-  return json.data as { fileUrl: string; fileName: string; fileType: string };
+  return json.data as ContractUploadResult;
 }
 
-async function mockUploadContractTemplateFile(type: string, file: File): Promise<{ fileUrl: string; fileName: string; fileType: string }> {
+async function mockUploadContractTemplateFile(type: string, file: File): Promise<ContractUploadResult> {
   await new Promise(r => setTimeout(r, 500));
   return {
     fileUrl: URL.createObjectURL(file),

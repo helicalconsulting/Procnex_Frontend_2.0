@@ -1,0 +1,391 @@
+/* ============================================================
+   FixedLayoutDocumentViewer.css
+   Authoritative Fixed-Coordinate Scene Graph Document Viewer & Editor
+   Isolated styling — immune to global typography or theme reflow
+   ============================================================ */
+
+.fld-container {
+  display: flex;
+  flex-direction: column;
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  overflow: hidden;
+  height: 100%;
+  min-height: 720px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: text;
+}
+
+/* Header & Controls Toolbar */
+.fld-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background-color: #1e293b;
+  border-bottom: 1px solid #334155;
+  gap: 12px;
+  flex-wrap: wrap;
+  z-index: 10;
+}
+
+.fld-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fld-mode-tabs {
+  display: flex;
+  background-color: #0f172a;
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+}
+
+.fld-mode-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fld-mode-tab:hover {
+  color: #f8fafc;
+}
+
+.fld-mode-tab--active {
+  background-color: #3b82f6;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+.fld-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background-color: #334155;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.fld-tool-btn:hover:not(:disabled) {
+  background-color: #475569;
+  color: #ffffff;
+}
+
+.fld-tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fld-tool-btn--convert {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  border-color: #6366f1;
+  color: #ffffff;
+}
+.fld-tool-btn--convert:hover {
+  background: linear-gradient(135deg, #4338ca, #4f46e5);
+}
+
+.fld-page-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+/* Viewport Area */
+.fld-viewport {
+  flex: 1;
+  overflow: auto;
+  background-color: #0b1120;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px;
+  position: relative;
+}
+
+.fld-split-viewport {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  overflow: auto;
+}
+
+.fld-split-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: auto;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background-color: #090d16;
+  padding: 20px;
+}
+
+.fld-pane-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Page Canvas (Fixed Point Geometry) */
+.fld-page-canvas-wrapper {
+  transform-origin: top center;
+  transition: transform 0.15s ease-out;
+}
+
+.fld-page-canvas {
+  position: relative;
+  background-color: #ffffff;
+  color: #000000;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 1px rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Mode A: Original Image View */
+.fld-original-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #ffffff;
+}
+
+/* Mode B: Positioned Reconstructed Elements */
+.fld-element {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.fld-element-text {
+  outline: none;
+  white-space: pre;
+  overflow: visible;
+  user-select: text;
+  cursor: text;
+  line-height: 1.15;
+}
+
+.fld-element-text:focus {
+  background-color: rgba(59, 130, 246, 0.08);
+  outline: 1.5px dashed #3b82f6;
+  border-radius: 2px;
+}
+
+/* Non-Text Form Elements */
+.fld-element-form-line {
+  border-bottom: 1.5px solid #1e293b;
+  pointer-events: none;
+}
+
+.fld-element-form-line-container {
+  display: flex;
+  align-items: flex-end;
+  box-sizing: border-box;
+}
+
+.fld-form-line-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-bottom: 1.5px solid #1e293b;
+  background: transparent;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 10pt;
+  line-height: 1.2;
+  padding: 0 2px 1px 2px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.fld-form-line-input:focus {
+  border-bottom: 2px solid #2563eb;
+  background-color: rgba(37, 99, 235, 0.05);
+  border-radius: 2px 2px 0 0;
+}
+
+.fld-form-line-input:disabled {
+  opacity: 0.9;
+  cursor: default;
+}
+
+.fld-element-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background-color: #ffffff;
+  border: 1.5px solid #1e293b;
+  border-radius: 2px;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.fld-element-checkbox:hover {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.fld-element-checkbox--checked {
+  background-color: #ffffff;
+  border-color: #1e293b;
+}
+
+.fld-element-checkbox--unknown {
+  border-style: dashed;
+  border-color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.05);
+}
+
+.fld-element-checkbox svg {
+  color: #0f172a;
+}
+
+.fld-suggest-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 8pt;
+  font-weight: 500;
+  font-family: sans-serif;
+  color: #2563eb;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1.2;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.fld-suggest-pill:hover {
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.fld-element-container-box {
+  border: 1.5px solid #1e293b;
+  background-color: rgba(248, 250, 252, 0.4);
+  border-radius: 3px;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.fld-element-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  background-color: #ffffff;
+  width: 100%;
+  height: 100%;
+}
+
+.fld-element-table td,
+.fld-element-table th {
+  border: 1px solid #334155;
+  padding: 2px 4px;
+  font-size: 9pt;
+  line-height: 1.15;
+  vertical-align: middle;
+  color: #0f172a;
+  min-height: 18px;
+  box-sizing: border-box;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.fld-element-table td[contenteditable="true"] {
+  cursor: text;
+  outline: none;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fld-element-table td[contenteditable="true"]:focus {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+  box-shadow: inset 0 0 0 1.5px #3b82f6;
+}
+
+.fld-element-table td:empty::before {
+  content: '\00a0';
+  display: inline-block;
+  visibility: hidden;
+}
+
+.fld-element-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Warnings and Uncertain Regions */
+.fld-element--uncertain {
+  border: 1.5px dashed #f59e0b !important;
+  background-color: rgba(245, 158, 11, 0.05);
+}
+
+.fld-element--uncertain:hover::after {
+  content: "Uncertain extraction — please review";
+  position: absolute;
+  top: -20px;
+  left: 0;
+  background: #f59e0b;
+  color: #000000;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* Notice Banner */
+.fld-banner {
+  padding: 8px 16px;
+  background-color: #1e293b;
+  border-bottom: 1px solid #334155;
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

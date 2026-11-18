@@ -17,6 +17,7 @@ import { MessageStrip, inferMessageType } from '../../components/shared/MessageS
 import { useBranding } from '../../context/BrandingContext';
 import { CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import RichTextEditor, { type RichTextEditorRef } from '../../components/shared/RichTextEditor';
+import FixedLayoutDocumentViewer from '../../components/contracts/FixedLayoutDocumentViewer';
 import '../../components/shared/RichTextEditor.css';
 import './CompanySettingsPage.css';
 import { Button } from '../../components/ui/button';
@@ -312,21 +313,21 @@ function textToHtml(text: string): string {
         const rowsHtml = tableRows
           .map(
             (r, rIdx) => `
-          <tr style="background-color: ${rIdx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-            <td style="padding: 10px 14px; border: 1px solid #1e293b; text-align: center; font-weight: 600; width: 14%; white-space: nowrap;">${r.col1}</td>
-            <td style="padding: 10px 14px; border: 1px solid #1e293b; text-align: left; width: 66%;">${r.col2}</td>
-            <td style="padding: 10px 14px; border: 1px solid #1e293b; text-align: center; font-weight: 600; color: #0f172a; width: 20%; white-space: nowrap;">${r.col3}</td>
+          <tr style="background-color: ${rIdx % 2 === 0 ? 'transparent' : 'rgba(148, 163, 184, 0.06)'}; color: inherit;">
+            <td style="padding: 10px 14px; border: 1px solid #475569; text-align: center; font-weight: 600; width: 14%; white-space: nowrap; color: inherit;">${r.col1}</td>
+            <td style="padding: 10px 14px; border: 1px solid #475569; text-align: left; width: 66%; color: inherit;">${r.col2}</td>
+            <td style="padding: 10px 14px; border: 1px solid #475569; text-align: center; font-weight: 600; color: inherit; width: 20%; white-space: nowrap;">${r.col3}</td>
           </tr>`
           )
           .join('');
 
         htmlBlocks.push(`
-          <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #1e293b; font-size: 14px; margin: 18px 0; table-layout: auto;">
+          <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #475569; font-size: 14px; margin: 18px 0; table-layout: auto;">
             <thead>
-              <tr style="background-color: #f8fafc;">
-                <th style="padding: 11px 14px; border: 1px solid #1e293b; text-align: center; width: 14%; font-weight: 700; white-space: nowrap; color: #0f172a;">Stage</th>
-                <th style="padding: 11px 14px; border: 1px solid #1e293b; text-align: left; width: 66%; font-weight: 700; color: #0f172a;">Work Completed</th>
-                <th style="padding: 11px 14px; border: 1px solid #1e293b; text-align: center; width: 20%; font-weight: 700; white-space: nowrap; color: #0f172a;">Payment</th>
+              <tr style="background-color: rgba(148, 163, 184, 0.16); color: inherit;">
+                <th style="padding: 11px 14px; border: 1px solid #475569; text-align: center; width: 14%; font-weight: 700; white-space: nowrap; color: inherit;">Stage</th>
+                <th style="padding: 11px 14px; border: 1px solid #475569; text-align: left; width: 66%; font-weight: 700; color: inherit;">Work Completed</th>
+                <th style="padding: 11px 14px; border: 1px solid #475569; text-align: center; width: 20%; font-weight: 700; white-space: nowrap; color: inherit;">Payment</th>
               </tr>
             </thead>
             <tbody>
@@ -339,7 +340,72 @@ function textToHtml(text: string): string {
       }
     }
 
-    // ── Pattern 2: Signatures Block ──
+    // ── Pattern 2: Two-Column Signature Table Box ──
+    if (/^(?:For\s+\[|SIGNATURES|Signed\s+by|On\s+behalf\s+of)/i.test(trimmed)) {
+      flushList();
+      const party1Lines: string[] = [trimmed];
+      const party2Lines: string[] = [];
+      let currentParty = 1;
+      let nextIdx = i + 1;
+
+      while (nextIdx < rawLines.length) {
+        const nextLine = rawLines[nextIdx].trim();
+        if (!nextLine) {
+          nextIdx++;
+          continue;
+        }
+        if (/^(?:For\s+\[|For\s+company|Contractor:?|Second\s+party)/i.test(nextLine)) {
+          currentParty = 2;
+          party2Lines.push(nextLine);
+          nextIdx++;
+          continue;
+        }
+        if (/^(?:Two\s+original\s+signed|Page\s+\d+|ARTICLE|SECTION|\d+[\.\)]\s+[A-Z])/i.test(nextLine)) {
+          break;
+        }
+        if (currentParty === 1) {
+          party1Lines.push(nextLine);
+        } else {
+          party2Lines.push(nextLine);
+        }
+        nextIdx++;
+      }
+
+      if (party1Lines.length > 0 && party2Lines.length > 0) {
+        const formatCell = (lines: string[]) =>
+          lines
+            .map((l) => {
+              if (/^(?:For\s+|Client:|Contractor:)/i.test(l)) {
+                return `<strong style="font-size: 14px; display: block; margin-bottom: 12px; color: inherit;">${l}</strong>`;
+              }
+              const m = l.match(/^([A-Za-z\s]+:)\s*(.*)/);
+              if (m) {
+                return `<div style="margin: 8px 0; font-size: 13.5px; color: inherit;"><strong style="display: inline-block; min-width: 65px; color: inherit;">${m[1]}</strong> ${m[2]}</div>`;
+              }
+              return `<div style="margin: 6px 0; font-size: 13.5px; color: inherit;">${l}</div>`;
+            })
+            .join('');
+
+        htmlBlocks.push(`
+          <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #475569; margin: 24px 0; font-family: inherit;">
+            <tbody>
+              <tr>
+                <td style="width: 50%; border: 1.5px solid #475569; padding: 18px 22px; vertical-align: top; line-height: 1.8; color: inherit;">
+                  ${formatCell(party1Lines)}
+                </td>
+                <td style="width: 50%; border: 1.5px solid #475569; padding: 18px 22px; vertical-align: top; line-height: 1.8; color: inherit;">
+                  ${formatCell(party2Lines)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        `);
+        i = nextIdx;
+        continue;
+      }
+    }
+
+    // ── Pattern 2.5: Signatures Block Fallback ──
     if (/^SIGNATURES$/i.test(trimmed)) {
       flushList();
       htmlBlocks.push(
@@ -415,35 +481,126 @@ function textToHtml(text: string): string {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-    // ── Pattern 3: Main Document Title ──
+    // ── Pattern 3: Main Document Titles & Annexures ──
     if (
       isFirstContentLine ||
-      (/^(?:TURNKEY\s+CONSTRUCTION\s+AGREEMENT|CONTRACT\s+AGREEMENT|NON-DISCLOSURE\s+AGREEMENT|MASTER\s+SERVICES\s+AGREEMENT)/i.test(
-        trimmed
-      ) &&
-        trimmed.length < 80)
+      /^(?:Annexure[-\s\d:]+|Draft\s+Format|Turnkey|Contract\s+Agreement|Master\s+Services|Non-Disclosure)/i.test(trimmed)
     ) {
       flushList();
       isFirstContentLine = false;
       isSecondContentLine = true;
       htmlBlocks.push(
-        `<h2 style="margin-top: 8px; margin-bottom: 8px; font-size: 1.6em; font-weight: 800; color: #002d62; text-align: center; letter-spacing: -0.01em;">${escaped}</h2>`
+        `<h2 style="margin-top: 10px; margin-bottom: 8px; font-size: 1.5em; font-weight: 800; text-align: center; letter-spacing: -0.01em;">${escaped}</h2>`
       );
       i++;
       continue;
     }
 
-    // ── Pattern 4: Subtitle in parentheses ──
-    if (isSecondContentLine && /^\(.*\)$/.test(trimmed) && trimmed.length < 120) {
+    // ── Pattern 4: Subtitles in parentheses (e.g. stamp paper, location) ──
+    if (/^\([^\)]+\)$/.test(trimmed) && trimmed.length < 120) {
       flushList();
-      isSecondContentLine = false;
+      const isStampPaper = /stamp\s+paper/i.test(trimmed);
       htmlBlocks.push(
-        `<p style="margin-top: 0; margin-bottom: 16px; font-size: 1.05em; font-style: italic; color: #64748b; text-align: center;">${escaped}</p>`
+        `<p style="margin-top: 2px; margin-bottom: 12px; font-size: 1.05em; font-style: ${isStampPaper ? 'italic' : 'normal'}; font-weight: ${isStampPaper ? 'normal' : '700'}; text-align: center;">${escaped}</p>`
       );
       i++;
       continue;
     }
     isSecondContentLine = false;
+
+    // ── Pattern 4.5: Contract Preamble Subject / Scope ──
+    if (/^(?:Outsourcing\s+of|Construction\s+of|Provision\s+of|Supply\s+of|Engagement\s+of|Rendering\s+of)\b/i.test(trimmed)) {
+      flushList();
+      htmlBlocks.push(
+        `<p style="margin-top: 8px; margin-bottom: 14px; font-size: 1.05em; text-align: center; line-height: 1.6;">${escaped}</p>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 4.6: Prominent AGREEMENT Header ──
+    if (/^(?:AGREEMENT|DRAFT\s+CONTRACT\s+AGREEMENT)$/i.test(trimmed)) {
+      flushList();
+      htmlBlocks.push(
+        `<h3 style="margin-top: 22px; margin-bottom: 14px; font-size: 1.3em; font-weight: 800; text-align: center; text-decoration: underline; text-underline-offset: 4px; letter-spacing: 0.05em;">${escaped}</h3>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 4.7: Date and Location Line ──
+    if (/^The\s+agreement\s+is\s+made\s+on\s+this\s+day/i.test(trimmed)) {
+      flushList();
+      htmlBlocks.push(
+        `<p style="margin-top: 14px; margin-bottom: 6px; font-size: 1.05em; text-align: center; line-height: 1.6;">${escaped}</p>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 4.8: Legal Parties Header (BETWEEN / AND) ──
+    if (/^(?:BETWEEN|AND)$/i.test(trimmed)) {
+      flushList();
+      htmlBlocks.push(
+        `<p style="margin-top: 18px; margin-bottom: 8px; font-size: 1.1em; font-weight: 800; text-align: center; letter-spacing: 0.06em;">${escaped}</p>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 4.9: Named Parties Under BETWEEN / AND ──
+    if (
+      /^(?:Director|Managing\s+Director|Secretary|Collector|represented\s+by|--+\s*Successful\s+bidder|M\/s\b|The\s+Client\b|The\s+Contractor\b)/i.test(trimmed)
+    ) {
+      flushList();
+      htmlBlocks.push(
+        `<p style="margin-top: 4px; margin-bottom: 8px; font-size: 1.05em; font-weight: 700; text-align: center; line-height: 1.5;">${escaped}</p>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 4.95: Articles / Named Clauses (e.g. "ARTICLE—1", "ARTICLE 4. Duration") ──
+    if (/^(?:ARTICLE|SECTION|CLAUSE|ANNEXURE)[\s\u2014\u2013\-\.:]+[A-Za-z0-9]+.*$/i.test(trimmed)) {
+      flushList();
+      htmlBlocks.push(
+        `<h3 style="margin-top: 24px; margin-bottom: 8px; font-size: 1.2em; font-weight: 800; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px;">${escaped}</h3>`
+      );
+      i++;
+      continue;
+    }
+
+    // ── Pattern 4.96: Standalone Clause Number Joiner (e.g. "4.1" followed by clause text) ──
+    if (/^(\d+\.\d+(?:\.\d+)?|\d+[\.\)])\s*$/.test(trimmed) && i + 1 < rawLines.length) {
+      const nextLine = rawLines[i + 1].trim();
+      if (nextLine && !/^(\d+\.\d+|\d+[\.\)]|ARTICLE|SECTION|CLAUSE)/i.test(nextLine)) {
+        flushList();
+        const nextEscaped = nextLine.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        htmlBlocks.push(
+          `<p style="margin-bottom: 12px; line-height: 1.65; text-align: justify; padding-left: 30px; text-indent: -30px;"><strong style="font-weight: 700;">${escaped}</strong> ${nextEscaped}</p>`
+        );
+        i += 2;
+        continue;
+      }
+    }
+
+    // ── Pattern 4.97: Universal Numbered / Lettered Clause (e.g. "4.13 The replacement...", "a) Cooking...") ──
+    const clauseMatch = trimmed.match(/^(?:(\d+(?:\.\d+)+|\d+[\.\)])|([a-z][\.\)])|([A-Z][\.\)])|([ivxIVX]+[\.\)]))\s+(.*)/);
+    if (clauseMatch) {
+      flushList();
+      const numPart = clauseMatch[1] || clauseMatch[2] || clauseMatch[3] || clauseMatch[4];
+      const bodyPart = clauseMatch[5] || '';
+      const isSub = /^[a-z][\.\)]|^[ivxIVX]+[\.\)]/.test(numPart);
+      const padLeft = isSub ? '44px' : '30px';
+      const indent = isSub ? '-22px' : '-30px';
+      const escNum = numPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escBody = bodyPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      htmlBlocks.push(
+        `<p style="margin-bottom: 12px; line-height: 1.65; text-align: justify; padding-left: ${padLeft}; text-indent: ${indent};"><strong style="font-weight: 700;">${escNum}</strong> ${escBody}</p>`
+      );
+      i++;
+      continue;
+    }
 
     // ── Pattern 5: Numbered Section Headings (e.g. "1. Project Details", "2. Scope of Work") ──
     const sectionHeadingMatch = trimmed.match(/^(\d+[\.\)]\s+[A-Z][A-Za-z0-9\s,&()/-]{2,70})$/);
@@ -506,14 +663,11 @@ function textToHtml(text: string): string {
       continue;
     }
 
-    // ── Pattern 7: Section Highlight Headers (e.g. "Between", "AND", "Items EXCLUDED...") ──
-    if (/^(?:Items\s+EXCLUDED.*|Between|AND|By\s+Client:|By\s+Contractor:)/i.test(trimmed)) {
+    // ── Pattern 7: Section Highlight Headers (e.g. "Items EXCLUDED...") ──
+    if (/^(?:Items\s+EXCLUDED.*|By\s+Client:|By\s+Contractor:)/i.test(trimmed)) {
       flushList();
-      const isParties = /^(?:Between|AND)$/i.test(trimmed);
       htmlBlocks.push(
-        `<h4 style="margin-top: ${isParties ? '12px' : '18px'}; margin-bottom: 6px; font-size: 1.05em; font-weight: 700; color: ${
-          isParties ? '#475569' : '#0f172a'
-        };">${escaped}</h4>`
+        `<h4 style="margin-top: 18px; margin-bottom: 6px; font-size: 1.05em; font-weight: 700;">${escaped}</h4>`
       );
       i++;
       continue;
@@ -563,7 +717,7 @@ function textToHtml(text: string): string {
 
     // ── Pattern 10: Standard Paragraph ──
     flushList();
-    htmlBlocks.push(`<p style="margin-bottom: 10px; line-height: 1.6; font-size: 14px; color: #1e293b;">${escaped}</p>`);
+    htmlBlocks.push(`<p style="margin-bottom: 10px; line-height: 1.6; font-size: 14px;">${escaped}</p>`);
     i++;
   }
 
@@ -1849,6 +2003,8 @@ export default function CompanySettingsPage() {
   const [editedContractIsActive, setEditedContractIsActive] = useState(true);
   const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const [contractTemplateDirty, setContractTemplateDirty] = useState(false);
+  const [editedContractLayoutModel, setEditedContractLayoutModel] = useState<any>(null);
+  const [editorMode, setEditorMode] = useState<'fixed' | 'flowing'>('fixed');
   const [savingContractTemplate, setSavingContractTemplate] = useState(false);
   const [editingNewContractType, setEditingNewContractType] = useState(false);
   const [newContractTypeName, setNewContractTypeName] = useState('');
@@ -1942,6 +2098,8 @@ export default function CompanySettingsPage() {
         setEditedContractName(tmpl.name || type);
         setEditedContractDescription(tmpl?.description || '');
         setEditedContractIsActive(tmpl?.isActive ?? true);
+        setEditedContractLayoutModel(tmpl.layoutModel || null);
+        setEditorMode(tmpl.layoutModel ? 'fixed' : 'flowing');
       } else {
         // No saved template with content — fetch default content from backend
         try {
@@ -1955,11 +2113,17 @@ export default function CompanySettingsPage() {
             setEditedContractName(result.template.name || type);
             setEditedContractDescription(result.template.description || '');
             setEditedContractIsActive(result.template.isActive ?? true);
+            setEditedContractLayoutModel(result.template.layoutModel || null);
+            setEditorMode(result.template.layoutModel ? 'fixed' : 'flowing');
           } else {
             setEditedContractName(type);
+            setEditedContractLayoutModel(null);
+            setEditorMode('flowing');
           }
         } catch { /* ignore */
           setEditedContractName(tmpl?.name || type);
+          setEditedContractLayoutModel(tmpl?.layoutModel || null);
+          setEditorMode(tmpl?.layoutModel ? 'fixed' : 'flowing');
         }
       }
     };
@@ -1998,6 +2162,7 @@ export default function CompanySettingsPage() {
         content: editedContractContent,
         description: editedContractDescription.trim() || null,
         isActive: editedContractIsActive,
+        layoutModel: editedContractLayoutModel || undefined,
       });
       setContractTemplates((prev) => {
         const filtered = prev.filter(t => t.type !== selectedContractType);
@@ -6194,16 +6359,28 @@ export default function CompanySettingsPage() {
                                       try {
                                         const result = await companySettingsService.uploadContractTemplateFile(selectedContractType, file);
                                         const extractedText = (result as any).ocrText;
-                                        const ocrStatus = (result as any).ocrStatus || (extractedText ? 'COMPLETED' : null);
+                                        const cleanHtml = (result as any).html;
+                                        const layoutModel = (result as any).layoutModel;
+                                        const ocrStatus = (result as any).ocrStatus || (extractedText || layoutModel ? 'COMPLETED' : null);
+
+                                        if (layoutModel) {
+                                          setEditedContractLayoutModel(layoutModel);
+                                          setEditorMode('fixed');
+                                        } else {
+                                          setEditedContractLayoutModel(null);
+                                        }
+
+                                        const contentToSave = cleanHtml || (extractedText ? textToHtml(extractedText) : editedContractContent);
 
                                         await companySettingsService.saveContractTemplate(selectedContractType, {
                                           name: editedContractName,
-                                          content: extractedText ? textToHtml(extractedText) : editedContractContent,
+                                          content: contentToSave,
                                           description: editedContractDescription || null,
                                           isActive: editedContractIsActive,
                                           fileUrl: result.fileUrl,
                                           fileName: result.fileName,
                                           fileType: result.fileType,
+                                          layoutModel: layoutModel || null,
                                         });
                                         setContractTemplateDirty(false);
                                         await fetchContractTemplates();
@@ -6215,11 +6392,12 @@ export default function CompanySettingsPage() {
                                             fileType: result.fileType,
                                             ocrStatus: ocrStatus,
                                             ocrText: extractedText || t.ocrText,
-                                            ocrProcessedAt: extractedText ? new Date().toISOString() : t.ocrProcessedAt,
+                                            layoutModel: layoutModel || t.layoutModel,
+                                            ocrProcessedAt: extractedText || layoutModel ? new Date().toISOString() : t.ocrProcessedAt,
                                           } : t
                                         ));
-                                        if (extractedText) {
-                                          setEditedContractContent(textToHtml(extractedText));
+                                        if (cleanHtml || extractedText) {
+                                          setEditedContractContent(cleanHtml || textToHtml(extractedText));
                                           setPageMsg(`Document "${file.name}" uploaded and text extracted via OCR!`);
                                         } else {
                                           setPageMsg(`Document "${file.name}" uploaded and attached to template.`);
@@ -6235,33 +6413,6 @@ export default function CompanySettingsPage() {
                                   {contractFileUploading ? <><Loader2 size={13} className="cs-spin" /> Uploading…</> : <><Upload size={13} /> Choose File</>}
                                 </label>
                               )}
-
-                              <Button
-                                type="button" variant="outline" className="settings-action"
-                                onClick={() => {
-                                  if (!selectedContractTemplate?.fileUrl) {
-                                    setPageMsg('Please upload a PDF/DOC file first before running OCR.');
-                                    return;
-                                  }
-                                  const validOcrText = selectedContractTemplate?.ocrText;
-                                  if (validOcrText && validOcrText !== 'No readable text detected.' && !validOcrText.startsWith('OCR failed')) {
-                                    setEditedContractContent(textToHtml(validOcrText));
-                                    setContractTemplateDirty(true);
-                                    setContractTemplates(prev => prev.map(t => t.type === selectedContractType ? { ...t, ocrStatus: 'COMPLETED' } : t));
-                                    setPageMsg('Extracted OCR text applied to rich editor!');
-                                  } else {
-                                    handleTriggerContractOcr();
-                                  }
-                                }}
-                                disabled={selectedContractTemplate?.ocrStatus === 'PROCESSING' || contractFileUploading}
-                                title="Run OCR on document and insert text into editor"
-                              >
-                                {selectedContractTemplate?.ocrStatus === 'PROCESSING' ? (
-                                  <><Loader2 size={13} className="cs-spin" /> Processing OCR…</>
-                                ) : (
-                                  <><FileText size={13} /> Run OCR & Insert Text</>
-                                )}
-                              </Button>
                             </div>
                           </div>
 
@@ -6271,13 +6422,25 @@ export default function CompanySettingsPage() {
                             <div className="cs-dt-detail__editor-label">
                               <FileSignature size={14} /> Contract Template Content
                             </div>
-                            <RichTextEditor
-                              ref={contractEditorRef}
-                              key={selectedContractType ?? 'none'}
-                              value={editedContractContent}
-                              onChange={handleContractContentChange}
-                              placeholder="Write contract template content here... Use {{contract_number}}, {{vendor_name}}, {{contract_value}}, etc."
-                            />
+
+                            {editedContractLayoutModel ? (
+                              <FixedLayoutDocumentViewer
+                                layoutModel={editedContractLayoutModel}
+                                originalFileUrl={selectedContractTemplate?.fileUrl}
+                                onModelChange={(updated) => {
+                                  setEditedContractLayoutModel(updated);
+                                  setContractTemplateDirty(true);
+                                }}
+                              />
+                            ) : (
+                              <RichTextEditor
+                                ref={contractEditorRef}
+                                key={selectedContractType ?? 'none'}
+                                value={editedContractContent}
+                                onChange={handleContractContentChange}
+                                placeholder="Write contract template content here... Use {{contract_number}}, {{vendor_name}}, {{contract_value}}, etc."
+                              />
+                            )}
                           </div>
                         </div>
 
@@ -7765,7 +7928,6 @@ export default function CompanySettingsPage() {
           </div>
         </SettingsModal>
       )}
-
 
     </div>
   );
