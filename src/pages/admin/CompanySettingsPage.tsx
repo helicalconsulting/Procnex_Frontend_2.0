@@ -9,7 +9,7 @@ import {
   Save, Settings, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, ArrowLeft, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
   Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw, Wallet, Boxes, Truck,
-  Columns, Maximize2,
+  Columns, Maximize2, Minimize2,
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -281,14 +281,88 @@ function textToHtml(text: string): string {
       continue;
     }
 
-    // ── Pattern 1: Table Detection (e.g. Stage / Work Completed / Payment or Pipe Tables) ──
-    if (
-      (trimmed.toLowerCase().includes('stage') && trimmed.toLowerCase().includes('payment')) ||
-      /^(?:Sr\.?\s+.*|Item\s+.*Amount|#\s+.*|No\.?\s+.*Rate.*)/i.test(trimmed)
-    ) {
+    // ── Pattern 1A: Markdown Pipe Table (| col 1 | col 2 |) ──
+    if (trimmed.startsWith('|') || (trimmed.includes('|') && trimmed.split('|').length >= 3)) {
       flushList();
-      const tableRows: Array<{ col1: string; col2: string; col3: string }> = [];
+      const tableLines: string[] = [];
+      let nextIdx = i;
+      while (nextIdx < rawLines.length) {
+        const nextLine = rawLines[nextIdx].trim();
+        if (nextLine.startsWith('|') || (nextLine.includes('|') && nextLine.split('|').length >= 3)) {
+          tableLines.push(nextLine);
+          nextIdx++;
+        } else {
+          break;
+        }
+      }
+
+      if (tableLines.length >= 2) {
+        // Filter out markdown divider rows like |---|---|
+        const parsedRows = tableLines
+          .filter((tl) => !/^[\|\s\-:\+]+$/.test(tl))
+          .map((tl) =>
+            tl
+              .split('|')
+              .map((c) => c.trim())
+              .filter((c, idx, arr) => (idx === 0 && !c ? false : idx === arr.length - 1 && !c ? false : true))
+          );
+
+        if (parsedRows.length > 0) {
+          const headerRow = parsedRows[0];
+          const bodyRows = parsedRows.slice(1);
+          const ths = headerRow
+            .map((c) => `<th style="padding: 10px 14px; border: 1px solid #64748b; background-color: #f1f5f9; text-align: left; font-weight: 700; color: #0f172a;">${c}</th>`)
+            .join('');
+          const trs = bodyRows
+            .map(
+              (r, rIdx) => `<tr style="background-color: ${rIdx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                ${r.map((c) => `<td style="padding: 8px 12px; border: 1px solid #cbd5e1; color: #1e293b; vertical-align: top;">${c}</td>`).join('')}
+              </tr>`
+            )
+            .join('');
+
+          htmlBlocks.push(`
+            <table border="1" style="width: 100%; border-collapse: collapse; border: 1.5px solid #64748b; margin: 18px 0; font-size: 13.5px;">
+              <thead><tr>${ths}</tr></thead>
+              <tbody>${trs}</tbody>
+            </table>
+          `);
+          i = nextIdx;
+          continue;
+        }
+      }
+    }
+
+    // ── Pattern 1B: Structured Numbered / Checklist / Tabular Data Tables ──
+    // Matches headers like "# Check list of document Yes/ No" or "S.No Particulars Status"
+    // or consecutive numbered rows (1 RFP document..., 2 Local office...)
+    const isHeaderLine =
+      /^#\s+|^Sr\.?\s*|^S\.?No\.?\s*|^Item\s*|^No\.?\s*|^Stage\b|^Code\b/i.test(trimmed) ||
+      (/^(?:Check\s*list|Document|Description|Particulars|Scope|Item|Deliverable|Milestone)\b/i.test(trimmed) &&
+        /(?:Yes\s*\/?\s*No|Status|Remarks|Date|Amount|Qty|Rate|Payment|Verified)/i.test(trimmed));
+
+    if (isHeaderLine) {
+      const candidateRows: Array<{ col1: string; col2: string; col3?: string }> = [];
       let nextIdx = i + 1;
+      let headerCol1 = '#';
+      let headerCol2 = 'Description';
+      let headerCol3 = '';
+
+      // Parse header text into columns
+      const rawHeader = trimmed.replace(/^#\s*/, '').trim();
+      const yesNoMatch = rawHeader.match(/\b(Yes\s*\/?\s*No|Status|Remarks|Payment|Amount|Rate|Verified)\b/i);
+      if (yesNoMatch) {
+        headerCol3 = yesNoMatch[1].replace(/\s+/g, ' ');
+        headerCol2 = rawHeader.substring(0, rawHeader.indexOf(yesNoMatch[0])).trim() || 'Check list of document';
+      } else {
+        const splitCols = rawHeader.split(/\t|\s{3,}/);
+        if (splitCols.length >= 2) {
+          headerCol2 = splitCols[0].trim();
+          headerCol3 = splitCols.slice(1).join(' ').trim();
+        } else {
+          headerCol2 = rawHeader || 'Description';
+        }
+      }
 
       while (nextIdx < rawLines.length) {
         const nextLine = rawLines[nextIdx].trim();
@@ -296,39 +370,63 @@ function textToHtml(text: string): string {
           nextIdx++;
           continue;
         }
-        // Match row pattern: "1. Mobilisation 10%" or "1. Plinth Level 10%" or similar
-        const rowMatch = nextLine.match(/^(\d+[\.\)]\s*)\s+(.+?)\s+(\d+(?:\.\d+)?%|\$?\d[\d,.]*)$/);
+
+        // Check if nextLine starts with a row number (e.g., "1 ...", "2. ...", "1) ...")
+        const rowMatch = nextLine.match(/^(\d+)[\.\)]?\s+(.+)$/);
         if (rowMatch) {
-          tableRows.push({
-            col1: rowMatch[1].trim(),
-            col2: rowMatch[2].trim(),
-            col3: rowMatch[3].trim(),
+          const rowNum = rowMatch[1];
+          let rowRest = rowMatch[2].trim();
+          let rowCol3 = '';
+
+          // Check if rowRest ends with a status or separate column (e.g. "Yes", "No", "10%", "$500")
+          const endValueMatch =
+            rowRest.match(/\s{2,}(Yes\b|No\b|N\/A\b|\d+(?:\.\d+)?%|\$?\d[\d,.]*)$/i) ||
+            rowRest.match(/\s+(Yes\b|No\b|N\/A\b|\d+(?:\.\d+)?%|\$?\d[\d,.]*)$/i);
+          if (endValueMatch && headerCol3) {
+            rowCol3 = endValueMatch[1].trim();
+            rowRest = rowRest.substring(0, rowRest.lastIndexOf(endValueMatch[0])).trim();
+          }
+
+          candidateRows.push({
+            col1: rowNum,
+            col2: rowRest,
+            col3: rowCol3 || (headerCol3 ? '' : undefined),
           });
           nextIdx++;
+        } else if (/^(?:Total|Subtotal|Note:|ANNEXURE|ARTICLE|SECTION|\bIN\s+WITNESS\b)/i.test(nextLine)) {
+          break;
+        } else if (candidateRows.length > 0 && candidateRows.length < 2) {
+          break;
         } else {
           break;
         }
       }
 
-      if (tableRows.length >= 2) {
-        const rowsHtml = tableRows
+      if (candidateRows.length >= 2) {
+        flushList();
+        const hasCol3 = Boolean(headerCol3);
+        const col1Width = '8%';
+        const col2Width = hasCol3 ? '72%' : '92%';
+        const col3Width = hasCol3 ? '20%' : '0%';
+
+        const rowsHtml = candidateRows
           .map(
             (r, rIdx) => `
-          <tr style="background-color: ${rIdx % 2 === 0 ? 'transparent' : 'rgba(148, 163, 184, 0.06)'}; color: inherit;">
-            <td style="padding: 10px 14px; border: 1px solid #475569; text-align: center; font-weight: 600; width: 14%; white-space: nowrap; color: inherit;">${r.col1}</td>
-            <td style="padding: 10px 14px; border: 1px solid #475569; text-align: left; width: 66%; color: inherit;">${r.col2}</td>
-            <td style="padding: 10px 14px; border: 1px solid #475569; text-align: center; font-weight: 600; color: inherit; width: 20%; white-space: nowrap;">${r.col3}</td>
+          <tr style="background-color: ${rIdx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+            <td style="padding: 10px 14px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; width: ${col1Width}; color: #1e293b; vertical-align: top;">${r.col1}</td>
+            <td style="padding: 10px 14px; border: 1px solid #cbd5e1; text-align: left; width: ${col2Width}; color: #1e293b; vertical-align: top; line-height: 1.5;">${r.col2}</td>
+            ${hasCol3 ? `<td style="padding: 10px 14px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; color: #1e293b; width: ${col3Width}; vertical-align: top;">${r.col3 || '<span style="color: #94a3b8;">[ &nbsp; ]</span>'}</td>` : ''}
           </tr>`
           )
           .join('');
 
         htmlBlocks.push(`
-          <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #475569; font-size: 14px; margin: 18px 0; table-layout: auto;">
+          <table border="1" style="width: 100%; border-collapse: collapse; border: 1.5px solid #64748b; font-size: 13.5px; margin: 18px 0; table-layout: auto;">
             <thead>
-              <tr style="background-color: rgba(148, 163, 184, 0.16); color: inherit;">
-                <th style="padding: 11px 14px; border: 1px solid #475569; text-align: center; width: 14%; font-weight: 700; white-space: nowrap; color: inherit;">Stage</th>
-                <th style="padding: 11px 14px; border: 1px solid #475569; text-align: left; width: 66%; font-weight: 700; color: inherit;">Work Completed</th>
-                <th style="padding: 11px 14px; border: 1px solid #475569; text-align: center; width: 20%; font-weight: 700; white-space: nowrap; color: inherit;">Payment</th>
+              <tr style="background-color: #f1f5f9;">
+                <th style="padding: 11px 14px; border: 1px solid #94a3b8; text-align: center; width: ${col1Width}; font-weight: 700; color: #0f172a;">${headerCol1}</th>
+                <th style="padding: 11px 14px; border: 1px solid #94a3b8; text-align: left; width: ${col2Width}; font-weight: 700; color: #0f172a;">${headerCol2}</th>
+                ${hasCol3 ? `<th style="padding: 11px 14px; border: 1px solid #94a3b8; text-align: center; width: ${col3Width}; font-weight: 700; color: #0f172a;">${headerCol3}</th>` : ''}
               </tr>
             </thead>
             <tbody>
@@ -2018,6 +2116,17 @@ export default function CompanySettingsPage() {
   const [selectedPlaceholderCategory, setSelectedPlaceholderCategory] = useState<string>('all');
   const [insertedPlaceholderNotice, setInsertedPlaceholderNotice] = useState<string | null>(null);
   const contractEditorRef = useRef<RichTextEditorRef>(null);
+  const [isContractFullscreen, setIsContractFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isContractFullscreen) {
+        setIsContractFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isContractFullscreen]);
 
   const resolveDocumentUrl = (url?: string | null): string => {
     if (!url) return '';
@@ -6472,48 +6581,90 @@ export default function CompanySettingsPage() {
                             </div>
                           </div>
 
-                          <div className="cs-dt-detail__editor-wrap">
-                            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                          <div className={isContractFullscreen ? "fixed inset-0 z-[100] bg-slate-950 p-4 md:p-6 flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150" : "cs-dt-detail__editor-wrap"}>
+                            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap shrink-0">
                               <div className="cs-dt-detail__editor-label flex items-center gap-2">
                                 <FileSignature size={14} /> Contract Template Content
+                                {isContractFullscreen && (
+                                  <span className="text-[11px] font-normal px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                    Full Screen Mode
+                                  </span>
+                                )}
                               </div>
 
-                              {selectedContractTemplate?.fileUrl && (
-                                <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
-                                  <button
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {selectedContractTemplate?.fileUrl && (
+                                  <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                                    <button
+                                      type="button"
+                                      onClick={() => setContractViewMode('side-by-side')}
+                                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                                        contractViewMode === 'side-by-side'
+                                          ? 'bg-blue-600 text-white shadow-sm'
+                                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                      }`}
+                                      title="Side-by-side view comparing original document with editable rich text"
+                                    >
+                                      <Columns size={13} />
+                                      Side-by-Side (PDF + Editor)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setContractViewMode('editor')}
+                                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                                        contractViewMode === 'editor'
+                                          ? 'bg-blue-600 text-white shadow-sm'
+                                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                      }`}
+                                      title="Full-width rich text editor"
+                                    >
+                                      <Maximize2 size={13} />
+                                      Full Editor
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Full Screen Toggle */}
+                                <button
+                                  type="button"
+                                  onClick={() => setIsContractFullscreen(prev => !prev)}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 border ${
+                                    isContractFullscreen
+                                      ? 'bg-amber-600 text-white border-amber-500 shadow-sm'
+                                      : 'bg-slate-900/90 text-slate-300 border-slate-800 hover:text-white hover:bg-slate-800/80'
+                                  }`}
+                                  title={isContractFullscreen ? "Exit full screen view (Esc)" : "Expand editor & PDF to full screen workspace"}
+                                >
+                                  {isContractFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                                  {isContractFullscreen ? 'Exit Full Screen' : 'Full Screen'}
+                                </button>
+
+                                {isContractFullscreen && (
+                                  <Button
+                                    variant="default"
+                                    size="sm"
                                     type="button"
-                                    onClick={() => setContractViewMode('side-by-side')}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-                                      contractViewMode === 'side-by-side'
-                                        ? 'bg-blue-600 text-white shadow-sm'
-                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                                    }`}
-                                    title="Side-by-side view comparing original document with editable rich text"
+                                    className="cs-dt-action-btn cs-dt-action-btn--primary !h-7 !px-3 !text-xs"
+                                    onClick={handleSaveContractTemplate}
+                                    disabled={savingContractTemplate || !contractTemplateDirty}
                                   >
-                                    <Columns size={13} />
-                                    Side-by-Side (PDF + Editor)
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setContractViewMode('editor')}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-                                      contractViewMode === 'editor'
-                                        ? 'bg-blue-600 text-white shadow-sm'
-                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                                    }`}
-                                    title="Full-width rich text editor"
-                                  >
-                                    <Maximize2 size={13} />
-                                    Full Editor
-                                  </button>
-                                </div>
-                              )}
+                                    {savingContractTemplate ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                                    {savingContractTemplate ? 'Saving…' : 'Save'}
+                                  </Button>
+                                )}
+                              </div>
                             </div>
 
                             {contractViewMode === 'side-by-side' && selectedContractTemplate?.fileUrl ? (
-                              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                              <div className={`grid grid-cols-1 xl:grid-cols-2 gap-4 items-start ${isContractFullscreen ? 'flex-1 h-[calc(100vh-90px)] overflow-hidden' : ''}`}>
                                 {/* Left: Original Document */}
-                                <div className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden" style={{ minHeight: '680px', height: '680px' }}>
+                                <div
+                                  className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden"
+                                  style={{
+                                    minHeight: isContractFullscreen ? '100%' : '680px',
+                                    height: isContractFullscreen ? '100%' : '680px',
+                                  }}
+                                >
                                   <div className="flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700/60 text-xs text-slate-300 shrink-0">
                                     <div className="flex items-center gap-2 truncate font-medium">
                                       <FileText size={14} className="text-blue-400 shrink-0" />
@@ -6533,7 +6684,7 @@ export default function CompanySettingsPage() {
                                       <iframe
                                         src={`${resolveDocumentUrl(selectedContractTemplate.fileUrl)}#toolbar=0&navpanes=0`}
                                         className="w-full h-full border-0 bg-white"
-                                        style={{ minHeight: '640px', height: '100%' }}
+                                        style={{ minHeight: isContractFullscreen ? '100%' : '640px', height: '100%' }}
                                         title="Original Document PDF"
                                       />
                                     ) : (
@@ -6549,7 +6700,13 @@ export default function CompanySettingsPage() {
                                 </div>
 
                                 {/* Right: Single Unified TinyMCE Editor */}
-                                <div className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden" style={{ minHeight: '680px' }}>
+                                <div
+                                  className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden"
+                                  style={{
+                                    minHeight: isContractFullscreen ? '100%' : '680px',
+                                    height: isContractFullscreen ? '100%' : '680px',
+                                  }}
+                                >
                                   <div className="flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700/60 text-xs text-slate-300 shrink-0">
                                     <div className="flex items-center gap-2 font-medium">
                                       <Edit3 size={14} className="text-emerald-400" />
@@ -6557,27 +6714,29 @@ export default function CompanySettingsPage() {
                                     </div>
                                     <span className="text-[11px] text-slate-400">Word-wrapped & formatted</span>
                                   </div>
-                                  <div className="flex-1">
+                                  <div className="flex-1 overflow-auto">
                                     <RichTextEditor
                                       ref={contractEditorRef}
                                       key={selectedContractType ?? 'none'}
                                       value={editedContractContent}
                                       onChange={handleContractContentChange}
                                       placeholder="Write or edit contract template content here..."
-                                      minHeight={630}
+                                      minHeight={isContractFullscreen ? 800 : 630}
                                     />
                                   </div>
                                 </div>
                               </div>
                             ) : (
-                              <div className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden">
+                              <div
+                                className={`flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden ${isContractFullscreen ? 'flex-1 h-[calc(100vh-90px)]' : ''}`}
+                              >
                                 <RichTextEditor
                                   ref={contractEditorRef}
                                   key={selectedContractType ?? 'none'}
                                   value={editedContractContent}
                                   onChange={handleContractContentChange}
                                   placeholder="Write or edit contract template content here..."
-                                  minHeight={650}
+                                  minHeight={isContractFullscreen ? 850 : 650}
                                 />
                               </div>
                             )}

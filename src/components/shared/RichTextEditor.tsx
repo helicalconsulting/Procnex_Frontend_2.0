@@ -132,6 +132,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
         ],
         quickbars_selection_toolbar: 'bold italic | quicklink h2 h3 blockquote quicktable',
         contextmenu: 'link image table',
+        table_default_attributes: {
+          border: '1',
+        },
+        table_default_styles: {
+          'border-collapse': 'collapse',
+          width: '100%',
+        },
+        table_responsive_width: true,
+        table_grid: true,
+        table_appearance_options: true,
         skin: isDark ? 'oxide-dark' : 'oxide',
         content_css: isDark ? 'dark' : 'default',
         content_style: `
@@ -163,13 +173,27 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             background: transparent;
           }
           table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 1rem 0;
+            border-collapse: collapse !important;
+            width: 100% !important;
+            margin: 1.25rem 0 !important;
+            border: 1.5px solid #64748b !important;
           }
-          table td, table th {
-            border: 1px solid #cbd5e1;
-            padding: 8px 12px;
+          table th {
+            background-color: #f1f5f9 !important;
+            border: 1px solid #94a3b8 !important;
+            padding: 8px 12px !important;
+            font-weight: 700 !important;
+            text-align: left;
+            color: #0f172a !important;
+          }
+          table td {
+            border: 1px solid #cbd5e1 !important;
+            padding: 8px 12px !important;
+            vertical-align: top;
+            color: #1e293b !important;
+          }
+          table tr:nth-child(even) td {
+            background-color: #f8fafc;
           }
           img {
             max-width: 100%;
