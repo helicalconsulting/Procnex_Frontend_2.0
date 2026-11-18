@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Check,
   RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import type { CanonicalPage, CanonicalElement } from '../../types/documentExtraction';
 import { API_BASE } from '../../api/client';
@@ -37,6 +38,106 @@ interface FixedLayoutDocumentViewerProps {
   onModelChange?: (updatedModel: CanonicalDocument) => void;
   readOnly?: boolean;
 }
+
+// ─── Native Canvas Renderer for Original PDF Pages ───────────
+// Renders the original PDF page cleanly onto an HTML5 canvas without
+// any nested browser PDF viewer chrome, toolbars, or thumbnail sidebars.
+const PdfPageCanvas: React.FC<{
+  pdfUrl: string;
+  pageNumber: number;
+}> = ({ pdfUrl, pageNumber }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+    let renderTask: any = null;
+
+    async function renderPage() {
+      if (!canvasRef.current || !pdfUrl) return;
+      setLoading(true);
+      setError(null);
+
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+        }
+
+        const loadingTask = pdfjsLib.getDocument({
+          url: pdfUrl,
+          withCredentials: false,
+        });
+        const pdf = await loadingTask.promise;
+        if (isCancelled) return;
+
+        const safePageNum = Math.min(Math.max(1, pageNumber), pdf.numPages);
+        const page = await pdf.getPage(safePageNum);
+        if (isCancelled) return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Render at 2x scale for sharp, high-DPI text resolution
+        const scale = 2.0;
+        const viewport = page.getViewport({ scale });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        renderTask = page.render({
+          canvasContext: ctx,
+          viewport,
+        });
+
+        await renderTask.promise;
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      } catch (err: any) {
+        if (!isCancelled) {
+          console.warn('PDF canvas render error:', err);
+          setError(err?.message || 'Failed to render PDF page');
+          setLoading(false);
+        }
+      }
+    }
+
+    renderPage();
+
+    return () => {
+      isCancelled = true;
+      if (renderTask && typeof renderTask.cancel === 'function') {
+        try { renderTask.cancel(); } catch {}
+      }
+    };
+  }, [pdfUrl, pageNumber]);
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#ffffff' }}>
+      <canvas ref={canvasRef} className="fld-original-img" />
+      {loading && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 2 }}>
+          <Loader2 className="cs-spin" size={24} style={{ color: '#0284c7' }} />
+        </div>
+      )}
+      {error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13, padding: 16, textAlign: 'center', backgroundColor: '#ffffff' }}>
+          Original document preview is loading...
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps> = ({
   layoutModel,
@@ -140,13 +241,15 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
         return { url: resolvedFileUrl, isPdf: false };
       }
 
-      // Render the original PDF page cleanly as a high-res image via the backend renderer.
-      // This completely removes the nested browser PDF viewer chrome (dark toolbar, thumbnail sidebar, etc.)
+      // For PDF files: route Cloudinary documents through backend proxy so pdfjs can fetch it cleanly
       const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
-      const pageImageUrl = `${backendBase}/api/vendors/pdf-page-image?url=${encodeURIComponent(resolvedFileUrl)}&page=${activePageIndex + 1}`;
-      return { url: pageImageUrl, isPdf: false };
+      const pdfFetchUrl = resolvedFileUrl.startsWith('https://res.cloudinary.com')
+        ? `${backendBase}/api/vendors/pdf-view?url=${encodeURIComponent(resolvedFileUrl)}`
+        : resolvedFileUrl;
+
+      return { url: pdfFetchUrl, isPdf: true };
     },
-    [originalFileUrl, originalFileName, fileType, imageLoadError, pages.length, activePageIndex]
+    [originalFileUrl, originalFileName, fileType, imageLoadError, pages.length]
   );
 
   const pageSource = getOriginalPageSource(currentPage);
@@ -558,11 +661,9 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
             <>
               {pageSource ? (
                 pageSource.isPdf ? (
-                  <iframe
-                    src={`${pageSource.url}#page=${activePageIndex + 1}`}
-                    title={`Page ${activePageIndex + 1}`}
-                    className="fld-original-img"
-                    style={{ border: 'none' }}
+                  <PdfPageCanvas
+                    pdfUrl={pageSource.url}
+                    pageNumber={activePageIndex + 1}
                   />
                 ) : (
                   <img
