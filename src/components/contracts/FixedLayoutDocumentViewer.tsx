@@ -39,106 +39,6 @@ interface FixedLayoutDocumentViewerProps {
   readOnly?: boolean;
 }
 
-// ─── Native Canvas Renderer for Original PDF Pages ───────────
-// Renders the original PDF page cleanly onto an HTML5 canvas without
-// any nested browser PDF viewer chrome, toolbars, or thumbnail sidebars.
-const PdfPageCanvas: React.FC<{
-  pdfUrl: string;
-  pageNumber: number;
-}> = ({ pdfUrl, pageNumber }) => {
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isCancelled = false;
-    let renderTask: any = null;
-
-    async function renderPage() {
-      if (!canvasRef.current || !pdfUrl) return;
-      setLoading(true);
-      setError(null);
-
-      try {
-        const pdfjsLib = await import('pdfjs-dist');
-        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
-        }
-
-        const loadingTask = pdfjsLib.getDocument({
-          url: pdfUrl,
-          withCredentials: false,
-        });
-        const pdf = await loadingTask.promise;
-        if (isCancelled) return;
-
-        const safePageNum = Math.min(Math.max(1, pageNumber), pdf.numPages);
-        const page = await pdf.getPage(safePageNum);
-        if (isCancelled) return;
-
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        // Render at 2x scale for sharp, high-DPI text resolution
-        const scale = 2.0;
-        const viewport = page.getViewport({ scale });
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        renderTask = page.render({
-          canvasContext: ctx,
-          viewport,
-        });
-
-        await renderTask.promise;
-        if (!isCancelled) {
-          setLoading(false);
-        }
-      } catch (err: any) {
-        if (!isCancelled) {
-          console.warn('PDF canvas render error:', err);
-          setError(err?.message || 'Failed to render PDF page');
-          setLoading(false);
-        }
-      }
-    }
-
-    renderPage();
-
-    return () => {
-      isCancelled = true;
-      if (renderTask && typeof renderTask.cancel === 'function') {
-        try { renderTask.cancel(); } catch {}
-      }
-    };
-  }, [pdfUrl, pageNumber]);
-
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#ffffff' }}>
-      <canvas ref={canvasRef} className="fld-original-img" />
-      {loading && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 2 }}>
-          <Loader2 className="cs-spin" size={24} style={{ color: '#0284c7' }} />
-        </div>
-      )}
-      {error && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13, padding: 16, textAlign: 'center', backgroundColor: '#ffffff' }}>
-          Original document preview is loading...
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps> = ({
   layoutModel,
   originalFileUrl,
@@ -211,11 +111,11 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
 
   // Derive preview image/document URL for Original Mode
   const getOriginalPageSource = useCallback(
-    (page?: CanonicalPage): { url: string; isPdf: boolean } | null => {
+    (page?: CanonicalPage): string | null => {
       // 1. If page has a raster preview from PDF extraction, use it directly as high-res image
       if (page?.previewImageUrl && !imageLoadError) {
         const resolvedPreview = resolveBackendUrl(page.previewImageUrl);
-        if (resolvedPreview) return { url: resolvedPreview, isPdf: false };
+        if (resolvedPreview) return resolvedPreview;
       }
 
       const resolvedFileUrl = resolveBackendUrl(originalFileUrl);
@@ -229,30 +129,19 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
         !imageLoadError
       );
 
-      const isKnownPdf = Boolean(
-        (originalFileName && /\.pdf$/i.test(originalFileName)) ||
-        (fileType && fileType.toLowerCase().includes('pdf')) ||
-        /\.pdf(\?|$)/i.test(resolvedFileUrl) ||
-        pages.length > 1 ||
-        !isKnownImage
-      );
-
-      if (isKnownImage && !isKnownPdf) {
-        return { url: resolvedFileUrl, isPdf: false };
+      if (isKnownImage) {
+        return resolvedFileUrl;
       }
 
-      // For PDF files: route Cloudinary documents through backend proxy so pdfjs can fetch it cleanly
+      // For PDF files: route through backend pdf-page-image endpoint to render a crystal-clear PNG of the exact page
       const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
-      const pdfFetchUrl = resolvedFileUrl.startsWith('https://res.cloudinary.com')
-        ? `${backendBase}/api/vendors/pdf-view?url=${encodeURIComponent(resolvedFileUrl)}`
-        : resolvedFileUrl;
-
-      return { url: pdfFetchUrl, isPdf: true };
+      const pageNum = activePageIndex + 1;
+      return `${backendBase}/api/vendors/pdf-page-image?url=${encodeURIComponent(resolvedFileUrl)}&page=${pageNum}`;
     },
-    [originalFileUrl, originalFileName, fileType, imageLoadError, pages.length]
+    [originalFileUrl, originalFileName, fileType, imageLoadError, activePageIndex]
   );
 
-  const pageSource = getOriginalPageSource(currentPage);
+  const pageSourceUrl = getOriginalPageSource(currentPage);
 
   // Handle text edit on element
   const handleTextChange = (elementId: string, newText: string) => {
@@ -659,32 +548,35 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
         >
           {viewMode === 'original' ? (
             <>
-              {pageSource ? (
-                pageSource.isPdf ? (
-                  <PdfPageCanvas
-                    pdfUrl={pageSource.url}
-                    pageNumber={activePageIndex + 1}
-                  />
-                ) : (
+              {pageSourceUrl ? (
+                <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#ffffff' }}>
                   <img
-                    src={pageSource.url}
+                    key={pageSourceUrl}
+                    src={pageSourceUrl}
                     alt={`Page ${activePageIndex + 1}`}
                     className="fld-original-img"
                     onError={() => setImageLoadError(true)}
                   />
-                )
+                </div>
               ) : (
                 <div
                   style={{
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     height: '100%',
                     color: '#64748b',
                     fontSize: 13,
+                    padding: 24,
+                    textAlign: 'center',
                   }}
                 >
-                  Original document preview not available
+                  <FileText size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
+                  <div>Original document preview not available</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                    Please attach a PDF or image file above
+                  </div>
                 </div>
               )}
             </>
