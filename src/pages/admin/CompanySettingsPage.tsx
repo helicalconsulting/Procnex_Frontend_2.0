@@ -246,7 +246,7 @@ function PredictiveMatchCard({
 // ─── Utility: Clean spaced-out OCR text & artifacts ───────────
 function cleanSpacedText(str: string): string {
   if (!str) return '';
-  return str
+  let s = str
     // Collapse single-letter runs separated by space (e.g. "T o b e m a d e o n" -> "To be made on", "A n n e x u r e" -> "Annexure")
     .replace(/(?<=\b[A-Za-z])\s+(?=[A-Za-z]\b)/g, '')
     // Fix common OCR broken words where letters were split
@@ -255,6 +255,28 @@ function cleanSpacedText(str: string): string {
     .replace(/\bFo\s*r\s*m\s*a\s*t\b/gi, 'Format')
     .replace(/\bContr\s*ac\s*t\b/gi, 'Contract')
     .replace(/\bAg\s*r\s*e\s*e\s*m\s*e\s*n\s*t\b/gi, 'Agreement')
+    .replace(/\bR\s*e\s*leva\s*nt\b/gi, 'Relevant')
+    .replace(/\bexpe\s*rie\s*nc\s*e\b/gi, 'experience')
+    .replace(/\bc\s*ertific\s*a\s*tes\b/gi, 'certificates')
+    .replace(/\bAnnua\s*l\b/gi, 'Annual')
+    .replace(/\bt\s*urnov\s*e\s*r\b/gi, 'turnover')
+    .replace(/\bsta\s*tem\s*e\s*nt\b/gi, 'statement')
+    .replace(/\by\s*e\s*a\s*rs\b/gi, 'years')
+    .replace(/\be\s*xc\s*lusi\s*ve\s*l\s*y\b/gi, 'exclusively')
+    .replace(/\boutso\s*urc\s*ing\b/gi, 'outsourcing')
+    .replace(/\bassignm\s*e\s*nts\b/gi, 'assignments')
+    .replace(/\bce\s*rtifie\s*d\b/gi, 'certified')
+    .replace(/\bb\s*y\s+C\s*h\s*a\s*rte\s*re\s*d\s+Ac\s*c\s*ountant\b/gi, 'by Chartered Accountant')
+    .replace(/\bC\s*h\s*a\s*rte\s*re\s*d\b/gi, 'Chartered')
+    .replace(/\bAc\s*c\s*ountant\b/gi, 'Accountant')
+    .replace(/\bL\s*e\s*tt\s*er\b/gi, 'Letter')
+    .replace(/\bo\s*f\s+c\s*om\s*for\s*t\b/gi, 'of comfort')
+    .replace(/\bc\s*om\s*for\s*t\b/gi, 'comfort')
+    .replace(/\bst\s*a\s*nding\b/gi, 'standing')
+    .replace(/\bfr\s*om\b/gi, 'from')
+    .replace(/\bdi\s*ffe\s*re\s*nt\b/gi, 'different')
+    .replace(/\bcu\s*stom\s*er\b/gi, 'customer')
+    .replace(/\borga\s*niz\s*a\s*ti\s*ons\b/gi, 'organizations')
     .replace(/\bte\s*a\s*c\s*hing\b/gi, 'teaching')
     .replace(/\bs\s*e\s*rvic\s*e\s*s\b/gi, 'services')
     .replace(/\bs\s*e\s*le\s*c\s*ted\b/gi, 'selected')
@@ -264,6 +286,7 @@ function cleanSpacedText(str: string): string {
     .replace(/\bS\s*c\s*hools\b/gi, 'Schools')
     .replace(/\bdist\s*ric\s*ts\b/gi, 'districts')
     .replace(/\bC\s*hha\s*t{1,2}isga\s*r\s*h\b/gi, 'Chhattisgarh');
+  return s;
 }
 
 // ─── Utility: Convert structured plain text to HTML ─────────
@@ -394,23 +417,50 @@ function textToHtml(text: string): string {
           continue;
         }
 
-        // Check if nextLine starts with a row number (e.g., "1 ...", "2. ...", "1) ...")
-        const rowMatch = nextLine.match(/^(\d+)[\.\)]?\s+(.+)$/);
-        if (rowMatch) {
-          const rowNum = rowMatch[1];
-          let rowRest = rowMatch[2].trim();
+        const expectedNum = candidateRows.length + 1;
+        let rowNum = '';
+        let rowRest = '';
+
+        const standardMatch = nextLine.match(/^(\d+)[\.\)]?\s{1,}(.+)$/);
+        const bareMatch = nextLine.match(/^(\d+)[\.\)]?$/);
+
+        if (standardMatch) {
+          const numVal = parseInt(standardMatch[1], 10);
+          // Only accept as a new row if it fits sequence or starts the table
+          if (candidateRows.length === 0 || numVal === expectedNum || (numVal > 0 && numVal <= candidateRows.length + 2)) {
+            rowNum = String(numVal);
+            rowRest = standardMatch[2].trim();
+          }
+        } else if (bareMatch && nextIdx + 1 < rawLines.length) {
+          const numVal = parseInt(bareMatch[1], 10);
+          if (candidateRows.length === 0 || numVal === expectedNum || (numVal > 0 && numVal <= candidateRows.length + 2)) {
+            rowNum = String(numVal);
+            nextIdx++;
+            rowRest = rawLines[nextIdx].trim();
+          }
+        }
+
+        if (rowNum) {
           let rowCol3 = '';
 
-          // Lookahead for continuation lines of this row before the next numbered row
+          // Lookahead for continuation lines of this row before the truly next row number
           let subIdx = nextIdx + 1;
+          const nextExpected = parseInt(rowNum, 10) + 1;
           while (subIdx < rawLines.length) {
             const subLine = rawLines[subIdx].trim();
             if (!subLine) {
               subIdx++;
               continue;
             }
+            // Check if subLine is genuinely the next numbered row
+            const nextRowMatch = subLine.match(/^(\d+)[\.\)]?(?:\s+(.+)|$)/);
+            if (nextRowMatch) {
+              const nextVal = parseInt(nextRowMatch[1], 10);
+              if (nextVal === nextExpected || nextVal === candidateRows.length + 2) {
+                break; // Genuinely the next row
+              }
+            }
             if (
-              /^\d+[\.\)]?\s+/.test(subLine) ||
               /^(?:Total|Subtotal|Note:|ANNEXURE|ARTICLE|SECTION|\bIN\s+WITNESS\b|This\s+checklist)/i.test(subLine)
             ) {
               break;
@@ -6502,6 +6552,16 @@ export default function CompanySettingsPage() {
                                   <FileText size={13} />
                                   <span>{selectedContractTemplate.fileName || 'Uploaded document'}</span>
                                   <a href={resolveDocumentUrl(selectedContractTemplate.fileUrl)} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
+                                  <button
+                                    type="button"
+                                    onClick={handleTriggerContractOcr}
+                                    disabled={selectedContractTemplate?.ocrStatus === 'PROCESSING'}
+                                    className="px-2.5 py-1 text-xs font-medium rounded bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 transition-all flex items-center gap-1.5"
+                                    title="Re-run extraction from uploaded document and build formatted table"
+                                  >
+                                    <RefreshCw size={11} className={selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'animate-spin' : ''} />
+                                    {selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'Extracting…' : 'Run OCR & Build Table'}
+                                  </button>
                                   <Button aria-label="Remove" variant="ghost" size="icon-sm"
                                     type="button"
                                     className="settings-action"
@@ -6649,11 +6709,28 @@ export default function CompanySettingsPage() {
                                   </div>
                                 )}
 
+                                {selectedContractTemplate?.fileUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={handleTriggerContractOcr}
+                                    disabled={selectedContractTemplate?.ocrStatus === 'PROCESSING'}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 bg-blue-950/70 text-blue-300 border border-blue-800 hover:bg-blue-900/80 hover:text-white"
+                                    title="Re-extract fresh text and build tables from the uploaded PDF"
+                                  >
+                                    <RefreshCw size={13} className={selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'animate-spin' : ''} />
+                                    {selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'Extracting OCR…' : 'Run OCR & Build Table'}
+                                  </button>
+                                )}
+
                                 {/* Clean & Re-align Formatting Button */}
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const raw = selectedContractTemplate?.ocrText || editedContractContent;
+                                    if (selectedContractTemplate?.fileUrl) {
+                                      handleTriggerContractOcr();
+                                      return;
+                                    }
+                                    const raw = selectedContractTemplate?.ocrText || (editedContractContent ? editedContractContent.replace(/<[^>]+>/g, '\n') : '');
                                     if (raw) {
                                       const cleaned = textToHtml(raw);
                                       setEditedContractContent(cleaned);
