@@ -17,6 +17,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { CanonicalPage, CanonicalElement } from '../../types/documentExtraction';
+import { API_BASE } from '../../api/client';
 import './FixedLayoutDocumentViewer.css';
 
 export interface CanonicalDocument {
@@ -62,10 +63,19 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
   // Helper to resolve asset URLs with backend server origin
   const resolveBackendUrl = (url?: string | null): string | null => {
     if (!url) return null;
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {
+    if (url.startsWith('blob:') || url.startsWith('data:')) {
       return url;
     }
-    const backendBase = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/api\/?$/, '');
+    const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+
+    // If url contains localhost:3000 but the app is running on remote domain (srm.procnex.com), rewrite to remote API base
+    if (url.startsWith('http://localhost:3000') && typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+      return url.replace('http://localhost:3000', backendBase);
+    }
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
     return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
