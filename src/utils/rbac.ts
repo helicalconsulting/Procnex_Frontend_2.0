@@ -3,7 +3,7 @@
  * Handles permission checking and role-based visibility
  */
 
-import { checkMenuItemPermission, getMenuPermissionRule, type UserPermissionsMap } from './permissions';
+import { checkMenuItemPermission, getMenuPermissionRule, hasModuleEntry, type UserPermissionsMap } from './permissions';
 import { getTenantCompanyCode } from './tenantResolver';
 
 // ─── Role Definitions ───────────────────────────────────────
@@ -48,6 +48,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     Signature: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
     'Digital Signatures': { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
     Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
+    'Inventory & Item Master': { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
   },
@@ -69,6 +70,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
+    'Inventory & Item Master': { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
   },
   'Purchase Manager': {
     RFQ: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
@@ -88,6 +90,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
+    'Inventory & Item Master': { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
   },
   'purchase_manager': {
     RFQ: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
@@ -107,6 +110,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
+    'Inventory & Item Master': { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
   },
   [RoleName.FINANCE_MANAGER]: {
     RFQ: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
@@ -119,6 +123,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Budget: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: true },
+    'Inventory & Item Master': { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
   },
   [RoleName.FINANCE_APPROVER]: {
     RFQ: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
@@ -131,6 +136,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     Reports: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Budget: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
+    'Inventory & Item Master': { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
   },
   [RoleName.VENDOR]: {
     RFQ: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
@@ -142,6 +148,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
     UserManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Reports: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     AuditTrail: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    'Inventory & Item Master': { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
   },
 };
 
@@ -245,13 +252,13 @@ export const NAVIGATION_MENU: MenuItem[] = [
     id: 'new-onboarding',
     label: 'Vendor Onboarding',
     path: '/onboarding/new',
-    roles: [...ADMIN_ACCESS_ROLES],
+    roles: [RoleName.SUPER_ADMIN],
   },
   {
     id: 'onboarding-queue',
     label: 'Onboarding Queue',
     path: '/onboarding/queue',
-    roles: [...ADMIN_ACCESS_ROLES],
+    roles: [RoleName.SUPER_ADMIN],
   },
   {
     id: 'vendors',
@@ -297,12 +304,32 @@ export const NAVIGATION_MENU: MenuItem[] = [
     id: 'admin',
     label: 'Administration',
     path: '/admin',
-    roles: [...ADMIN_ACCESS_ROLES, RoleName.PROCUREMENT_MANAGER],
+    roles: [
+      ...ADMIN_ACCESS_ROLES,
+      RoleName.PROCUREMENT_MANAGER,
+      'Purchase Manager',
+      'purchase_manager',
+      RoleName.FINANCE_MANAGER,
+      RoleName.FINANCE_APPROVER,
+    ],
     children: [
       { id: 'users', label: 'Users', path: '/admin/users', roles: [...ADMIN_ACCESS_ROLES] },
       { id: 'roles', label: 'Roles & Permissions', path: '/admin/roles-permissions', roles: [...ADMIN_ACCESS_ROLES] },
       { id: 'approval-levels', label: 'Approval Levels', path: '/admin/approval-levels', roles: [...ADMIN_ACCESS_ROLES] },
-      { id: 'company-settings', label: 'Company Settings', path: '/admin/company-settings', roles: [...ADMIN_ACCESS_ROLES, RoleName.PROCUREMENT_MANAGER] },
+      { id: 'company-settings', label: 'Company Settings', path: '/admin/company-settings', roles: [RoleName.SUPER_ADMIN] },
+      {
+        id: 'inventory-master',
+        label: 'Inventory & Item Master',
+        path: '/admin/inventory-master',
+        roles: [
+          ...ADMIN_ACCESS_ROLES,
+          RoleName.PROCUREMENT_MANAGER,
+          'Purchase Manager',
+          'purchase_manager',
+          RoleName.FINANCE_MANAGER,
+          RoleName.FINANCE_APPROVER,
+        ],
+      },
       { id: 'custom-form-builder', label: 'Custom Form Builder', path: '/admin/custom-form-builder', roles: [...ADMIN_ACCESS_ROLES] },
       { id: 'form-responses', label: 'Form Responses', path: '/admin/form-responses', roles: [...ADMIN_ACCESS_ROLES] },
     ],
@@ -441,7 +468,10 @@ function filterMenuByPermissions(
       // When permissions map is present, module permission is strict & authoritative!
       const rule = getMenuPermissionRule(item.id);
       if (rule) {
-        const allowed = checkMenuItemPermission(permissions, item.id);
+        const hasExplicitEntry = hasModuleEntry(permissions, rule.module);
+        const allowed = hasExplicitEntry
+          ? checkMenuItemPermission(permissions, item.id)
+          : item.roles.some((r) => roles.includes(r)) || isAdmin(roles);
         if (!allowed) return null;
       } else {
         const hasRole = item.roles.some((r) => roles.includes(r));

@@ -292,7 +292,7 @@ export default function CompanyGRNListPage() {
       status: req.status || 'APPROVED',
       items: (req.items || []).map((it) => ({
         id: it.id || String(it.itemNo),
-        itemName: it.description,
+        itemName: it.itemName || it.name || it.title || it.description || 'Line Item',
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         totalPrice: it.total,

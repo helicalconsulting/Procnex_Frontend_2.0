@@ -10,7 +10,7 @@ import {
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, ArrowLeft, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
   Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw, Wallet, Boxes, Truck,
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -703,11 +703,18 @@ const EMBEDDED_STANDARD_UNITS: EmbeddedUnit[] = [
 // ─── Component ──────────────────────────────────────────────
 
 export default function CompanySettingsPage() {
-  const { hasPermission, user } = useAuth();
-  const hasCreatePermission = hasPermission('Company Settings', 'canCreate') || hasPermission('Settings', 'canCreate');
+  const navigate = useNavigate();
+  const { hasPermission, user, roles } = useAuth();
+
+  const isSuperAdmin = (roles || []).some((r: any) => {
+    const roleStr = String(typeof r === 'string' ? r : r?.roleName || r?.name || '').toLowerCase().trim();
+    return roleStr === 'super admin' || roleStr === 'superadmin';
+  });
+
+  const hasCreatePermission = isSuperAdmin;
   const [viewOnlyBypass, setViewOnlyBypass] = useState(false);
-  const canCreateSettings = hasCreatePermission && !viewOnlyBypass;
-  const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify company settings.";
+  const canCreateSettings = isSuperAdmin && !viewOnlyBypass;
+  const noPermissionTitle = "Super Admin has not allowed this action. You do not have permission to modify company settings.";
   const disabledActionStyle = !canCreateSettings ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' as const } : undefined;
 
   // Passcode & Access control check
@@ -715,8 +722,8 @@ export default function CompanySettingsPage() {
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [checkingPasscodeStatus, setCheckingPasscodeStatus] = useState<boolean>(true);
 
-  // Read-only users can always fetch and view data; edit users fetch when unlocked or open access
-  const isDataFetchEnabled = isUnlocked || (!checkingPasscodeStatus && !isPasscodeProtected) || !canCreateSettings;
+  // Only Super Admin fetches settings data when unlocked or open access
+  const isDataFetchEnabled = isSuperAdmin && (isUnlocked || (!checkingPasscodeStatus && !isPasscodeProtected) || !canCreateSettings);
 
   // Data
   const { data: departments, loading, reload } = useServiceData(
@@ -3446,6 +3453,22 @@ export default function CompanySettingsPage() {
   // ── Render Documents Tab (extracted for Oxc compatibility) ──
 
 
+
+  // ── Access Restricted Gate: Only Super Admin can access Company Settings ──
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 max-w-lg mx-auto text-center space-y-4">
+        <div className="inline-flex p-4 rounded-2xl bg-destructive/10 text-destructive mb-2">
+          <ShieldCheck size={40} />
+        </div>
+        <h2 className="text-2xl font-bold text-foreground">Access Restricted to Super Admin</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Company Settings is managed centrally for the entire organization. Only Super Administrators are authorized to view and modify company-wide settings.
+        </p>
+        <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
+      </div>
+    );
+  }
 
   // ── Early Return for Passcode Protection Gate ──
   // If user has Create permission and settings are passcode protected, prompt for passcode.

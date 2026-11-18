@@ -46,6 +46,14 @@ function getUserToken(): string {
   }
 }
 
+function getActiveBranchKey(): string {
+  try {
+    return localStorage.getItem('heliflow_active_branch_id') || 'all';
+  } catch {
+    return 'all';
+  }
+}
+
 export function useServiceData<T>(
   fetcher: () => Promise<T>,
   initial: T,
@@ -57,15 +65,16 @@ export function useServiceData<T>(
   const fetcherStr = fetcher.toString();
   const userKey = getUserToken();
   const companyKey = getTenantCompanyCode() || getEmployeeCompanyCode() || 'default';
+  const branchKey = getActiveBranchKey();
   const depsHash = useMemo(() => JSON.stringify(deps), [deps]);
   const cacheKey = options.cacheKey;
 
   const queryKey = useMemo(
     () => (cacheKey
-      ? ['svc', userKey, companyKey, cacheKey]
-      : ['svc', userKey, companyKey, hashKey(depsHash + '|' + fetcherStr)]
+      ? ['svc', userKey, companyKey, branchKey, cacheKey]
+      : ['svc', userKey, companyKey, branchKey, hashKey(depsHash + '|' + fetcherStr)]
     ),
-    [cacheKey, userKey, companyKey, depsHash, fetcherStr]
+    [cacheKey, userKey, companyKey, branchKey, depsHash, fetcherStr]
   );
 
   const cacheDisabled = options.cacheTtlMs === 0;

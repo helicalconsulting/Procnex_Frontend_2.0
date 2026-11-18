@@ -149,7 +149,7 @@ export default function CreateGRNPage() {
       status: req.status || 'APPROVED',
       items: (req.items || []).map((it) => ({
         id: it.id || String(it.itemNo),
-        itemName: it.description,
+        itemName: it.itemName || it.name || it.title || it.description || 'Line Item',
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         totalPrice: it.total,
@@ -1498,7 +1498,7 @@ export default function CreateGRNPage() {
               <thead className="bg-muted/50 text-muted-foreground text-xs uppercase font-semibold border-b border-border/70">
                 <tr>
                   <th className="py-3 px-3.5 w-10 text-center">#</th>
-                  <th className="py-3 px-3.5 min-w-[200px]">Item Description</th>
+                  <th className="py-3 px-3.5 min-w-[200px]">Item Name *</th>
                   <th className="py-3 px-3.5 w-24 text-center">Ordered</th>
                   <th className="py-3 px-3.5 w-28 text-center">Received *</th>
                   <th className="py-3 px-3.5 w-28 text-center">Accepted</th>
@@ -1531,7 +1531,7 @@ export default function CreateGRNPage() {
                           <Input
                             type="text"
                             value={item.itemName}
-                            placeholder="Item description"
+                            placeholder="Item Name"
                             onChange={(e) => handleUpdateItem(item.id, 'itemName', e.target.value)}
                             className="h-9 text-sm bg-background"
                           />

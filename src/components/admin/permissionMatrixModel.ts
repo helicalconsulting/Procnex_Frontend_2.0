@@ -7,7 +7,7 @@ export const PERMISSION_GROUPS = [
   { name: 'Procurement', modules: ['Purchase Requisitions', 'RFQ Management', 'PO Creation', 'Budget Management', 'Contracts', 'Create Purchase Invoice', 'Create Payment Voucher'] },
   { name: 'Approvals', modules: ['Quotation Approval', 'Purchase Order Approval', 'Purchase Invoice Approval', 'Payment Voucher Approval'] },
   { name: 'Governance', modules: ['Vendors', 'New Onboarding', 'Onboarding Queue', 'Signature', 'Reports', 'Audit Trail'] },
-  { name: 'Administration', modules: ['User Management', 'Roles & Permissions', 'Approval Levels', 'Company Settings', 'Custom Form Builder', 'Form Responses'] },
+  { name: 'Administration', modules: ['User Management', 'Roles & Permissions', 'Approval Levels', 'Company Settings', 'Inventory & Item Master', 'Custom Form Builder', 'Form Responses'] },
 ];
 
 /** Applied when editing/submitting: dependent actions always require View. */

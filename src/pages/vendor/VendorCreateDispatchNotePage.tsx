@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Phone,
   Mail,
+  Sparkles,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
@@ -71,6 +72,8 @@ export interface PoDispatchSummary {
   isFullyDispatched: boolean;
   isPartiallyDispatched: boolean;
   hasPriorDispatches: boolean;
+  priorDispatchNotes?: any[];
+  latestDispatchNote?: any | null;
   items: PoItemDeliverySummary[];
 }
 
@@ -83,6 +86,8 @@ export function getPoDispatchSummary(po: any, dnData: any): PoDispatchSummary {
       isFullyDispatched: false,
       isPartiallyDispatched: false,
       hasPriorDispatches: false,
+      priorDispatchNotes: [],
+      latestDispatchNote: null,
       items: [],
     };
   }
@@ -99,6 +104,14 @@ export function getPoDispatchSummary(po: any, dnData: any): PoDispatchSummary {
       return (poIdStr && (dnPoId === poIdStr || dnPoNum === poIdStr)) ||
              (poNumStr && (dnPoId === poNumStr || dnPoNum === poNumStr));
     });
+
+  // Sort descending by creation date / dispatch date so the latest previous dispatch note is first
+  const sortedDns = [...dns].sort((a: any, b: any) => {
+    const timeA = new Date(a.createdAt || a.dispatchDate || 0).getTime();
+    const timeB = new Date(b.createdAt || b.dispatchDate || 0).getTime();
+    return timeB - timeA;
+  });
+  const latestDispatchNote = sortedDns.length > 0 ? sortedDns[0] : null;
 
   const deliveredMap = new Map<string, number>();
   dns.forEach((dn: any) => {
@@ -164,6 +177,8 @@ export function getPoDispatchSummary(po: any, dnData: any): PoDispatchSummary {
     isFullyDispatched,
     isPartiallyDispatched,
     hasPriorDispatches: dns.length > 0,
+    priorDispatchNotes: sortedDns,
+    latestDispatchNote,
     items: itemSummaries,
   };
 }
@@ -261,57 +276,121 @@ export default function VendorCreateDispatchNotePage() {
     }
   }, [poIdParam, selectedPoId]);
 
-  // Auto-populate line items and addresses when PO is selected
+  // Track last populated PO & prior dispatch state so user edits aren't overwritten on random re-renders
+  const lastPopulatedPoKeyRef = useRef<string | null>(null);
+
+  // Clear logistics details if vendor wants to re-enter from scratch
+  const handleClearLogisticsDetails = () => {
+    setTransportMode('Road');
+    setTransporterName('');
+    setVehicleNumber('');
+    setTrackingNumber('');
+    setDriverName('');
+    setDriverPhone('');
+    setDriverEmail('');
+    setPhoneError(null);
+    setEmailError(null);
+    setTotalPackages(1);
+    setTotalWeight('');
+  };
+
+  // Auto-populate line items, addresses, and logistics details (sustained from prior dispatch note)
   useEffect(() => {
     if (!selectedPO) {
+      lastPopulatedPoKeyRef.current = null;
       return;
     }
 
-    // Auto-populate shipping address from PO
+    const summary = getPoDispatchSummary(selectedPO, dnData);
     const dest =
       selectedPO.shippingAddress ||
       selectedPO.deliveryLocation ||
       selectedPO.warehouseLocation ||
       (selectedPO as any).shipToAddress ||
       '';
-    if (dest && !shippingAddress) {
-      setShippingAddress(dest);
-    }
-
-    // Auto-populate dispatch from address from Vendor profile if available
     const vendorAddr =
       selectedPO.vendor?.address ||
       (user as any)?.address ||
       (user as any)?.companyAddress ||
       '';
-    if (vendorAddr && !dispatchFromAddress) {
-      setDispatchFromAddress(vendorAddr);
-    }
 
-    // Auto-populate line items with delivery tracking (PO Quantity, Delivered Quantity, Quantity to be delivered, Remaining Quantity)
-    const summary = getPoDispatchSummary(selectedPO, dnData);
-    if (summary.items.length > 0) {
-      setLineItems(
-        summary.items.map((item, idx) => {
-          const defaultToDeliver = item.remainingAvailable;
-          const remaining = Math.max(0, item.orderedQty - (item.deliveredQty + defaultToDeliver));
-          return {
-            id: `item_${idx}_${Date.now()}`,
-            itemCode: item.itemCode,
-            itemName: item.itemName,
-            orderedQty: item.orderedQty,
-            deliveredQty: item.deliveredQty,
-            quantityToBeDelivered: defaultToDeliver,
-            remainingQty: remaining,
-            dispatchedQty: defaultToDeliver,
-            unit: item.rawItem.unit || item.rawItem.uom || 'Units',
-            unitPrice: Number(item.rawItem.unitPrice || item.rawItem.price || 0),
-            remarks: item.deliveredQty > 0
-              ? `Subsequent dispatch (Prev delivered: ${item.deliveredQty})`
-              : 'Dispatched in good condition',
-          };
-        })
-      );
+    const prevDn = summary.latestDispatchNote;
+    const currentKey = `${selectedPO.id || selectedPO.poNumber}_${prevDn ? (prevDn.id || prevDn.dispatchNoteNumber) : 'no_prior'}`;
+
+    if (lastPopulatedPoKeyRef.current !== currentKey) {
+      lastPopulatedPoKeyRef.current = currentKey;
+
+      if (prevDn) {
+        // Sustain logistics & transporter details from previous dispatch note (e.g. Dispatch Note 1)
+        if (prevDn.transportMode) setTransportMode(prevDn.transportMode);
+        if (prevDn.transporterName) setTransporterName(prevDn.transporterName);
+        if (prevDn.vehicleNumber) setVehicleNumber(prevDn.vehicleNumber);
+        if (prevDn.trackingNumber) setTrackingNumber(prevDn.trackingNumber);
+        if (prevDn.driverName) setDriverName(prevDn.driverName);
+        if (prevDn.driverPhone) {
+          setDriverPhone(prevDn.driverPhone);
+          setPhoneError(null);
+        }
+        if (prevDn.driverEmail) {
+          setDriverEmail(prevDn.driverEmail);
+          setEmailError(null);
+        }
+        if (prevDn.totalPackages !== undefined && prevDn.totalPackages !== null) {
+          setTotalPackages(Number(prevDn.totalPackages) || 1);
+        }
+        if (prevDn.totalWeight) {
+          setTotalWeight(String(prevDn.totalWeight));
+        }
+        if (prevDn.dispatchFromAddress) {
+          setDispatchFromAddress(prevDn.dispatchFromAddress);
+        } else if (vendorAddr) {
+          setDispatchFromAddress(vendorAddr);
+        }
+        if (prevDn.shippingAddress) {
+          setShippingAddress(prevDn.shippingAddress);
+        } else if (dest) {
+          setShippingAddress(dest);
+        }
+        if (prevDn.expectedDeliveryDate) {
+          const prevDate = new Date(prevDn.expectedDeliveryDate);
+          if (!isNaN(prevDate.getTime()) && prevDate.getTime() >= Date.now() - 86400000) {
+            setExpectedDeliveryDate(localDateValue(prevDate));
+          }
+        }
+      } else {
+        // No prior dispatch note - populate addresses from PO and vendor profile
+        if (dest && !shippingAddress) {
+          setShippingAddress(dest);
+        }
+        if (vendorAddr && !dispatchFromAddress) {
+          setDispatchFromAddress(vendorAddr);
+        }
+      }
+
+      // Auto-populate line items with delivery tracking (PO Quantity, Delivered Quantity, Quantity to be delivered, Remaining Quantity)
+      if (summary.items.length > 0) {
+        setLineItems(
+          summary.items.map((item, idx) => {
+            const defaultToDeliver = item.remainingAvailable;
+            const remaining = Math.max(0, item.orderedQty - (item.deliveredQty + defaultToDeliver));
+            return {
+              id: `item_${idx}_${Date.now()}`,
+              itemCode: item.itemCode,
+              itemName: item.itemName,
+              orderedQty: item.orderedQty,
+              deliveredQty: item.deliveredQty,
+              quantityToBeDelivered: defaultToDeliver,
+              remainingQty: remaining,
+              dispatchedQty: defaultToDeliver,
+              unit: item.rawItem.unit || item.rawItem.uom || 'Units',
+              unitPrice: Number(item.rawItem.unitPrice || item.rawItem.price || 0),
+              remarks: item.deliveredQty > 0
+                ? `Subsequent dispatch (Prev delivered: ${item.deliveredQty})`
+                : 'Dispatched in good condition',
+            };
+          })
+        );
+      }
     }
   }, [selectedPO, dnData]);
 
@@ -575,7 +654,7 @@ export default function VendorCreateDispatchNotePage() {
 
     for (const item of lineItems) {
       if (!item.itemName.trim()) {
-        setErrorMsg('All line items must have a valid item description.');
+        setErrorMsg('All line items must have a valid item name.');
         return false;
       }
       const toDeliver = Number(item.quantityToBeDelivered);
@@ -929,9 +1008,32 @@ export default function VendorCreateDispatchNotePage() {
 
         {/* Section 02: Logistics, Carrier & Transport */}
         <Card className="p-6 border border-border/80 shadow-xs space-y-6">
-          <div className="flex items-center gap-2 pb-3 border-b border-border/60">
-            <Truck className="size-5 text-primary" />
-            <h2 className="text-base font-bold text-foreground">Logistics, Transporter & Tracking Details</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <Truck className="size-5 text-primary" />
+              <h2 className="text-base font-bold text-foreground">Logistics, Transporter & Tracking Details</h2>
+            </div>
+            {selectedPOSummary.hasPriorDispatches && selectedPOSummary.latestDispatchNote && (
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="bg-primary/10 text-primary border-primary/30 text-xs py-0.5 px-2.5 flex items-center gap-1.5 w-fit font-medium"
+                >
+                  <Sparkles className="size-3.5 text-primary shrink-0" />
+                  <span>
+                    Auto-filled from {selectedPOSummary.latestDispatchNote.dispatchNoteNumber || 'previous dispatch note'}
+                  </span>
+                </Badge>
+                <button
+                  type="button"
+                  onClick={handleClearLogisticsDetails}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors cursor-pointer"
+                  title="Clear logistics fields to enter new transporter details"
+                >
+                  Clear details
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -1172,7 +1274,7 @@ export default function VendorCreateDispatchNotePage() {
               <thead className="bg-muted/50 text-muted-foreground text-xs uppercase font-semibold border-b border-border/70">
                 <tr>
                   <th className="py-3 px-3.5 w-10 text-center">#</th>
-                  <th className="py-3 px-3.5 min-w-[200px]">Material / Item Description *</th>
+                  <th className="py-3 px-3.5 min-w-[200px]">Item Name *</th>
                   <th className="py-3 px-3.5 w-28 text-center">PO Quantity</th>
                   <th className="py-3 px-3.5 w-32 text-center">Delivered Quantity</th>
                   <th className="py-3 px-3.5 w-36 text-center">Quantity to be delivered *</th>
@@ -1204,7 +1306,7 @@ export default function VendorCreateDispatchNotePage() {
                           <Input
                             type="text"
                             value={item.itemName}
-                            placeholder="Item name / specifications"
+                            placeholder="Item Name"
                             onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
                             className="h-9 text-sm bg-background font-medium"
                           />

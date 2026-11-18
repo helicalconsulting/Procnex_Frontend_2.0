@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Building2, ChevronDown, MapPin, Check, Plus, X, Loader2, Sparkles } from 'lucide-react';
+import { Building2, ChevronDown, MapPin, Check, Plus, X, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { companySettingsService, type Branch } from '../../services/companySettingsService';
 import { clearAllApiCache } from '../../api/client';
@@ -45,14 +45,15 @@ export const BranchSwitcher: React.FC = () => {
 
       if (activeList.length > 0) {
         const savedBranchId = localStorage.getItem(ACTIVE_BRANCH_KEY);
-        const isValidSaved = activeList.some((b) => b.id === savedBranchId);
+        const isValidSaved = savedBranchId === 'ALL' || activeList.some((b) => b.id === savedBranchId);
 
         if (!isValidSaved) {
           const defaultBr = activeList.find((b) => b.isDefault) || activeList[0];
-          setSelectedBranchId(defaultBr.id);
-          localStorage.setItem(ACTIVE_BRANCH_KEY, defaultBr.id);
+          const initialId = defaultBr ? defaultBr.id : 'ALL';
+          setSelectedBranchId(initialId);
+          localStorage.setItem(ACTIVE_BRANCH_KEY, initialId);
           clearAllApiCache();
-          window.dispatchEvent(new CustomEvent('branchScopeChanged', { detail: { branchId: defaultBr.id } }));
+          window.dispatchEvent(new CustomEvent('branchScopeChanged', { detail: { branchId: initialId } }));
         }
       }
     } catch (err) {
@@ -159,8 +160,13 @@ export const BranchSwitcher: React.FC = () => {
   }
 
   // 2. Only Super Admin gets the interactive switcher & creation button
-  const currentBranch = branches.find((b) => b.id === selectedBranchId) || branches[0];
-  const currentLabel = currentBranch ? `${currentBranch.name} (${currentBranch.code})` : 'Select Branch';
+  const isAllBranches = selectedBranchId === 'ALL' || !selectedBranchId;
+  const currentBranch = branches.find((b) => b.id === selectedBranchId);
+  const currentLabel = isAllBranches
+    ? 'All Branches'
+    : currentBranch
+    ? `${currentBranch.name} (${currentBranch.code})`
+    : 'All Branches';
 
   return (
     <>
@@ -168,17 +174,11 @@ export const BranchSwitcher: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shadow-xs border",
-            currentBranch
-              ? "bg-primary text-white border-transparent hover:bg-primary/90"
-              : "bg-slate-100 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200/80"
-          )}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all shadow-xs border border-transparent bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white"
           title="Super Admin: Switch Active Branch"
         >
-          <Building2 size={13} className={currentBranch ? "text-white shrink-0" : "text-amber-500 shrink-0"} />
           <span className="max-w-[140px] truncate">{currentLabel}</span>
-          <ChevronDown size={12} className={cn("transition-transform duration-200", currentBranch ? "text-white/90" : "opacity-70", isOpen && "rotate-180")} />
+          <ChevronDown size={12} className={cn("transition-transform duration-200 opacity-90 text-white", isOpen && "rotate-180")} />
         </button>
 
         {isOpen && (
@@ -188,7 +188,36 @@ export const BranchSwitcher: React.FC = () => {
               <span className="text-[9px] bg-primary/10 text-primary-600 font-semibold px-1.5 py-0.5 rounded">Super Admin</span>
             </div>
 
-            <div className="max-h-60 overflow-y-auto py-1">
+            {/* 1. All Branches option */}
+            <div className="p-1 border-b border-border/50">
+              <button
+                type="button"
+                onClick={() => handleSelectBranch('ALL')}
+                className={cn(
+                  "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left transition-colors",
+                  isAllBranches
+                    ? "bg-primary/10 text-primary-600 dark:text-primary-400 font-bold"
+                    : "hover:bg-muted/70 text-foreground"
+                )}
+              >
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <div className={cn(
+                    "flex size-6 shrink-0 items-center justify-center rounded-md",
+                    isAllBranches ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  )}>
+                    <Building2 size={13} />
+                  </div>
+                  <div className="flex flex-col truncate">
+                    <span className="font-semibold truncate">All Branches</span>
+                    <span className="text-[10px] text-muted-foreground">Consolidated company-wide view</span>
+                  </div>
+                </div>
+                {isAllBranches && <Check size={14} className="text-primary-600 dark:text-primary-400 shrink-0" />}
+              </button>
+            </div>
+
+            {/* 2. Specific Branches List */}
+            <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
               {branches.length === 0 ? (
                 <div className="px-3 py-3 text-muted-foreground text-center">No branches configured</div>
               ) : (
@@ -200,15 +229,25 @@ export const BranchSwitcher: React.FC = () => {
                       type="button"
                       onClick={() => handleSelectBranch(b.id)}
                       className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/70 transition-colors",
-                        isSelected && "text-primary-600 dark:text-primary-400 font-bold bg-primary/5"
+                        "w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors",
+                        isSelected
+                          ? "bg-primary/10 text-primary-600 dark:text-primary-400 font-bold"
+                          : "hover:bg-muted/70 text-foreground"
                       )}
                     >
-                      <div className="flex flex-col truncate pr-2">
-                        <span className="truncate">{b.name}</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {b.code} {b.city ? `• ${b.city}` : ''} {b.isDefault ? '• Default' : ''}
-                        </span>
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <div className={cn(
+                          "flex size-6 shrink-0 items-center justify-center rounded-md",
+                          isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        )}>
+                          <Building2 size={13} />
+                        </div>
+                        <div className="flex flex-col truncate">
+                          <span className="truncate font-medium">{b.name}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {b.code} {b.city ? `• ${b.city}` : ''} {b.isDefault ? '• Default' : ''}
+                          </span>
+                        </div>
                       </div>
                       {isSelected && <Check size={14} className="text-primary-600 dark:text-primary-400 shrink-0" />}
                     </button>

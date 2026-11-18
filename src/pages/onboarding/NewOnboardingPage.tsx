@@ -162,12 +162,17 @@ function calculateFuzzyNameMatchScore(s1: string, s2: string): number {
 
 export default function NewOnboardingPage() {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
-  const canCreateOnboarding = hasPermission('New Onboarding', 'canCreate');
+  const { hasPermission, roles } = useAuth();
+  const isSuperAdmin = (roles || []).some((r: any) => {
+    const roleStr = typeof r === 'string' ? r : (r?.roleName || r?.name || '');
+    const clean = roleStr.toLowerCase().trim();
+    return clean === 'super admin' || clean === 'superadmin' || clean === 'administrator' || clean === 'admin';
+  });
+  const canCreateOnboarding = isSuperAdmin && hasPermission('New Onboarding', 'canCreate');
   const { data: invitations, loading, error, reload } = useServiceData(
-    () => procurementService.listInvitations(),
+    () => isSuperAdmin ? procurementService.listInvitations() : Promise.resolve([]),
     [] as VendorInvitationRow[],
-    [],
+    [isSuperAdmin],
     { cacheKey: 'onboarding:invitations' }
   );
 
@@ -1222,6 +1227,21 @@ export default function NewOnboardingPage() {
       ))}
     </div>
   );
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 max-w-lg mx-auto text-center space-y-4">
+        <div className="inline-flex p-4 rounded-2xl bg-destructive/10 text-destructive mb-2">
+          <ShieldCheck size={40} />
+        </div>
+        <h2 className="text-2xl font-bold text-foreground">Access Restricted to Super Admin</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Vendor Onboarding is managed centrally for the entire organization. Only Super Administrators are authorized to invite and onboard new suppliers.
+        </p>
+        <Button onClick={() => navigate('/vendors')}>Go to Vendors Directory</Button>
+      </div>
+    );
+  }
 
   return (
     <PageFrame className="new-onboarding-workspace">

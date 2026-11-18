@@ -58,6 +58,8 @@ interface MockUser {
   branchName?: string | null;
   role: string;
   apiRoleName: string;
+  userType: 'P2P' | 'WORKFLOW';
+  position?: string;
   isActive: boolean;
   isMobileAccessEnabled: boolean;
   lastLoginAt: string | null;
@@ -68,11 +70,17 @@ interface MockUser {
 }
 
 function mapUser(
-  u: User & { roles?: string[]; isMobileAccessEnabled?: boolean; branch?: { id: string; code: string; name: string } | null; branchName?: string | null }
+  u: User & { roles?: string[]; userType?: string; position?: string; isMobileAccessEnabled?: boolean; branch?: { id: string; code: string; name: string } | null; branchName?: string | null }
 ): MockUser {
   const rawRole = u.roles?.[0] || 'Staff';
   const role = rawRole;
   const initials = u.fullName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const rawUt = String(u.userType || '').trim().toUpperCase();
+  const inferredUserType: 'P2P' | 'WORKFLOW' = (rawUt === 'WORKFLOW' || rawUt === 'HELIFLOW')
+    ? 'WORKFLOW'
+    : (rawUt === 'P2P' || rawUt === 'RFQ')
+      ? 'P2P'
+      : (rawRole.match(/admin|approv|director|head|cfo|manager/i) ? 'WORKFLOW' : 'P2P');
 
   return {
     id: u.id,
@@ -81,6 +89,8 @@ function mapUser(
     email: u.email,
     phone: u.phone || '—',
     department: u.department || '—',
+    position: u.position || undefined,
+    userType: inferredUserType,
     companyCode: u.companyCode,
     branchId: u.branchId || null,
     branchCode: u.branchCode || u.branch?.code || null,
@@ -141,6 +151,27 @@ const ALL_COLUMNS: UserColumnDef[] = [
       else if (u.role.includes('Manager')) tone = 'info';
       else if (u.role.includes('Finance')) tone = 'warning';
       return <Badge tone={tone} className="users-role-pill" title={u.role}>{u.role}</Badge>;
+    },
+  },
+  {
+    key: 'userType',
+    label: 'User Type',
+    defaultVisible: true,
+    width: '145px',
+    render: (u) => {
+      const isWorkflow = u.userType === 'WORKFLOW';
+      return (
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+            isWorkflow
+              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/25'
+              : 'bg-primary/10 text-primary border border-primary/25'
+          }`}
+        >
+          {isWorkflow ? <Zap size={12} className="shrink-0" /> : <ShoppingCart size={12} className="shrink-0" />}
+          <span>{isWorkflow ? 'Workflow User' : 'P2P User'}</span>
+        </span>
+      );
     },
   },
   { key: 'department', label: 'Department', defaultVisible: true, width: '130px', render: (u) => <span className="users-table__dept">{u.department}</span> },
@@ -226,6 +257,7 @@ export default function UsersPage() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'admins'>('all');
+  const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'P2P' | 'WORKFLOW'>('all');
   const [view, setView] = useState<'table' | 'card'>('table');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -243,6 +275,7 @@ export default function UsersPage() {
   const [editDepartment, setEditDepartment] = useState('');
   const [editBranchId, setEditBranchId] = useState('');
   const [editRoleName, setEditRoleName] = useState('');
+  const [editUserType, setEditUserType] = useState<'P2P' | 'WORKFLOW'>('P2P');
   const [editMobileAccess, setEditMobileAccess] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
@@ -258,7 +291,40 @@ export default function UsersPage() {
   const [widgetSaving, setWidgetSaving] = useState(false);
   const [widgetError, setWidgetError] = useState('');
 
-  // Combine roles from DB (Roles & Permissions) with active company positions from DB
+  // P2P User position options: only operational Positions from Company Settings
+  const p2pPositionOptions = useMemo(() => {
+    const positionNames = positions.filter((p) => p.isActive).map((p) => p.name);
+    const defaultP2p = [
+      'Purchase Clerk',
+      'Store Keeper',
+      'Procurement Officer',
+      'Inventory Manager',
+      'Store In-Charge',
+      'Material Specialist',
+    ];
+    const combined = [...new Set([...positionNames, ...defaultP2p])];
+    return combined.sort((a, b) => a.localeCompare(b));
+  }, [positions]);
+
+  // Workflow User role options: only Approval & Governance Roles
+  const workflowRoleOptions = useMemo(() => {
+    const roleNames = roleRecords.map((r) => r.roleName);
+    const defaultWorkflow = [
+      'Approver',
+      'Purchase Manager',
+      'Finance Manager',
+      'Finance Approver',
+      'Department Head',
+      'Administrator',
+      'Super Admin',
+      'General Manager',
+      'Director',
+    ];
+    const combined = [...new Set([...roleNames, ...defaultWorkflow])];
+    return combined.sort((a, b) => a.localeCompare(b));
+  }, [roleRecords]);
+
+  // Combined roles from DB (Roles & Permissions) with active company positions from DB
   const positionRoleOptions = useMemo(() => {
     const roleNames = roleRecords.map((r) => r.roleName);
     const positionNames = positions
@@ -347,6 +413,9 @@ export default function UsersPage() {
     if (statusFilter === 'active') list = list.filter((u) => u.isActive);
     else if (statusFilter === 'inactive') list = list.filter((u) => !u.isActive);
     else if (statusFilter === 'admins') list = list.filter((u) => u.role === 'Super Admin' || u.role === 'Administrator');
+    if (userTypeFilter !== 'all') {
+      list = list.filter((u) => u.userType === userTypeFilter);
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -355,11 +424,13 @@ export default function UsersPage() {
           u.username.toLowerCase().includes(q) ||
           u.email.toLowerCase().includes(q) ||
           u.department.toLowerCase().includes(q) ||
-          u.role.toLowerCase().includes(q)
+          u.role.toLowerCase().includes(q) ||
+          (u.userType && u.userType.toLowerCase().includes(q)) ||
+          (u.position && u.position.toLowerCase().includes(q))
       );
     }
     return list;
-  }, [displayUsers, statusFilter, search]);
+  }, [displayUsers, statusFilter, userTypeFilter, search]);
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
@@ -522,7 +593,7 @@ export default function UsersPage() {
         position: selectedUserType === 'rfq' ? newPosition : undefined,
         companyCode: userCompanyCode || undefined,
         roleName,
-        userType: selectedUserType || undefined,
+        userType: selectedUserType === 'rfq' ? 'P2P' : 'WORKFLOW',
         isMobileAccessEnabled: newMobileAccess,
         documents: {
           aadhaar: docAadhaar || undefined,
@@ -578,6 +649,7 @@ export default function UsersPage() {
     setEditDepartment(user.department === '—' ? '' : user.department);
     setEditBranchId(user.branchId || '');
     setEditRoleName(user.apiRoleName || user.role || '');
+    setEditUserType(user.userType || 'P2P');
     setEditMobileAccess(user.isMobileAccessEnabled);
   }, []);
 
@@ -601,6 +673,7 @@ export default function UsersPage() {
         department: editDepartment.trim(),
         branchId: editBranchId || 'HQ',
         roleName: editRoleName.trim(),
+        userType: editUserType,
         isMobileAccessEnabled: editMobileAccess,
       });
       setPageMsg(`User "${updated.fullName}" updated successfully.`);
@@ -821,7 +894,16 @@ export default function UsersPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 justify-end shrink-0 sm:ml-auto">
+        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          <Select
+            value={userTypeFilter}
+            onChange={(e) => { setUserTypeFilter(e.target.value as any); setCurrentPage(1); }}
+            className="h-11 min-w-[155px] rounded-xl text-xs font-semibold"
+          >
+            <option value="all">All User Types</option>
+            <option value="P2P">🛒 P2P Users</option>
+            <option value="WORKFLOW">⚡ Workflow Users</option>
+          </Select>
           <div className="inline-flex rounded-xl border border-input bg-card p-1 shadow-xs">
             <button
               type="button"
@@ -1055,10 +1137,20 @@ export default function UsersPage() {
                         )} />
                       </div>
 
-                      <div className="mb-4">
+                      <div className="mb-4 flex flex-wrap items-center gap-1.5">
                         <Badge tone={roleTone} className="users-role-pill text-[10px] px-2 py-0.5 max-w-full truncate" title={user.role}>
                           {user.role}
                         </Badge>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            user.userType === 'WORKFLOW'
+                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/25'
+                              : 'bg-primary/10 text-primary border border-primary/25'
+                          }`}
+                        >
+                          {user.userType === 'WORKFLOW' ? <Zap size={10} /> : <ShoppingCart size={10} />}
+                          <span>{user.userType === 'WORKFLOW' ? 'Workflow' : 'P2P'}</span>
+                        </span>
                       </div>
 
                       <div className="space-y-1.5 text-xs text-muted-foreground mb-4">
@@ -1206,14 +1298,14 @@ export default function UsersPage() {
                     <button type="button" aria-pressed={selectedUserType === 'rfq'} className={`users-modal__type-card ${selectedUserType === 'rfq' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('rfq')}>
                       <div className="users-modal__type-card-icon users-modal__type-card-icon--rfq"><ShoppingCart size={28} /></div>
                       <div className="users-modal__type-card-check">{selectedUserType === 'rfq' && <CheckCircle2 size={22} />}</div>
-                      <h3>P2P User</h3>
-                      <p>Create a user for company positions like Purchase Clerk, Store Keeper, etc.</p>
+                      <h3>P2P User (Procurement)</h3>
+                      <p>Creates and manages Purchase Requisitions, RFQs, POs, and Store / GRN goods receipt.</p>
                     </button>
                     <button type="button" aria-pressed={selectedUserType === 'heliflow'} className={`users-modal__type-card ${selectedUserType === 'heliflow' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('heliflow')}>
                       <div className="users-modal__type-card-icon users-modal__type-card-icon--heliflow"><Zap size={28} /></div>
                       <div className="users-modal__type-card-check">{selectedUserType === 'heliflow' && <CheckCircle2 size={22} />}</div>
-                      <h3>Workflow User</h3>
-                      <p>Create a workflow user with access determined by their assigned role.</p>
+                      <h3>Workflow User (Approvals)</h3>
+                      <p>Approval authority for Quotation, PO, Purchase Invoice, and Payment Voucher workflows.</p>
                     </button>
                   </div>
                 </div>
@@ -1233,9 +1325,9 @@ export default function UsersPage() {
                   {createModalError && (
                     <MessageStrip type="error" compact className="sap-message-strip--flush">{createModalError}</MessageStrip>
                   )}
-                  <div className="users-modal__type-badge">
-                    {selectedUserType === 'rfq' ? <ShoppingCart size={14} /> : <LayoutDashboard size={14} />}
-                    {selectedUserType === 'rfq' ? 'P2P User' : 'Workflow User'}
+                  <div className="users-modal__type-badge flex items-center gap-1.5 font-semibold text-xs py-1 px-3">
+                    {selectedUserType === 'rfq' ? <ShoppingCart size={14} className="text-primary" /> : <Zap size={14} className="text-purple-600 dark:text-purple-400" />}
+                    {selectedUserType === 'rfq' ? '🛒 P2P User • Procurement Section' : '⚡ Workflow User • Approvals Section'}
                   </div>
                   <div className="users-modal__field">
                     <label htmlFor="users-newFullName" className="users-modal__label">Full Name <span className="users-required" aria-hidden="true">*</span></label>
@@ -1290,10 +1382,10 @@ export default function UsersPage() {
                   {selectedUserType === 'rfq' && (
                     <div className="users-modal__row">
                       <div className="users-modal__field">
-                        <label htmlFor="users-newPosition" className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Position <span className="users-required" aria-hidden="true">*</span></label>
+                        <label htmlFor="users-newPosition" className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Position (Procurement Role) <span className="users-required" aria-hidden="true">*</span></label>
                         <Select id="users-newPosition" disabled={actionLoading} className="users-modal__select" required value={newPosition} onChange={(e) => setNewPosition(e.target.value)}>
                           <option value="">Select position</option>
-                          {positionRoleOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                          {p2pPositionOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
                         </Select>
                       </div>
                       <div className="users-modal__field">
@@ -1308,10 +1400,10 @@ export default function UsersPage() {
                   {selectedUserType === 'heliflow' && (
                     <div className="users-modal__row">
                       <div className="users-modal__field">
-                        <label htmlFor="users-newRole" className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Role <span className="users-required" aria-hidden="true">*</span></label>
+                        <label htmlFor="users-newRole" className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Approval Role <span className="users-required" aria-hidden="true">*</span></label>
                         <Select id="users-newRole" disabled={actionLoading} className="users-modal__select" required value={newRole} onChange={(e) => setNewRole(e.target.value)}>
-                          <option value="">Select role</option>
-                          {positionRoleOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                          <option value="">Select approval role</option>
+                          {workflowRoleOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
                         </Select>
                       </div>
                       <div className="users-modal__field">
@@ -1395,22 +1487,37 @@ export default function UsersPage() {
             <div className="users-modal__body">
               <div className="users-modal__field"><label className="users-modal__label">Full Name</label><p style={{ margin: 0 }}>{viewUser.fullName}</p></div>
               <div className="users-modal__row">
+                <div className="users-modal__field">
+                  <label className="users-modal__label">User Type</label>
+                  <p style={{ margin: 0 }}>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        viewUser.userType === 'WORKFLOW'
+                          ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/25'
+                          : 'bg-primary/10 text-primary border border-primary/25'
+                      }`}
+                    >
+                      {viewUser.userType === 'WORKFLOW' ? <Zap size={12} /> : <ShoppingCart size={12} />}
+                      {viewUser.userType === 'WORKFLOW' ? 'Workflow User (Approvals)' : 'P2P User (Procurement)'}
+                    </span>
+                  </p>
+                </div>
+                <div className="users-modal__field"><label className="users-modal__label">{viewUser.userType === 'WORKFLOW' ? 'Approval Role' : 'Position'}</label><p style={{ margin: 0 }}>{viewUser.position || viewUser.role}{viewUser.apiRoleName && viewUser.apiRoleName !== viewUser.role ? ` (${viewUser.apiRoleName})` : ''}</p></div>
+              </div>
+              <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Username</label><p style={{ margin: 0 }}>@{viewUser.username}</p></div>
-                <div className="users-modal__field"><label className="users-modal__label">Role</label><p style={{ margin: 0 }}>{viewUser.role}{viewUser.apiRoleName !== viewUser.role ? ` (${viewUser.apiRoleName})` : ''}</p></div>
-              </div>
-              <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Email</label><p style={{ margin: 0 }}>{viewUser.email}</p></div>
+              </div>
+              <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Phone</label><p style={{ margin: 0 }}>{viewUser.phone}</p></div>
-              </div>
-              <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Department</label><p style={{ margin: 0 }}>{viewUser.department}</p></div>
+              </div>
+              <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Branch</label><p style={{ margin: 0 }}>{viewUser.branchName || '—'}</p></div>
-              </div>
-              <div className="users-modal__row">
                 <div className="users-modal__field"><label className="users-modal__label">Status</label><p style={{ margin: 0 }}>{viewUser.isActive ? 'Active' : 'Inactive'}</p></div>
-                <div className="users-modal__field"><label className="users-modal__label">Mobile App Access</label><p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Smartphone size={15} strokeWidth={2} /> {viewUser.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}</p></div>
               </div>
               <div className="users-modal__row">
+                <div className="users-modal__field"><label className="users-modal__label">Mobile App Access</label><p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Smartphone size={15} strokeWidth={2} /> {viewUser.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}</p></div>
                 <div className="users-modal__field"><label className="users-modal__label">Last Login</label><p style={{ margin: 0 }}>{formatDateTime(viewUser.lastLoginAt)}</p></div>
               </div>
             </div>
@@ -1466,6 +1573,22 @@ export default function UsersPage() {
               </div>
               <div className="users-modal__row">
                 <div className="users-modal__field">
+                  <label htmlFor="users-editUserType" className="users-modal__label">User Type <span className="users-required" aria-hidden="true">*</span></label>
+                  <Select id="users-editUserType" disabled={actionLoading} className="users-modal__select" value={editUserType} onChange={(e) => setEditUserType(e.target.value as any)}>
+                    <option value="P2P">🛒 P2P User (Procurement Operations)</option>
+                    <option value="WORKFLOW">⚡ Workflow User (Approvals & Governance)</option>
+                  </Select>
+                </div>
+                <div className="users-modal__field">
+                  <label htmlFor="users-editRoleName" className="users-modal__label">{editUserType === 'P2P' ? 'Position (Procurement Role) *' : 'Approval Role *'}</label>
+                  <Select id="users-editRoleName" disabled={actionLoading} className="users-modal__select" required value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}>
+                    <option value="">Select {editUserType === 'P2P' ? 'position' : 'role'}</option>
+                    {(editUserType === 'P2P' ? p2pPositionOptions : workflowRoleOptions).map((r) => (<option key={r} value={r}>{r}</option>))}
+                  </Select>
+                </div>
+              </div>
+              <div className="users-modal__row">
+                <div className="users-modal__field">
                   <label htmlFor="users-editDepartment" className="users-modal__label">Department <span className="users-required" aria-hidden="true">*</span></label>
                   <Select id="users-editDepartment" disabled={actionLoading} className="users-modal__select" required value={editDepartment} onChange={(e) => setEditDepartment(e.target.value)}>
                     <option value="">Select department</option>
@@ -1474,19 +1597,12 @@ export default function UsersPage() {
                   </Select>
                 </div>
                 <div className="users-modal__field">
-                  <label htmlFor="users-editRoleName" className="users-modal__label">Role <span className="users-required" aria-hidden="true">*</span></label>
-                  <Select id="users-editRoleName" disabled={actionLoading} className="users-modal__select" required value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}>
-                    <option value="">Select role / position</option>
-                    {positionRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
+                  <label htmlFor="users-editBranch" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Branch</label>
+                  <Select id="users-editBranch" disabled={actionLoading} className="users-modal__select" value={editBranchId} onChange={(e) => setEditBranchId(e.target.value)}>
+                    <option value="">Select branch</option>
+                    {branches.filter((b) => b.isActive).map((b) => (<option key={b.id} value={b.id}>{b.name} ({b.code})</option>))}
                   </Select>
                 </div>
-              </div>
-              <div className="users-modal__field" style={{ marginTop: 8 }}>
-                <label htmlFor="users-editBranch" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Branch</label>
-                <Select id="users-editBranch" disabled={actionLoading} className="users-modal__select" value={editBranchId} onChange={(e) => setEditBranchId(e.target.value)}>
-                  <option value="">Select branch</option>
-                  {branches.filter((b) => b.isActive).map((b) => (<option key={b.id} value={b.id}>{b.name} ({b.code})</option>))}
-                </Select>
               </div>
               <div className="users-mobile-setting">
                     <div className="users-mobile-setting__heading">

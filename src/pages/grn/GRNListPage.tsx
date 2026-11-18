@@ -1260,7 +1260,7 @@ export default function GRNListPage() {
                 <table className="w-full text-left text-xs">
                   <thead className="border-b border-border/70 bg-muted/40 font-semibold text-muted-foreground">
                     <tr>
-                      <th className="px-3.5 py-2.5">Item Description</th>
+                      <th className="px-3.5 py-2.5">Item Name</th>
                       <th className="px-3.5 py-2.5 text-center">Quantity</th>
                       <th className="px-3.5 py-2.5 text-right">Unit Price</th>
                       <th className="px-3.5 py-2.5 text-right">Total Price</th>

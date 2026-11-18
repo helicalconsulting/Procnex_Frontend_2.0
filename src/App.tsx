@@ -99,6 +99,9 @@ const CustomFormBuilderPage = lazy(
 const FormResponsesPage = lazy(
   () => import("./pages/admin/FormResponsesPage"),
 );
+const InventoryMasterPage = lazy(
+  () => import("./pages/admin/InventoryMasterPage"),
+);
 const FormsPage = lazy(() => import("./pages/forms/FormsPage"));
 const ContractsPage = lazy(() => import("./pages/contracts/ContractsPage"));
 const ContractDetailPage = lazy(() => import("./pages/contracts/ContractDetailPage"));
@@ -308,6 +311,10 @@ export default function App() {
                           <Route
                             path="/admin/company-settings"
                             element={page(CompanySettingsPage)}
+                          />
+                          <Route
+                            path="/admin/inventory-master"
+                            element={page(InventoryMasterPage)}
                           />
                           <Route
                             path="/admin/custom-form-builder"

@@ -83,6 +83,9 @@ export function hasModulePermission(
     'Roles & Permissions': ['Roles & Permissions', 'Roles', 'RolesPermissions'],
     'Approval Levels': ['Approval Levels', 'ApprovalLevels'],
     'Company Settings': ['Company Settings', 'CompanySettings'],
+    'Inventory & Item Master': ['Inventory & Item Master', 'InventoryMaster', 'ItemMaster', 'Inventory', 'Item Master', 'inventory-master'],
+    'Item Master': ['Inventory & Item Master', 'InventoryMaster', 'ItemMaster', 'Inventory', 'Item Master', 'inventory-master'],
+    'inventory-master': ['Inventory & Item Master', 'InventoryMaster', 'ItemMaster', 'Inventory', 'Item Master', 'inventory-master'],
     'Custom Form Builder': ['Custom Form Builder', 'CustomFormBuilder'],
     'Form Responses': ['Form Responses', 'FormResponses'],
   };
@@ -126,4 +129,18 @@ export function getFirstAllowedPath(
 
 export function getMenuPermissionRule(itemId: string): RoutePermissionRule | undefined {
   return MENU_ITEM_PERMISSIONS[itemId];
+}
+
+export function hasModuleEntry(
+  permissions: UserPermissionsMap | null | undefined,
+  module: string
+): boolean {
+  if (!permissions) return false;
+  const aliases: Record<string, string[]> = {
+    'Inventory & Item Master': ['Inventory & Item Master', 'InventoryMaster', 'ItemMaster', 'Inventory', 'Item Master', 'inventory-master'],
+    'Item Master': ['Inventory & Item Master', 'InventoryMaster', 'ItemMaster', 'Inventory', 'Item Master', 'inventory-master'],
+    'inventory-master': ['Inventory & Item Master', 'InventoryMaster', 'ItemMaster', 'Inventory', 'Item Master', 'inventory-master'],
+  };
+  const list = aliases[module] || [module, `${module}s`, module.replace(/s$/, '')];
+  return list.some((m) => permissions[m] !== undefined);
 }

@@ -12,6 +12,8 @@ export interface User {
   fullName: string;
   companyCode: string;
   department?: string;
+  position?: string;
+  userType?: string;
   phone?: string;
   branchId?: string | null;
   branchCode?: string | null;

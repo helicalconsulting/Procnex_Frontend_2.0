@@ -90,6 +90,11 @@ class SSEClient {
     'pr_updated',
     'pr_status_changed',
     'pr_deleted',
+    // Inventory & Item Master events
+    'item_master_created',
+    'item_master_updated',
+    'item_master_deleted',
+    'inventory_updated',
   ];
 
   /**

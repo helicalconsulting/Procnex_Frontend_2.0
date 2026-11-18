@@ -19,7 +19,8 @@ export interface CreateUserPayload {
   branchId?: string;
   companyCode?: string;
   roleName: string;
-  userType?: 'rfq' | 'heliflow';
+  userType?: 'rfq' | 'heliflow' | 'P2P' | 'WORKFLOW' | string;
+  position?: string;
   documents?: {
     aadhaar?: File;
     pan?: File;
@@ -35,6 +36,8 @@ export interface UpdateUserPayload {
   department?: string;
   branchId?: string;
   roleName?: string;
+  userType?: string;
+  position?: string;
 }
 
 export interface CreateApprovalLevelPayload {

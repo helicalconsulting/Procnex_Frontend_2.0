@@ -28,6 +28,7 @@ import {
   PackageCheck,
   Plus,
   Minus,
+  Boxes,
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import heliflowLogo from '../../assets/heliflow.png';
@@ -97,6 +98,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Forms: <ClipboardList size={19} />,
   'Form Responses': <BarChart3 size={19} />,
   'Budget Management': <Wallet size={19} />,
+  'Inventory & Item Master': <Boxes size={19} />,
+  'Item Master': <Boxes size={19} />,
 };
 
 const FR_NAV_MAP: Record<string, string> = {

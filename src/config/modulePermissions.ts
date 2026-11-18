@@ -32,6 +32,7 @@ export const MODULE_CAPABILITIES: ModuleCapability[] = [
   { module: 'Roles & Permissions', hint: 'Configure RBAC roles & access', supports: ['canView', 'canCreate'] },
   { module: 'Approval Levels', hint: 'Configure approval chains', supports: ['canView', 'canCreate'] },
   { module: 'Company Settings', hint: 'Company profile & settings', supports: ['canView', 'canCreate'] },
+  { module: 'Inventory & Item Master', hint: 'Inventory items & catalog master management', supports: ['canView', 'canCreate', 'canApprove'] },
   { module: 'Custom Form Builder', hint: 'Build custom forms', supports: ['canView', 'canCreate'] },
   { module: 'Form Responses', hint: 'View form submissions', supports: ['canView'] },
 ];

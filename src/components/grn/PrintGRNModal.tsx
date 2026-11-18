@@ -372,7 +372,7 @@ export function PrintGRNModal({
             <thead>
               <tr>
                 <th style={{ width: 36 }}>#</th>
-                <th>Item Code & Description</th>
+                <th>Item Code & Name</th>
                 <th className="text-center" style={{ width: 75 }}>Ordered</th>
                 <th className="text-center" style={{ width: 80 }}>Received</th>
                 <th className="text-center" style={{ width: 80 }}>Accepted</th>

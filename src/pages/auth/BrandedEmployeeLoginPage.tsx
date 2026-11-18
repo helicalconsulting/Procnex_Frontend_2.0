@@ -317,19 +317,15 @@ export const BrandedEmployeeLoginPage: React.FC = () => {
             id="elogin-branch"
             value={selectedBranchId}
             onChange={(e) => setSelectedBranchId(e.target.value)}
-            disabled={isSubmitting || loadingBranches || branches.length === 0}
+            disabled={isSubmitting || loadingBranches}
             className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            required={branches.length > 0}
           >
-            {branches.length === 0 ? (
-              <option value="">{loadingBranches ? 'Loading branches…' : 'Main Branch / Head Office'}</option>
-            ) : (
-              branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.code}){b.city ? ` • ${b.city}` : ''}{b.isDefault ? ' [Head Office]' : ''}
-                </option>
-              ))
-            )}
+            <option value="ALL">🌐 All Branches (Super Admin)</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} ({b.code}){b.city ? ` • ${b.city}` : ''}{b.isDefault ? ' [Head Office]' : ''}
+              </option>
+            ))}
           </select>
         </div>
 

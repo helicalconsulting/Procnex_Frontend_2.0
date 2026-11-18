@@ -1,6 +1,6 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { createPortal } from 'react-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -342,11 +342,18 @@ function downloadSignedDocument(doc: VendorDocument): void {
 }
 
 export default function OnboardingQueuePage() {
-  const { hasPermission } = useAuth();
-  const canApproveOnboarding = hasPermission('Onboarding Queue', 'canApprove');
+  const navigate = useNavigate();
+  const { hasPermission, roles } = useAuth();
+  const isSuperAdmin = (roles || []).some((r: any) => {
+    const roleStr = typeof r === 'string' ? r : (r?.roleName || r?.name || '');
+    const clean = roleStr.toLowerCase().trim();
+    return clean === 'super admin' || clean === 'superadmin' || clean === 'administrator' || clean === 'admin';
+  });
+  const canApproveOnboarding = isSuperAdmin && hasPermission('Onboarding Queue', 'canApprove');
   const { data: requests, loading, error, reload } = useServiceData(
-    () => procurementService.getOnboardingQueue().then((list) => list.map(mapOnboardingVendor)),
-    [] as QueueRow[]
+    () => isSuperAdmin ? procurementService.getOnboardingQueue().then((list) => list.map(mapOnboardingVendor)) : Promise.resolve([]),
+    [] as QueueRow[],
+    [isSuperAdmin]
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -688,6 +695,21 @@ export default function OnboardingQueuePage() {
       }
     }
   }, []);
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 max-w-lg mx-auto text-center space-y-4">
+        <div className="inline-flex p-4 rounded-2xl bg-destructive/10 text-destructive mb-2">
+          <ShieldCheck size={40} />
+        </div>
+        <h2 className="text-2xl font-bold text-foreground">Access Restricted to Super Admin</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Vendor Onboarding Queue review and approvals are restricted to Super Administrators.
+        </p>
+        <Button onClick={() => navigate('/vendors')}>Go to Vendors Directory</Button>
+      </div>
+    );
+  }
 
   return (
     <PageFrame>

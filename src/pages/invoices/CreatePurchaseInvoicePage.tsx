@@ -9,7 +9,6 @@ import { vendorService } from '../../services/vendorService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { grnService, type GoodsReceivedNote } from '../../services/grnService';
 import { invoiceService, type APInvoice } from '../../services/invoiceService';
-import { dispatchNoteService, type DispatchNote } from '../../services/dispatchNoteService';
 import { sequencePreview } from '../../components/admin/company-settings/serializationModel';
 import { companySettingsService } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
@@ -45,6 +44,9 @@ import {
   PackageX,
   Scale,
   TrendingDown,
+  Boxes,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import TablePagination from '../../components/shared/TablePagination';
 import { MessageStrip } from '../../components/shared/MessageStrip';
@@ -214,9 +216,61 @@ export default function CreatePurchaseInvoicePage() {
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [selectedPoId, setSelectedPoId] = useState<string>(() => poIdParam || '');
   const [selectedGrnId, setSelectedGrnId] = useState<string>(() => grnIdParam || '');
+  const [invoiceBasis, setInvoiceBasis] = useState<'vendor_invoice' | 'single_grn' | 'multi_grn' | 'direct'>(() => {
+    if (modeParam === 'manual') return 'direct';
+    if (modeParam === 'multi_grn') return 'multi_grn';
+    if (modeParam === 'vendor_invoice' || invoiceIdParam || (invoiceNumberParam && !grnIdParam)) return 'vendor_invoice';
+    return 'single_grn';
+  });
+  const [selectedGrnIds, setSelectedGrnIds] = useState<string[]>(() => {
+    if (grnIdParam) return [grnIdParam];
+    return [];
+  });
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
   const [invoiceOptions, setInvoiceOptions] = useState<APInvoice[]>([]);
   const [grnRefreshTrigger, setGrnRefreshTrigger] = useState(0);
+
+  // Vendor Submitted Invoices for selection in vendor_invoice mode
+  const vendorSubmittedInvoices = useMemo(() => {
+    const list = invoicesList || [];
+    return list.filter((inv: any) => {
+      const isVendorSub = Boolean(inv.isVendorSubmission || inv.vendorPortalSubmitted || inv.status === 'DRAFT');
+      if (selectedVendorId) {
+        const matchesVendor =
+          String(inv.vendorId) === String(selectedVendorId) ||
+          String(inv.purchaseOrder?.vendorId) === String(selectedVendorId);
+        return matchesVendor && (isVendorSub || inv.status !== 'PAID');
+      }
+      if (selectedPoId) {
+        const matchesPo =
+          String(inv.poId) === String(selectedPoId) ||
+          String(inv.purchaseOrder?.id) === String(selectedPoId) ||
+          String(inv.poNumber) === String(selectedPoId);
+        return matchesPo && (isVendorSub || inv.status !== 'PAID');
+      }
+      return isVendorSub || inv.status === 'DRAFT';
+    });
+  }, [invoicesList, selectedVendorId, selectedPoId]);
+
+  const availableVendorInvoices = useMemo(() => {
+    const map = new Map<string, APInvoice>();
+    (invoiceOptions || []).forEach((inv) => {
+      if (inv && inv.id) map.set(String(inv.id), inv);
+    });
+    vendorSubmittedInvoices.forEach((inv) => {
+      if (inv && inv.id) map.set(String(inv.id), inv);
+    });
+    return Array.from(map.values());
+  }, [invoiceOptions, vendorSubmittedInvoices]);
+
+  // Load all available company GRNs so users can create invoices from Single or Multiple GRNs directly
+  const { data: allCompanyGrnsData } = useServiceData(
+    () => grnService.list({ limit: 200 }),
+    { grns: [], total: 0 },
+    [grnRefreshTrigger],
+    { cacheKey: 'create-invoice:all-company-grns', cacheTtlMs: 20000 }
+  );
+  const allCompanyGrns = allCompanyGrnsData.grns || [];
 
   useEffect(() => {
     const handleGrnUpdated = () => {
@@ -231,15 +285,6 @@ export default function CreatePurchaseInvoicePage() {
   // Form Details (declared before useMemo to avoid TDZ ReferenceError)
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(() => (invoiceIdParam ? String(invoiceIdParam) : null));
   const [invoiceNumber, setInvoiceNumber] = useState<string>(() => (invoiceNumberParam ? String(invoiceNumberParam) : ''));
-
-  // Dispatch Notes list for checking vendor dispatch status
-  const { data: dnData } = useServiceData(
-    () => (selectedPoId ? dispatchNoteService.list({ poId: selectedPoId, limit: 50 }) : Promise.resolve({ dispatchNotes: [], total: 0 })),
-    { dispatchNotes: [], total: 0 },
-    [selectedPoId],
-    { cacheKey: `create-invoice:dns:${selectedPoId || 'none'}`, cacheTtlMs: 30000 }
-  );
-  const dispatchNotes = dnData.dispatchNotes || [];
 
 
   useEffect(() => {
@@ -564,47 +609,89 @@ export default function CreatePurchaseInvoicePage() {
     return 'Supplier';
   }, [vendorName, allSuppliers, selectedVendorId, selectedPO]);
 
-  // Human-readable Dispatch Note / Invoice Number formatter
-  const displayGrnNumber = useMemo(() => {
-    if (selectedGrnId === 'all_grn' || (!selectedGrnId && grnOptions.length > 1)) {
-      return `All GRNs Combined (${grnOptions.length} Receipts)`;
+  // Dynamically resolve available GRNs across supplier/PO
+  const availableGrns = useMemo(() => {
+    let list = grnOptions.length > 0 ? grnOptions : allCompanyGrns;
+    if (selectedPoId) {
+      const filtered = list.filter(
+        (g) =>
+          String(g.poId) === String(selectedPoId) ||
+          String(g.purchaseOrder?.id) === String(selectedPoId) ||
+          String(g.purchaseOrder?.poNumber) === String(selectedPoId)
+      );
+      if (filtered.length > 0) return filtered;
     }
+    if (selectedVendorId) {
+      const filtered = list.filter(
+        (g) =>
+          String(g.vendorId) === String(selectedVendorId) ||
+          String(g.purchaseOrder?.vendorId) === String(selectedVendorId)
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    return list;
+  }, [grnOptions, allCompanyGrns, selectedPoId, selectedVendorId]);
+
+  // Human-readable Store GRN / Vendor Invoice Number formatter
+  const displayGrnNumber = useMemo(() => {
+    if (invoiceBasis === 'direct') {
+      return 'Direct Entry (Without GRN)';
+    }
+    if (invoiceBasis === 'multi_grn' || selectedGrnIds.length > 1) {
+      const count = selectedGrnIds.length;
+      if (count === 0) return 'No GRNs Selected (Choose below)';
+      const names = selectedGrnIds
+        .map((id) => {
+          const match = availableGrns.find(
+            (g) => String(g.id) === String(id) || String(g.grnNumber) === String(id)
+          );
+          return match?.grnNumber || id;
+        })
+        .slice(0, 3)
+        .join(', ');
+      return `${count} GRNs Combined (${names}${count > 3 ? '...' : ''})`;
+    }
+
     const cleanGrnId = selectedGrnId.replace(/^grn_/, '').replace(/^inv_/, '');
-    const matchInGrn = grnOptions.find(
+    const matchInGrn = availableGrns.find(
       (g) => String(g.id) === String(cleanGrnId) || String(g.grnNumber) === String(cleanGrnId)
     );
-    const matchInInv = invoiceOptions.find(
+    const matchInInv = availableVendorInvoices.find(
       (i) => String(i.id) === String(cleanGrnId) || String(i.invoiceNumber) === String(cleanGrnId)
     );
 
-    const dnLabel = matchInGrn?.grnNumber
-      ? matchInGrn.grnNumber.replace(/^GRN-/, 'DN-')
-      : grnOptions[0]?.grnNumber
-      ? grnOptions[0].grnNumber.replace(/^GRN-/, 'DN-')
-      : null;
-    const invLabel = matchInInv?.invoiceNumber || invoiceOptions[0]?.invoiceNumber || null;
+    const grnLabel = matchInGrn?.grnNumber || (availableGrns.length === 1 ? availableGrns[0].grnNumber : null);
+    const invLabel = matchInInv?.invoiceNumber || (selectedGrnId.startsWith('inv_') ? cleanGrnId : null) || null;
 
-    if (dnLabel && invLabel) {
-      return `DN: ${dnLabel} • Invoice: ${invLabel}`;
-    }
-    if (invLabel) {
-      return `Invoice: ${invLabel}`;
-    }
-    if (dnLabel) {
-      return `Dispatch Note: ${dnLabel}`;
+    if (invoiceBasis === 'vendor_invoice') {
+      if (invLabel && grnLabel) {
+        return `Vendor Inv: ${invLabel} • Store GRN: ${grnLabel}`;
+      }
+      if (invLabel) {
+        return `Vendor Invoice: ${invLabel}`;
+      }
+      return 'Vendor Submitted Invoice (Select below)';
     }
 
-    if (grnIdParam && (grnIdParam.startsWith('GRN-') || grnIdParam.startsWith('DN-') || grnIdParam.startsWith('INV-')))
-      return grnIdParam.replace(/^GRN-/, 'DN-');
-    if (cleanGrnId && (cleanGrnId.startsWith('GRN-') || cleanGrnId.startsWith('DN-') || cleanGrnId.startsWith('INV-')))
-      return cleanGrnId.replace(/^GRN-/, 'DN-');
+    if (selectedGrnId === 'all_grn' || (!selectedGrnId && availableGrns.length > 1)) {
+      return `All GRNs Combined (${availableGrns.length} Receipts)`;
+    }
+
+    if (grnLabel) {
+      return `Store GRN: ${grnLabel}`;
+    }
+
+    if (grnIdParam && (grnIdParam.startsWith('GRN-') || grnIdParam.startsWith('INV-')))
+      return grnIdParam;
+    if (cleanGrnId && (cleanGrnId.startsWith('GRN-') || cleanGrnId.startsWith('INV-')))
+      return cleanGrnId;
 
     if (cleanGrnId && /^[0-9a-fA-F]{24}$/.test(cleanGrnId)) {
       return `Ref: ${cleanGrnId.slice(-6).toUpperCase()}`;
     }
 
-    return selectedPoId ? 'Direct PO Billing (No Linked DN / Invoice)' : 'Select Purchase Order First';
-  }, [grnOptions, invoiceOptions, selectedGrnId, grnIdParam, selectedPoId]);
+    return selectedPoId ? 'Direct PO Billing (No Linked Store GRN)' : 'Select Purchase Order First';
+  }, [availableGrns, availableVendorInvoices, selectedGrnId, selectedGrnIds, invoiceBasis, grnIdParam, selectedPoId]);
 
   // Pre-fill query params if present
   useEffect(() => {
@@ -680,24 +767,24 @@ export default function CreatePurchaseInvoicePage() {
     }
   }, [grnIdParam, grnOptions, invoiceOptions, selectedPoId, selectedGrnId, invoiceNumber]);
 
-  // When switching to manual creation mode, reset items to clean blank template
+  // When switching to direct manual creation mode, reset items to clean blank template
   useEffect(() => {
-    if (creationMode === 'manual') {
-      setSelectedPoId('');
+    if (invoiceBasis === 'direct') {
       setSelectedGrnId('');
-      setGrnOptions([]);
-      setInvoiceOptions([]);
+      setSelectedGrnIds([]);
       setLineItems([
         { id: Date.now(), itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
       ]);
     }
-  }, [creationMode]);
+  }, [invoiceBasis]);
 
   // Fetch GRNs & Vendor Invoices strictly linked to the selected PO
   useEffect(() => {
-    if (creationMode === 'manual' || !selectedPoId) {
-      setGrnOptions([]);
-      setInvoiceOptions([]);
+    if (invoiceBasis === 'direct' || !selectedPoId) {
+      if (invoiceBasis === 'direct') {
+        setGrnOptions([]);
+        setInvoiceOptions([]);
+      }
       return;
     }
 
@@ -770,7 +857,7 @@ export default function CreatePurchaseInvoicePage() {
       })
       .catch(() => setInvoiceOptions([]));
 
-    if (foundPO && creationMode !== 'manual') {
+    if (foundPO && invoiceBasis !== 'direct') {
       if (foundPO.vendorId) setSelectedVendorId(String(foundPO.vendorId));
       if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
 
@@ -786,7 +873,7 @@ export default function CreatePurchaseInvoicePage() {
         setPaymentTerms(poPaymentTerms);
       }
 
-      if (!selectedGrnId && foundPO.items && foundPO.items.length > 0) {
+      if (!selectedGrnId && selectedGrnIds.length === 0 && foundPO.items && foundPO.items.length > 0) {
         const totalVal = Number(foundPO.totalAmount || 0);
         setLineItems(
           foundPO.items.map((item: any, idx: number) => {
@@ -819,11 +906,11 @@ export default function CreatePurchaseInvoicePage() {
         );
       }
     }
-  }, [selectedPoId, poList, creationMode, grnRefreshTrigger]);
+  }, [selectedPoId, poList, creationMode, invoiceBasis, grnRefreshTrigger]);
 
   // When selected GRN or Vendor Invoice changes, populate form & item details
   useEffect(() => {
-    if (!selectedGrnId) return;
+    if (!selectedGrnId && selectedGrnIds.length === 0) return;
     if (isReadOnly) return;
 
     const foundPO = poList.find(
@@ -832,22 +919,28 @@ export default function CreatePurchaseInvoicePage() {
 
     const resolveItemsForSelection = (foundInv: any, foundGRN: any, poObj: any) => {
       const isDirectMasterRfq = poObj?.rfq?.title === 'Direct PO Master' || poObj?.rfq?.rfqNumber?.startsWith('RFQ-DIRECT');
-      const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
+      const activeGRN = foundGRN || (availableGrns && availableGrns.length > 0 ? availableGrns[0] : null);
       const invTotalAmount = Number(foundInv?.amount || 0);
       const totalPOValue = Number(poObj?.totalAmount || invTotalAmount || 0);
 
       // Determine which GRNs to draw received/accepted quantities from:
       const targetGrns: GoodsReceivedNote[] = (() => {
-        if (!grnOptions || grnOptions.length === 0) {
-          return activeGRN ? [activeGRN] : [];
+        if (invoiceBasis === 'direct') return [];
+        if (invoiceBasis === 'multi_grn' && selectedGrnIds.length > 0) {
+          const matched = availableGrns.filter(
+            (g) => selectedGrnIds.includes(String(g.id)) || selectedGrnIds.includes(String(g.grnNumber))
+          );
+          if (matched.length > 0) return matched;
         }
         if (selectedGrnId && selectedGrnId !== 'all_grn' && selectedGrnId.startsWith('grn_')) {
           const cleanId = selectedGrnId.replace(/^grn_/, '');
-          const single = grnOptions.find((g) => String(g.id) === cleanId || String(g.grnNumber) === cleanId);
+          const single = availableGrns.find((g) => String(g.id) === cleanId || String(g.grnNumber) === cleanId);
           if (single) return [single];
         }
-        // Default / 'all_grn': aggregate across ALL GRNs of this PO!
-        return grnOptions;
+        if (availableGrns && availableGrns.length > 0) {
+          return availableGrns;
+        }
+        return activeGRN ? [activeGRN] : [];
       })();
 
       // Base PO items
@@ -855,11 +948,17 @@ export default function CreatePurchaseInvoicePage() {
         ? poObj.items
         : (!isDirectMasterRfq ? (poObj?.rfq?.items || poObj?.rfq?.selectedQuotation?.items) : []) || [];
 
-      // Check if GRN is selected or prioritized
-      const isGrnSelected = selectedGrnId === 'all_grn' || selectedGrnId.startsWith('grn_') || Boolean(grnIdParam) || (!selectedGrnId.startsWith('inv_') && targetGrns.length > 0);
+      // Check if GRN is selected or prioritized (only when not in vendor_invoice mode)
+      const shouldPrioritizeGrn =
+        invoiceBasis !== 'vendor_invoice' &&
+        !foundInv &&
+        (selectedGrnId === 'all_grn' ||
+          selectedGrnId.startsWith('grn_') ||
+          Boolean(grnIdParam) ||
+          (!selectedGrnId.startsWith('inv_') && targetGrns.length > 0));
 
       // ── PRIORITY 1: When PO has items and GRN is selected, map PO items with full GRN fulfillment ──
-      if (isGrnSelected && basePoItems.length > 0) {
+      if (shouldPrioritizeGrn && basePoItems.length > 0) {
         return basePoItems.map((poItem: any, idx: number) => {
           const poQty = Math.max(1, Number(poItem.quantity || poItem.orderedQty || 1));
           let unitPrice = Number(poItem.unitPrice || 0);
@@ -889,12 +988,12 @@ export default function CreatePurchaseInvoicePage() {
             });
           });
 
-          // Dispatch Qty is the quantity dispatched / received by store (e.g. 20 for lap)
-          const dispatchQty = targetGrns.length > 0 ? (hasAnyMatch ? totalRecQty : 0) : poQty;
+          // Store Received Qty is the quantity received by store (e.g. 20 for lap)
+          const receivedQty = targetGrns.length > 0 ? (hasAnyMatch ? totalRecQty : 0) : poQty;
           // Accepted Quantity is the inspected quantity accepted by store (e.g. 10 for lap)
           const acceptedQty = targetGrns.length > 0 ? (hasAnyMatch ? totalAccQty : 0) : poQty;
 
-          const grnQty = dispatchQty;
+          const grnQty = receivedQty;
           const supplierQty = acceptedQty;
 
           if (!unitPrice && totalPOValue > 0 && poQty > 0) {
@@ -1163,14 +1262,17 @@ export default function CreatePurchaseInvoicePage() {
 
     if (
       selectedGrnId.startsWith('inv_') ||
-      invoiceOptions.some((i) => `inv_${i.id}` === selectedGrnId || String(i.invoiceNumber) === String(selectedGrnId))
+      availableVendorInvoices.some((i) => `inv_${i.id}` === selectedGrnId || String(i.invoiceNumber) === String(selectedGrnId))
     ) {
       const invId = selectedGrnId.replace('inv_', '');
-      const foundInv = invoiceOptions.find(
+      const foundInv = availableVendorInvoices.find(
         (i) => String(i.id) === String(invId) || String(i.invoiceNumber) === String(invId) || String(i.invoiceNumber) === String(selectedGrnId)
       );
       if (foundInv) {
-        if (isReadOnly && foundInv.invoiceNumber) {
+        if (foundInv.id) {
+          setEditingInvoiceId(String(foundInv.id));
+        }
+        if (foundInv.invoiceNumber) {
           setInvoiceNumber(foundInv.invoiceNumber);
         } else if (!isReadOnly && !invoiceNumber) {
           companySettingsService
@@ -1266,17 +1368,143 @@ export default function CreatePurchaseInvoicePage() {
         setLineItems(resolved);
       }
     }
-  }, [selectedGrnId, grnOptions, invoiceOptions, poList, selectedPoId]);
+  }, [selectedGrnId, selectedGrnIds, invoiceBasis, availableGrns, availableVendorInvoices, grnOptions, invoiceOptions, poList, selectedPoId]);
 
   // Handle vendor selection change
   const handleVendorSelect = (vId: string) => {
     setSelectedVendorId(vId);
     setSelectedPoId('');
     setSelectedGrnId('');
+    setSelectedGrnIds([]);
     const found = allSuppliers.find((v) => String(v.id) === String(vId) || v.name === vId);
     if (found) {
       setVendorName(found.name);
     }
+  };
+
+  // Handle Vendor's Submitted Invoice Selection
+  const handleVendorInvoiceSelect = (invKey: string) => {
+    setSelectedGrnId(invKey);
+    setSelectedGrnIds([]);
+    const cleanId = invKey.replace(/^inv_/, '');
+    const foundInv = availableVendorInvoices.find(
+      (i) => String(i.id) === String(cleanId) || String(i.invoiceNumber) === String(cleanId)
+    );
+    if (foundInv) {
+      if (foundInv.id) {
+        setEditingInvoiceId(String(foundInv.id));
+      }
+      if (foundInv.invoiceNumber) {
+        setInvoiceNumber(foundInv.invoiceNumber);
+      }
+      if (foundInv.poId && !selectedPoId) {
+        setSelectedPoId(String(foundInv.poId));
+      }
+      const vId = foundInv.vendorId || foundInv.purchaseOrder?.vendorId;
+      if (vId && !selectedVendorId) {
+        setSelectedVendorId(String(vId));
+      }
+    }
+  };
+
+  // Handle Invoice Creation Basis Switch (Vendor Invoice vs Single GRN vs Multi-GRN vs Direct Entry)
+  const handleBasisChange = (basis: 'vendor_invoice' | 'single_grn' | 'multi_grn' | 'direct') => {
+    setInvoiceBasis(basis);
+    if (basis === 'vendor_invoice') {
+      if (availableVendorInvoices.length > 0) {
+        handleVendorInvoiceSelect(`inv_${availableVendorInvoices[0].id}`);
+      } else {
+        setSelectedGrnId('');
+        setSelectedGrnIds([]);
+      }
+    } else if (basis === 'direct') {
+      setSelectedGrnId('');
+      setSelectedGrnIds([]);
+      setLineItems([
+        { id: Date.now(), itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
+      ]);
+    } else if (basis === 'single_grn') {
+      if (selectedGrnIds.length > 0) {
+        const first = selectedGrnIds[0];
+        setSelectedGrnId(`grn_${first}`);
+        setSelectedGrnIds([first]);
+      } else if (availableGrns.length > 0) {
+        const first = availableGrns[0];
+        setSelectedGrnId(`grn_${first.id}`);
+        setSelectedGrnIds([String(first.id)]);
+      }
+    } else if (basis === 'multi_grn') {
+      if (selectedGrnIds.length === 0) {
+        if (selectedGrnId && selectedGrnId !== 'all_grn' && !selectedGrnId.startsWith('inv_')) {
+          const clean = selectedGrnId.replace(/^grn_/, '');
+          setSelectedGrnIds([clean]);
+        } else if (availableGrns.length > 0) {
+          setSelectedGrnIds(availableGrns.slice(0, 5).map((g) => String(g.id)));
+          setSelectedGrnId('all_grn');
+        }
+      } else if (selectedGrnIds.length > 1) {
+        setSelectedGrnId('all_grn');
+      }
+    }
+  };
+
+  // Single GRN Selection
+  const handleSingleGrnSelect = (grnKey: string) => {
+    setSelectedGrnId(grnKey);
+    const cleanId = grnKey.replace(/^grn_/, '').replace(/^inv_/, '');
+    setSelectedGrnIds(cleanId ? [cleanId] : []);
+
+    const targetGrn = availableGrns.find(
+      (g) => String(g.id) === cleanId || String(g.grnNumber) === cleanId
+    );
+    if (targetGrn) {
+      if (targetGrn.poId && !selectedPoId) {
+        setSelectedPoId(targetGrn.poId);
+      }
+      const vId = targetGrn.purchaseOrder?.vendorId || targetGrn.vendorId;
+      if (vId && !selectedVendorId) {
+        setSelectedVendorId(String(vId));
+      }
+    }
+  };
+
+  // Multi-GRN Toggle Selection
+  const handleToggleMultiGrn = (grnKey: string) => {
+    const cleanId = grnKey.replace(/^grn_/, '').replace(/^inv_/, '');
+    setSelectedGrnIds((prev) => {
+      const exists = prev.includes(cleanId);
+      const next = exists ? prev.filter((id) => id !== cleanId) : [...prev, cleanId];
+      if (next.length === 1) {
+        setSelectedGrnId(`grn_${next[0]}`);
+      } else if (next.length > 1) {
+        setSelectedGrnId('all_grn');
+      } else {
+        setSelectedGrnId('');
+      }
+
+      if (!exists) {
+        const found = availableGrns.find((g) => String(g.id) === cleanId || String(g.grnNumber) === cleanId);
+        if (found) {
+          if (found.poId && !selectedPoId) setSelectedPoId(found.poId);
+          const vId = found.purchaseOrder?.vendorId || found.vendorId;
+          if (vId && !selectedVendorId) setSelectedVendorId(String(vId));
+        }
+      }
+      return next;
+    });
+  };
+
+  // Select all visible GRNs for multi-GRN consolidation
+  const handleSelectAllGrns = () => {
+    const allIds = availableGrns.map((g) => String(g.id));
+    setSelectedGrnIds(allIds);
+    setSelectedGrnId(allIds.length > 1 ? 'all_grn' : (allIds[0] ? `grn_${allIds[0]}` : ''));
+  };
+
+  // Clear all selected GRNs
+  const handleClearAllGrns = () => {
+    setSelectedGrnIds([]);
+    setSelectedGrnId('');
   };
 
   // Add Line Item
@@ -1717,19 +1945,31 @@ export default function CreatePurchaseInvoicePage() {
       setErrorMsg('Please select a Supplier.');
       return false;
     }
-    if (creationMode === 'linked') {
-      if (!selectedPoId) {
-        setErrorMsg('Please select a linked Purchase Order (PO Selection).');
+    if (invoiceBasis === 'vendor_invoice' && !selectedGrnId.startsWith('inv_') && availableVendorInvoices.length > 0) {
+      setErrorMsg("Please select a Vendor Invoice.");
+      return false;
+    }
+    if (invoiceBasis === 'single_grn' && !selectedGrnId && availableGrns.length > 0) {
+      setErrorMsg('Please select a Goods Received Note (GRN) for Single GRN invoice creation.');
+      return false;
+    }
+    if (invoiceBasis === 'multi_grn' && selectedGrnIds.length === 0) {
+      setErrorMsg('Please select at least one Goods Received Note (GRN) from the list for Multiple GRNs creation.');
+      return false;
+    }
+    if (creationMode === 'linked' && invoiceBasis !== 'direct' && invoiceBasis !== 'vendor_invoice') {
+      if (!selectedPoId && selectedGrnIds.length === 0) {
+        setErrorMsg('Please select a linked Purchase Order (PO Selection) or select GRN(s).');
         return false;
       }
-      const isAll = selectedGrnId === 'all_grn' || !selectedGrnId;
+      const isAll = selectedGrnId === 'all_grn' || invoiceBasis === 'multi_grn';
       const activeGrn = isAll
-        ? grnOptions[0]
-        : (grnOptions.find(
+        ? availableGrns[0]
+        : (availableGrns.find(
             (g) =>
               String(g.id) === String(selectedGrnId).replace(/^grn_/, '') ||
               String(g.grnNumber) === String(selectedGrnId).replace(/^grn_/, '')
-          ) || grnOptions[0]);
+          ) || availableGrns[0]);
       const existingInv = activeGrn?.invoices?.find(
         (inv) => inv.status !== 'CANCELLED' && inv.status !== 'REJECTED'
       );
@@ -1781,10 +2021,10 @@ export default function CreatePurchaseInvoicePage() {
 
       const cleanVendorInv = (() => {
         if (!displayGrnNumber || displayGrnNumber === '—') return undefined;
-        const matchInv = displayGrnNumber.match(/(?:•|\||\b)\s*Invoice:\s*([^\s|•]+)/i);
+        const matchInv = displayGrnNumber.match(/(?:•|\||\b)\s*(?:Vendor\s+)?Invoice:\s*([^\s|•]+)/i);
         if (matchInv && matchInv[1]) return matchInv[1].trim();
         if (!displayGrnNumber.startsWith('GRN-') && !displayGrnNumber.toLowerCase().includes('select')) {
-          return displayGrnNumber.replace(/^(?:DN|Dispatch Note):\s*/i, '').trim();
+          return displayGrnNumber.replace(/^(?:DN|Dispatch Note|Store GRN|Vendor Inv|Vendor Invoice):\s*/i, '').trim();
         }
         return undefined;
       })();
@@ -1792,8 +2032,16 @@ export default function CreatePurchaseInvoicePage() {
       const resolvedGrnId =
         (selectedGrnId && selectedGrnId.startsWith('grn_')
           ? selectedGrnId.replace(/^grn_/, '')
-          : (selectedGrnId === 'all_grn' ? (grnOptions[0]?.id || null) : selectedGrnId)) ||
-        (grnOptions.length > 0 ? grnOptions[0].id : null);
+          : (selectedGrnId === 'all_grn' ? (selectedGrnIds[0] || availableGrns[0]?.id || null) : selectedGrnId)) ||
+        (selectedGrnIds.length > 0 ? selectedGrnIds[0] : (availableGrns.length > 0 ? availableGrns[0].id : null));
+
+      const grnNumbersList = selectedGrnIds.map((id) => {
+        const found = availableGrns.find((g) => String(g.id) === String(id) || String(g.grnNumber) === String(id));
+        return found?.grnNumber || id;
+      });
+
+      const actualGrnId = invoiceBasis === 'direct' ? null : (invoiceBasis === 'vendor_invoice' ? (availableGrns[0]?.id || null) : resolvedGrnId);
+      const actualGrnIds = invoiceBasis === 'direct' ? [] : (invoiceBasis === 'vendor_invoice' ? (availableGrns[0]?.id ? [String(availableGrns[0].id)] : []) : (selectedGrnIds.length > 0 ? selectedGrnIds : (resolvedGrnId ? [resolvedGrnId] : [])));
 
       await apiRequest('/invoices/manual', {
         method: 'POST',
@@ -1804,7 +2052,10 @@ export default function CreatePurchaseInvoicePage() {
           erpInvoiceRef: cleanVendorInv,
           vendorId: selectedVendorId || selectedPOObj?.vendorId,
           poId: selectedPoId || null,
-          grnId: resolvedGrnId || null,
+          grnId: actualGrnId,
+          grnIds: actualGrnIds,
+          grnNumbers: grnNumbersList,
+          bypassGrnCheck: invoiceBasis === 'direct' || invoiceBasis === 'vendor_invoice',
           invoiceDate,
           dueDate,
           paymentTerms,
@@ -2459,7 +2710,7 @@ export default function CreatePurchaseInvoicePage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '8px 0' }}>
-                {/* Option 1: Link with Vendor Dispatch Note / Invoice */}
+                {/* Option 1: Vendor's Submitted Invoice */}
                 <div
                   className="cpi-mode-option"
                   onClick={() => {
@@ -2467,9 +2718,39 @@ export default function CreatePurchaseInvoicePage() {
                       setSelectedVendorId('');
                       setSelectedPoId('');
                       setSelectedGrnId('');
+                      setSelectedGrnIds([]);
                       setVendorName('');
                     }
                     setCreationMode('linked');
+                    handleBasisChange('vendor_invoice');
+                    setIsCreating(true);
+                    setShowModeModal(false);
+                  }}
+                >
+                  <div className="cpi-mode-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#7c3aed' }}>
+                    <FileText size={26} />
+                  </div>
+                  <div>
+                    <div className="cpi-mode-title">Link with Vendor Invoice</div>
+                    <div className="cpi-mode-desc">
+                      Select from vendor-submitted Invoices linked to Purchase Orders for automated 3-way quantity matching.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Option 2: Single GRN */}
+                <div
+                  className="cpi-mode-option"
+                  onClick={() => {
+                    if (!poIdParam && !grnIdParam) {
+                      setSelectedVendorId('');
+                      setSelectedPoId('');
+                      setSelectedGrnId('');
+                      setSelectedGrnIds([]);
+                      setVendorName('');
+                    }
+                    setCreationMode('linked');
+                    handleBasisChange('single_grn');
                     setIsCreating(true);
                     setShowModeModal(false);
                   }}
@@ -2478,27 +2759,52 @@ export default function CreatePurchaseInvoicePage() {
                     <PackageCheck size={26} />
                   </div>
                   <div>
-                    <div className="cpi-mode-title">Link with Vendor Dispatch Note / Invoice</div>
+                    <div className="cpi-mode-title">From Single Store GRN</div>
                     <div className="cpi-mode-desc">
-                      Select from vendor-submitted Dispatch Notes or Invoices linked to Purchase Orders for automated 3-way quantity matching.
+                      Select from a verified store Goods Received Note for automated 3-way quantity matching.
                     </div>
                   </div>
                 </div>
 
-                {/* Option 2: Direct Manual Invoice */}
+                {/* Option 3: Multiple GRNs */}
+                <div
+                  className="cpi-mode-option"
+                  onClick={() => {
+                    if (!poIdParam && !grnIdParam) {
+                      setSelectedVendorId('');
+                      setSelectedPoId('');
+                      setSelectedGrnId('');
+                      setSelectedGrnIds([]);
+                      setVendorName('');
+                    }
+                    setCreationMode('linked');
+                    handleBasisChange('multi_grn');
+                    setIsCreating(true);
+                    setShowModeModal(false);
+                  }}
+                >
+                  <div className="cpi-mode-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#2563eb' }}>
+                    <Boxes size={26} />
+                  </div>
+                  <div>
+                    <div className="cpi-mode-title">From Multiple Store GRNs (Multi-GRN Invoice)</div>
+                    <div className="cpi-mode-desc">
+                      Combine and bill multiple Goods Received Notes into one consolidated purchase invoice with aggregated accepted quantities.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Option 4: Direct Manual Invoice */}
                 <div
                   className="cpi-mode-option"
                   onClick={() => {
                     setSelectedVendorId('');
                     setSelectedPoId('');
                     setSelectedGrnId('');
+                    setSelectedGrnIds([]);
                     setVendorName('');
-                    setGrnOptions([]);
-                    setInvoiceOptions([]);
-                    setLineItems([
-                      { id: Date.now(), itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
-                    ]);
                     setCreationMode('manual');
+                    handleBasisChange('direct');
                     setIsCreating(true);
                     setShowModeModal(false);
                   }}
@@ -2509,7 +2815,7 @@ export default function CreatePurchaseInvoicePage() {
                   <div>
                     <div className="cpi-mode-title">Create Custom / Direct Manual Invoice</div>
                     <div className="cpi-mode-desc">
-                      Create a custom purchase invoice directly without requiring a vendor dispatch note cascade reference.
+                      Create a custom purchase invoice directly with manual line item entry without requiring GRN linkage.
                     </div>
                   </div>
                 </div>
@@ -2630,96 +2936,305 @@ export default function CreatePurchaseInvoicePage() {
 
       {/* Form Content */}
       <div className="cpi-form-body">
-        {/* Section 01: Supplier & Purchase Order Selection */}
-        {creationMode === 'linked' && (
-          <div className="cpi-section">
-            <div className="cpi-section-header">
-              <div className="cpi-section-header-left">
-                <span className="cpi-section-badge">01</span>
-                <div>
-                  <h3 className="cpi-section-title">Supplier & Purchase Order Selection</h3>
-                  <span className="cpi-section-hint">Select supplier and linked purchase order</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="cpi-form-grid cpi-form-grid--2">
-              {/* 1. Supplier Selection */}
-              <div className="cpi-field">
-                <label>
-                  1. SUPPLIER SELECTION <span className="required">*</span>
-                </label>
-                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)} disabled={isReadOnly}>
-                  <option value="">-- Select Supplier (e.g. Telematics) --</option>
-                  {allSuppliers.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name} ({v.category || 'Supplier'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 2. PO Selection */}
-              <div className="cpi-field">
-                <label>
-                  2. PO SELECTION <span className="required">*</span>
-                </label>
-                <select
-                  value={selectedPoId}
-                  disabled={isReadOnly}
-                  onChange={(e) => {
-                    setSelectedPoId(e.target.value);
-                    setSelectedGrnId('');
-                  }}
-                >
-                  {!selectedVendorId ? (
-                    <option value="">-- Select Supplier First or Pick PO --</option>
-                  ) : availablePOs.length === 0 ? (
-                    <option value="">-- No Purchase Orders for Selected Supplier --</option>
-                  ) : (
-                    <option value="">-- Select Linked PO --</option>
-                  )}
-                  {availablePOs.map((po) => (
-                    <option key={po.id} value={po.id}>
-                      {po.poNumber} — {formatAmount(po.totalAmount, currency)}
-                    </option>
-                  ))}
-                  {selectedPoId && !availablePOs.some((po) => String(po.id) === String(selectedPoId)) && (
-                    <option value={selectedPoId}>{displayPoNumber}</option>
-                  )}
-                </select>
+        {/* Section 01: Invoice Creation Basis & Order / GRN Selection */}
+        <div className="cpi-section">
+          <div className="cpi-section-header">
+            <div className="cpi-section-header-left">
+              <span className="cpi-section-badge">01</span>
+              <div>
+                <h3 className="cpi-section-title">Invoice Creation Basis &amp; Document Selection</h3>
+                <span className="cpi-section-hint">Choose invoice creation source: Vendor's Submitted Invoice, Single Store GRN, Multiple Store GRNs, or Direct Entry</span>
               </div>
             </div>
           </div>
-        )}
+
+          {/* Basis Selector Cards */}
+          <div className="cpi-basis-container">
+            <div className="cpi-basis-grid">
+              <div
+                className={`cpi-basis-card ${invoiceBasis === 'vendor_invoice' ? 'cpi-basis-card--active' : ''}`}
+                onClick={() => handleBasisChange('vendor_invoice')}
+              >
+                <div className="cpi-basis-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#7c3aed' }}>
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <div className="cpi-basis-title">Vendor Invoice</div>
+                  <div className="cpi-basis-desc">Create/review invoice from vendor's portal submission reconciled with store GRN.</div>
+                </div>
+              </div>
+
+              <div
+                className={`cpi-basis-card ${invoiceBasis === 'single_grn' ? 'cpi-basis-card--active' : ''}`}
+                onClick={() => handleBasisChange('single_grn')}
+              >
+                <div className="cpi-basis-icon">
+                  <PackageCheck size={18} />
+                </div>
+                <div>
+                  <div className="cpi-basis-title">Single Store GRN</div>
+                  <div className="cpi-basis-desc">Create invoice from 1 Goods Received Note with automated 3-way matching.</div>
+                </div>
+              </div>
+
+              <div
+                className={`cpi-basis-card ${invoiceBasis === 'multi_grn' ? 'cpi-basis-card--active' : ''}`}
+                onClick={() => handleBasisChange('multi_grn')}
+              >
+                <div className="cpi-basis-icon">
+                  <Boxes size={18} />
+                </div>
+                <div>
+                  <div className="cpi-basis-title">Multiple Store GRNs</div>
+                  <div className="cpi-basis-desc">Combine &amp; bill line items across multiple GRNs into one consolidated invoice.</div>
+                </div>
+              </div>
+
+              <div
+                className={`cpi-basis-card ${invoiceBasis === 'direct' ? 'cpi-basis-card--active' : ''}`}
+                onClick={() => handleBasisChange('direct')}
+              >
+                <div className="cpi-basis-icon">
+                  <Receipt size={18} />
+                </div>
+                <div>
+                  <div className="cpi-basis-title">Without GRN (Direct Entry)</div>
+                  <div className="cpi-basis-desc">Custom manual line item entry without requiring GRN linkage.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Supplier & PO Filter Grid */}
+          <div className="cpi-form-grid cpi-form-grid--2">
+            {/* 1. Supplier Selection */}
+            <div className="cpi-field">
+              <label>
+                1. SUPPLIER SELECTION <span className="required">*</span>
+              </label>
+              <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)} disabled={isReadOnly}>
+                <option value="">-- Select Supplier (e.g. Telematics) --</option>
+                {allSuppliers.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} ({v.category || 'Supplier'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. PO Selection */}
+            <div className="cpi-field">
+              <label>
+                2. PO SELECTION {invoiceBasis !== 'direct' && <span className="required">*</span>}
+              </label>
+              <select
+                value={selectedPoId}
+                disabled={isReadOnly}
+                onChange={(e) => {
+                  setSelectedPoId(e.target.value);
+                  setSelectedGrnId('');
+                  setSelectedGrnIds([]);
+                }}
+              >
+                {!selectedVendorId ? (
+                  <option value="">-- Select Supplier First or Pick PO --</option>
+                ) : availablePOs.length === 0 ? (
+                  <option value="">-- No Purchase Orders for Selected Supplier --</option>
+                ) : (
+                  <option value="">-- Select Linked PO --</option>
+                )}
+                {availablePOs.map((po) => (
+                  <option key={po.id} value={po.id}>
+                    {po.poNumber} — {formatAmount(po.totalAmount, currency)}
+                  </option>
+                ))}
+                {selectedPoId && !availablePOs.some((po) => String(po.id) === String(selectedPoId)) && (
+                  <option value={selectedPoId}>{displayPoNumber}</option>
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* Vendor Invoice Selection Dropdown */}
+          {invoiceBasis === 'vendor_invoice' && (
+            <div style={{ marginTop: 16 }}>
+              <div className="cpi-field">
+                <label>
+                  3. SELECT VENDOR INVOICE <span className="required">*</span>
+                </label>
+                <select
+                  value={selectedGrnId.startsWith('inv_') ? selectedGrnId : (availableVendorInvoices[0] ? `inv_${availableVendorInvoices[0].id}` : '')}
+                  disabled={isReadOnly}
+                  onChange={(e) => handleVendorInvoiceSelect(e.target.value)}
+                >
+                  <option value="">-- Select Vendor Invoice --</option>
+                  {availableVendorInvoices.map((inv) => {
+                    const poRef = inv.poNumber || (inv.poId ? `PO-${String(inv.poId).slice(-6).toUpperCase()}` : 'Direct');
+                    const itemsCount = (inv.lineItems as any[])?.length || (inv.items as any[])?.length || 0;
+                    const invDate = inv.submittedAt || inv.invoiceDate ? new Date(inv.submittedAt || inv.invoiceDate).toLocaleDateString() : '';
+                    const invStatus = inv.status || 'DRAFT';
+                    return (
+                      <option key={inv.id} value={`inv_${inv.id}`}>
+                        {inv.invoiceNumber} • PO: {poRef} • {itemsCount} Item{itemsCount !== 1 ? 's' : ''} • {formatAmount(inv.amount || 0, currency)} ({invDate}) [{invStatus}]
+                      </option>
+                    );
+                  })}
+                </select>
+                {selectedGrnId.startsWith('inv_') && (
+                  <div style={{ fontSize: 12, color: '#7c3aed', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                    <CheckCircle2 size={14} /> Linked to Vendor Invoice: {displayGrnNumber}
+                  </div>
+                )}
+                {availableVendorInvoices.length === 0 && (
+                  <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 4 }}>
+                    ⚠️ No vendor invoices found for this Supplier / PO. If the vendor has not submitted an invoice yet, you can create the invoice directly from <strong>Single Store GRN</strong> or <strong>Multiple Store GRNs</strong>.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Single GRN Selection Dropdown */}
+          {invoiceBasis === 'single_grn' && (
+            <div style={{ marginTop: 16 }}>
+              <div className="cpi-field">
+                <label>
+                  3. SELECT GOODS RECEIVED NOTE (GRN) <span className="required">*</span>
+                </label>
+                <select
+                  value={selectedGrnId}
+                  disabled={isReadOnly}
+                  onChange={(e) => handleSingleGrnSelect(e.target.value)}
+                >
+                  <option value="">-- Select Verified GRN --</option>
+                  {availableGrns.map((g) => {
+                    const poRef = g.purchaseOrder?.poNumber || g.poId;
+                    const itemsCount = g.items?.length || 0;
+                    const recDate = g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : '';
+                    return (
+                      <option key={g.id} value={`grn_${g.id}`}>
+                        {g.grnNumber} • PO: {poRef} • {itemsCount} Item{itemsCount !== 1 ? 's' : ''} ({recDate})
+                      </option>
+                    );
+                  })}
+                </select>
+                {selectedGrnId && (
+                  <div style={{ fontSize: 12, color: '#10b981', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                    <CheckCircle2 size={14} /> Linked to Goods Received Note: {displayGrnNumber}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Multiple GRNs Selection Panel */}
+          {invoiceBasis === 'multi_grn' && (
+            <div className="cpi-multi-grn-panel">
+              <div className="cpi-multi-grn-header">
+                <div className="cpi-multi-grn-title">
+                  <Boxes size={16} />
+                  <span>Select Goods Received Notes to Consolidate</span>
+                  <span className="cpi-multi-grn-badge">
+                    {selectedGrnIds.length} of {availableGrns.length} GRNs Selected
+                  </span>
+                </div>
+                {!isReadOnly && availableGrns.length > 0 && (
+                  <div className="cpi-multi-grn-actions">
+                    <button
+                      type="button"
+                      className="cpi-btn cpi-btn--outline cpi-btn--sm"
+                      onClick={handleSelectAllGrns}
+                    >
+                      <CheckSquare size={13} /> Select All
+                    </button>
+                    <button
+                      type="button"
+                      className="cpi-btn cpi-btn--outline cpi-btn--sm"
+                      onClick={handleClearAllGrns}
+                      disabled={selectedGrnIds.length === 0}
+                    >
+                      <X size={13} /> Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {availableGrns.length === 0 ? (
+                <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+                  No verified Goods Received Notes found for this Supplier / PO. Please verify that GRNs exist.
+                </div>
+              ) : (
+                <div className="cpi-grn-grid">
+                  {availableGrns.map((g) => {
+                    const isChecked = selectedGrnIds.includes(String(g.id)) || selectedGrnIds.includes(String(g.grnNumber));
+                    const itemsCount = g.items?.length || 0;
+                    const totalAcc = (g.items || []).reduce((acc: number, it: any) => acc + Number(it.acceptedQty ?? it.receivedQty ?? 0), 0);
+                    const poRef = g.purchaseOrder?.poNumber || (g.poId ? `PO-${String(g.poId).slice(-6).toUpperCase()}` : 'Direct PO');
+                    const formattedDate = g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : '';
+
+                    return (
+                      <div
+                        key={g.id}
+                        className={`cpi-grn-card ${isChecked ? 'cpi-grn-card--selected' : ''}`}
+                        onClick={() => !isReadOnly && handleToggleMultiGrn(g.id)}
+                      >
+                        <input
+                          type="checkbox"
+                          className="cpi-grn-checkbox"
+                          checked={isChecked}
+                          disabled={isReadOnly}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleToggleMultiGrn(g.id);
+                          }}
+                        />
+                        <div className="cpi-grn-card-content">
+                          <div className="cpi-grn-card-top">
+                            <span className="cpi-grn-card-num">{g.grnNumber}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
+                              {g.status || 'RECEIVED'}
+                            </span>
+                          </div>
+                          <div className="cpi-grn-card-po">PO: {poRef} • {formattedDate}</div>
+                          <div className="cpi-grn-card-items">
+                            <span>{itemsCount} item{itemsCount !== 1 ? 's' : ''}</span>
+                            <span>•</span>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{totalAcc} units accepted</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.04)', padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.12)' }}>
+                💡 <strong>Multi-GRN Consolidation:</strong> All line items and accepted quantities across the {selectedGrnIds.length} selected GRNs will be summed and consolidated in the items table.
+              </div>
+            </div>
+          )}
+
+          {/* Direct Entry Notice */}
+          {invoiceBasis === 'direct' && (
+            <div style={{ marginTop: 14, fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(234, 179, 8, 0.05)', padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(234, 179, 8, 0.2)' }}>
+              ✍️ <strong>Direct Manual Invoice Mode:</strong> GRN validation bypassed. You can enter custom line items, quantities, and rates directly.
+            </div>
+          )}
+        </div>
 
         {/* Section 02: Invoice Meta & Dates */}
         <div className="cpi-section">
           <div className="cpi-section-header">
             <div className="cpi-section-header-left">
-              <span className="cpi-section-badge">{creationMode === 'manual' ? '01' : '02'}</span>
+              <span className="cpi-section-badge">02</span>
               <div>
-                <h3 className="cpi-section-title">Invoice Dates & Details</h3>
+                <h3 className="cpi-section-title">Invoice Dates &amp; Details</h3>
+                <span className="cpi-section-hint">Enter invoice billing number, issue date, and payment terms</span>
               </div>
             </div>
           </div>
 
-          <div className={`cpi-form-grid ${creationMode === 'manual' ? 'cpi-form-grid--4' : 'cpi-form-grid--4'}`}>
-            {creationMode === 'manual' && (
-              <div className="cpi-field">
-                <label>
-                  SUPPLIER / VENDOR <span className="required">*</span>
-                </label>
-                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)} disabled={isReadOnly}>
-                  <option value="">-- Select Supplier --</option>
-                  {allSuppliers.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name} ({v.category || 'Supplier'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+          <div className="cpi-form-grid cpi-form-grid--4">
 
             <div className="cpi-field">
               <label>
@@ -2769,7 +3284,16 @@ export default function CreatePurchaseInvoicePage() {
             <div className="cpi-section-header-left">
               <span className="cpi-section-badge">{creationMode === 'manual' ? '02' : '03'}</span>
               <div>
-                <h3 className="cpi-section-title">Items Listing & 3-Quantity Matching</h3>
+                <h3 className="cpi-section-title">Items Listing &amp; 3-Quantity Matching</h3>
+                <span className="cpi-section-hint">
+                  {invoiceBasis === 'vendor_invoice'
+                    ? "Review items submitted by vendor against Store Goods Received Note (GRN)"
+                    : invoiceBasis === 'multi_grn'
+                    ? "Consolidated line items across multiple selected Store GRNs"
+                    : invoiceBasis === 'single_grn'
+                    ? "3-Way matching: PO Ordered vs Store Received vs Accepted Billed Qty"
+                    : "Direct manual entry line items"}
+                </span>
               </div>
             </div>
             {!isReadOnly && (
@@ -2788,7 +3312,7 @@ export default function CreatePurchaseInvoicePage() {
                     PO Quantity
                   </th>
                   <th style={{ width: '100px' }} className="cpi-th--grn">
-                    Dispatch Qty
+                    Store Received Qty
                   </th>
                   <th style={{ width: '140px' }} className="cpi-th--supplier">
                     Accepted Quantity *
@@ -3631,7 +4155,9 @@ export default function CreatePurchaseInvoicePage() {
             <span className="po-doc__info-value">{displayPoNumber}</span>
           </div>
           <div className="po-doc__info-item">
-            <span className="po-doc__info-label">Linked Dispatch Note / Invoice</span>
+            <span className="po-doc__info-label">
+              {invoiceBasis === 'vendor_invoice' ? 'Linked Vendor Invoice / GRN' : 'Linked Store GRN / Reference'}
+            </span>
             <span className="po-doc__info-value">{displayGrnNumber}</span>
           </div>
           <div className="po-doc__info-item">
@@ -3763,7 +4289,7 @@ export default function CreatePurchaseInvoicePage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '8px 0' }}>
-              {/* Option 1: Link with Vendor Dispatch Note / Invoice */}
+              {/* Option 1: Vendor's Submitted Invoice */}
               <div
                 className="cpi-mode-option"
                 onClick={() => {
@@ -3772,9 +4298,40 @@ export default function CreatePurchaseInvoicePage() {
                     setSelectedVendorId('');
                     setSelectedPoId('');
                     setSelectedGrnId('');
+                    setSelectedGrnIds([]);
                     setVendorName('');
                   }
                   setCreationMode('linked');
+                  handleBasisChange('vendor_invoice');
+                  setIsCreating(true);
+                  setShowModeModal(false);
+                }}
+              >
+                <div className="cpi-mode-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#7c3aed' }}>
+                  <FileText size={26} />
+                </div>
+                <div>
+                  <div className="cpi-mode-title">Link with Vendor Invoice</div>
+                  <div className="cpi-mode-desc">
+                    Select from vendor-submitted Invoices linked to Purchase Orders for automated 3-way quantity matching.
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 2: Single GRN */}
+              <div
+                className="cpi-mode-option"
+                onClick={() => {
+                  setIsReadOnly(false);
+                  if (!poIdParam && !grnIdParam) {
+                    setSelectedVendorId('');
+                    setSelectedPoId('');
+                    setSelectedGrnId('');
+                    setSelectedGrnIds([]);
+                    setVendorName('');
+                  }
+                  setCreationMode('linked');
+                  handleBasisChange('single_grn');
                   setIsCreating(true);
                   setShowModeModal(false);
                 }}
@@ -3783,14 +4340,43 @@ export default function CreatePurchaseInvoicePage() {
                   <PackageCheck size={26} />
                 </div>
                 <div>
-                  <div className="cpi-mode-title">Link with Vendor Dispatch Note / Invoice</div>
+                  <div className="cpi-mode-title">From Single Store GRN</div>
                   <div className="cpi-mode-desc">
-                    Select from vendor-submitted Dispatch Notes or Invoices linked to Purchase Orders for automated 3-way quantity matching.
+                    Select from a verified store Goods Received Note for automated 3-way quantity matching.
                   </div>
                 </div>
               </div>
 
-              {/* Option 2: Direct Manual Invoice */}
+              {/* Option 3: Multiple GRNs */}
+              <div
+                className="cpi-mode-option"
+                onClick={() => {
+                  setIsReadOnly(false);
+                  if (!poIdParam && !grnIdParam) {
+                    setSelectedVendorId('');
+                    setSelectedPoId('');
+                    setSelectedGrnId('');
+                    setSelectedGrnIds([]);
+                    setVendorName('');
+                  }
+                  setCreationMode('linked');
+                  handleBasisChange('multi_grn');
+                  setIsCreating(true);
+                  setShowModeModal(false);
+                }}
+              >
+                <div className="cpi-mode-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#2563eb' }}>
+                  <Boxes size={26} />
+                </div>
+                <div>
+                  <div className="cpi-mode-title">From Multiple Store GRNs (Multi-GRN Invoice)</div>
+                  <div className="cpi-mode-desc">
+                    Combine and bill multiple Goods Received Notes into one consolidated purchase invoice with aggregated accepted quantities.
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 4: Direct Manual Invoice */}
               <div
                 className="cpi-mode-option"
                 onClick={() => {
@@ -3798,13 +4384,10 @@ export default function CreatePurchaseInvoicePage() {
                   setSelectedVendorId('');
                   setSelectedPoId('');
                   setSelectedGrnId('');
+                  setSelectedGrnIds([]);
                   setVendorName('');
-                  setGrnOptions([]);
-                  setInvoiceOptions([]);
-                  setLineItems([
-                    { id: Date.now(), itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
-                  ]);
                   setCreationMode('manual');
+                  handleBasisChange('direct');
                   setIsCreating(true);
                   setShowModeModal(false);
                 }}
@@ -3815,7 +4398,7 @@ export default function CreatePurchaseInvoicePage() {
                 <div>
                   <div className="cpi-mode-title">Create Custom / Direct Manual Invoice</div>
                   <div className="cpi-mode-desc">
-                    Create a custom purchase invoice directly without requiring a vendor dispatch note cascade reference.
+                    Create a custom purchase invoice directly with manual line item entry without requiring GRN linkage.
                   </div>
                 </div>
               </div>

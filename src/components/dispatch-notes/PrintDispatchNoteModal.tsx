@@ -347,7 +347,7 @@ export function PrintDispatchNoteModal({
               <tr>
                 <th style={{ width: 35 }} className="text-center">#</th>
                 <th style={{ width: 100 }}>Item Code</th>
-                <th>Description / Specification</th>
+                <th>Item Name / Specification</th>
                 <th style={{ width: 100 }}>PO Ref</th>
                 <th style={{ width: 75 }} className="text-right">PO Qty</th>
                 <th style={{ width: 75 }} className="text-right">Delivered</th>

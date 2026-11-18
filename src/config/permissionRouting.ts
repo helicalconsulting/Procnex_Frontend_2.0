@@ -15,6 +15,7 @@ export const ROUTE_PERMISSION_RULES: Array<{ prefix: string; rule: RoutePermissi
   { prefix: '/admin/users', rule: { module: 'User Management', action: 'canView' } },
   { prefix: '/admin/roles-permissions', rule: { module: 'Roles & Permissions', action: 'canView' } },
   { prefix: '/admin/company-settings', rule: { module: 'Company Settings', action: 'canView' } },
+  { prefix: '/admin/inventory-master', rule: { module: 'Inventory & Item Master', action: 'canView' } },
   { prefix: '/admin/approval-levels', rule: { module: 'Approval Levels', action: 'canView' } },
   { prefix: '/admin/custom-form-builder', rule: { module: 'Custom Form Builder', action: 'canView' } },
   { prefix: '/admin/form-responses', rule: { module: 'Form Responses', action: 'canView' } },
@@ -73,6 +74,7 @@ export const MENU_ITEM_PERMISSIONS: Record<string, RoutePermissionRule> = {
   roles: { module: 'Roles & Permissions', action: 'canView' },
   'approval-levels': { module: 'Approval Levels', action: 'canView' },
   'company-settings': { module: 'Company Settings', action: 'canView' },
+  'inventory-master': { module: 'Inventory & Item Master', action: 'canView' },
   'custom-form-builder': { module: 'Custom Form Builder', action: 'canView' },
   'form-responses': { module: 'Form Responses', action: 'canView' },
 };

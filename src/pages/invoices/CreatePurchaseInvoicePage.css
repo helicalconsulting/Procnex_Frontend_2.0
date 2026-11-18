@@ -1499,3 +1499,206 @@
   border: 1px solid rgba(239, 68, 68, 0.28);
 }
 
+/* Invoice Creation Basis Selector (Single GRN vs Multi-GRN vs Direct Entry) */
+.cpi-basis-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.cpi-basis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .cpi-basis-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .cpi-basis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cpi-basis-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md, 10px);
+  border: 2px solid var(--border);
+  background: var(--surface-card, var(--surface));
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.cpi-basis-card:hover {
+  border-color: var(--primary-500, #0a6ed1);
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 4%, var(--surface-card, var(--surface)));
+  transform: translateY(-1px);
+}
+
+.cpi-basis-card--active {
+  border-color: var(--primary-500, #0a6ed1) !important;
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 8%, var(--surface-card, var(--surface))) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-500, #0a6ed1) 20%, transparent);
+}
+
+.cpi-basis-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 12%, transparent);
+  color: var(--primary-500, #0a6ed1);
+  flex-shrink: 0;
+}
+
+.cpi-basis-card--active .cpi-basis-icon {
+  background: var(--primary-500, #0a6ed1);
+  color: #fff;
+}
+
+.cpi-basis-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.cpi-basis-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* Multi-GRN Panel & Check Cards */
+.cpi-multi-grn-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--surface-card, var(--surface));
+  padding: 16px;
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cpi-multi-grn-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cpi-multi-grn-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cpi-multi-grn-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 15%, transparent);
+  color: var(--primary-500, #0a6ed1);
+}
+
+.cpi-multi-grn-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cpi-grn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  max-height: 290px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.cpi-grn-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.cpi-grn-card:hover {
+  border-color: var(--primary-500, #0a6ed1);
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 4%, var(--surface));
+}
+
+.cpi-grn-card--selected {
+  border-color: var(--primary-500, #0a6ed1) !important;
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 9%, var(--surface)) !important;
+  box-shadow: 0 0 0 1px var(--primary-500, #0a6ed1);
+}
+
+.cpi-grn-checkbox {
+  margin-top: 2px;
+  accent-color: var(--primary-500, #0a6ed1);
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.cpi-grn-card-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cpi-grn-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cpi-grn-card-num {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cpi-grn-card-po {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.cpi-grn-card-items {
+  font-size: 11px;
+  color: var(--text-muted, var(--text-secondary));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+

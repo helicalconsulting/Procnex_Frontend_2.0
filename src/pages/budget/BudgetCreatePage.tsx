@@ -38,6 +38,7 @@ import { loadBudgetLogicSettings } from '../../components/admin/company-settings
 import { companySettingsService } from '../../services/companySettingsService';
 import { vendorService } from '../../services/vendorService';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { useAuth } from '../../context/AuthContext';
 import { PageFrame, PageLead } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -81,6 +82,11 @@ export interface ExistingBudgetDisplay {
 
 export default function BudgetCreatePage() {
   const navigate = useNavigate();
+  const { roles } = useAuth();
+  const isSuperAdmin = (roles || []).some((r: any) => {
+    const roleStr = String(typeof r === 'string' ? r : r?.roleName || r?.name || '').toLowerCase().trim();
+    return roleStr === 'super admin' || roleStr === 'superadmin';
+  });
   const { companyDefaultCurrency } = useCurrency();
   const [activeStep, setActiveStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
@@ -538,15 +544,17 @@ export default function BudgetCreatePage() {
         title={budgetMode === 'REVISION' ? `Revise Budget (${budgetCode})` : 'Create New Budget'}
         description="Configure header parameters, dimensional allocation lines, and multi-tier control rules"
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/admin/company-settings?tab=budget-logic')}
-            className="gap-2"
-          >
-            <Settings className="size-4 text-primary" />
-            <span>Budget Settings</span>
-          </Button>
+          isSuperAdmin ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/admin/company-settings?tab=budget-logic')}
+              className="gap-2"
+            >
+              <Settings className="size-4 text-primary" />
+              <span>Budget Settings</span>
+            </Button>
+          ) : undefined
         }
       />
 

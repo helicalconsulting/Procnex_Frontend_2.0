@@ -317,8 +317,13 @@ export default function VendorsPage() {
   const [editingVendor, setEditingVendor] = useState<VendorTableRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VendorTableRow | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const { hasPermission } = useAuth();
-  const canCreateVendor = hasPermission('Vendors', 'canCreate');
+  const { hasPermission, roles } = useAuth();
+  const isSuperAdmin = (roles || []).some((r: any) => {
+    const roleStr = typeof r === 'string' ? r : (r?.roleName || r?.name || '');
+    const clean = roleStr.toLowerCase().trim();
+    return clean === 'super admin' || clean === 'superadmin' || clean === 'administrator' || clean === 'admin';
+  });
+  const canCreateVendor = isSuperAdmin && hasPermission('Vendors', 'canCreate');
   const [actionLoading, setActionLoading] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [detailVendor, setDetailVendor] = useState<VendorTableRow | null>(null);
@@ -660,13 +665,17 @@ export default function VendorsPage() {
   }, [displayVendors, reload, queryClient]);
 
   const openAddModal = useCallback(() => {
+    if (!isSuperAdmin) {
+      setPageMsg('Access denied: Only Super Admin is authorized to add vendors.');
+      return;
+    }
     setEditingVendor(null);
     setFName(''); setFEmail(''); setFCountryCode('+254'); setFPhone(''); setFContact('');
     setFCategory(''); setFCategoryId(undefined); setFLocation(''); setFWebsite('');
     setFMobileAccess(false);
     setPageMsg(null);
     setShowModal(true);
-  }, []);
+  }, [isSuperAdmin]);
 
   const openEditModal = useCallback((vendor: VendorTableRow) => {
     setEditingVendor(vendor);
@@ -827,13 +836,15 @@ export default function VendorsPage() {
               <span>Active Vendors: {summary.active} / {maxVendorsAllowed} Limit</span>
             </div>
 
-            <Button
-              onClick={(!isVendorLimitReached && canCreateVendor) ? openAddModal : undefined}
-              disabled={isVendorLimitReached || !canCreateVendor}
-              title={!canCreateVendor ? 'Admin has not allowed this action. You do not have permission to create vendors.' : isVendorLimitReached ? 'Company vendor limit reached. Please contact Procnex Support to upgrade.' : 'Add a new vendor'}
-            >
-              {canCreateVendor ? <Plus /> : <ShieldOff />} Add Vendor
-            </Button>
+            {isSuperAdmin && (
+              <Button
+                onClick={!isVendorLimitReached ? openAddModal : undefined}
+                disabled={isVendorLimitReached}
+                title={isVendorLimitReached ? 'Company vendor limit reached. Please contact Procnex Support to upgrade.' : 'Add a new vendor'}
+              >
+                <Plus /> Add Vendor
+              </Button>
+            )}
           </div>
         }
       />

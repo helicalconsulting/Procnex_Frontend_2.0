@@ -29,8 +29,10 @@ import {
   ThumbsDown,
   Pencil,
   Filter,
+  Tag,
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
+import { companySettingsService } from '../../services/companySettingsService';
 import { approvalService } from '../../services/approvalService';
 import { signatureService } from '../../services/signatureService';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
@@ -83,6 +85,8 @@ interface MockPO {
   expectedDelivery: string;
   department: string;
   createdBy: string;
+  itemClass?: string;
+  supplierClass?: string;
   items?: any[];
   rawPO?: any;
   [key: string]: any;
@@ -175,6 +179,23 @@ function mapPO(po: PurchaseOrder): MockPO {
     } catch {}
   }
 
+  const rawItemClass =
+    (po as any).itemClass ||
+    (po as any).items?.[0]?.itemClass ||
+    formattedItems[0]?.itemClass ||
+    (po.rfq as any)?.itemClass ||
+    (po as any).category ||
+    '';
+
+  const rawSupplierClass =
+    (po as any).supplierClass ||
+    (po as any).supplierType ||
+    (po.rfq as any)?.supplierClass ||
+    (po.vendor as any)?.supplierClass ||
+    (po.vendor as any)?.category?.name ||
+    (po.vendor as any)?.customFields?.supplierClass ||
+    '';
+
   return {
     id: po.id,
     poNumber: po.poNumber,
@@ -191,6 +212,8 @@ function mapPO(po: PurchaseOrder): MockPO {
     expectedDelivery: created,
     department: '—',
     createdBy: '—',
+    itemClass: rawItemClass || '—',
+    supplierClass: rawSupplierClass || '—',
     items: formattedItems.length > 0 ? formattedItems : (po.items as any[]),
     rawPO: po,
   };
@@ -210,6 +233,8 @@ function StatusBadge({ status }: { status: POStatus }) {
 const ALL_COLUMNS: ColumnDef[] = [
   { key: 'poNumber', label: 'Purchase Order', defaultVisible: true, required: true },
   { key: 'vendorName', label: 'Vendor', defaultVisible: true },
+  { key: 'itemClass', label: 'Item Class', defaultVisible: false },
+  { key: 'supplierClass', label: 'Supplier Class', defaultVisible: false },
   { key: 'totalAmount', label: 'Amount', defaultVisible: true },
   { key: 'itemCount', label: 'Items', defaultVisible: true },
   { key: 'priority', label: 'Priority', defaultVisible: true },
@@ -354,6 +379,65 @@ export default function PurchaseOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<POStatus | 'ALL'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [detailPO, setDetailPO] = useState<MockPO | null>(null);
+  const [itemClassesList, setItemClassesList] = useState<Array<{ id: string; name: string; supplierClassName?: string }>>([]);
+
+  useEffect(() => {
+    companySettingsService
+      .listItemClasses(false)
+      .then((res) => {
+        if (Array.isArray(res)) setItemClassesList(res);
+      })
+      .catch(() => {});
+  }, []);
+
+  const resolveClasses = useCallback(
+    (po: any) => {
+      let itClass =
+        po?.itemClass && po.itemClass !== '—'
+          ? po.itemClass
+          : po?.rawPO?.itemClass ||
+            po?.items?.[0]?.itemClass ||
+            po?.rawPO?.items?.[0]?.itemClass ||
+            po?.rawPO?.rfq?.itemClass ||
+            po?.rawPO?.category ||
+            '';
+
+      let supClass =
+        po?.supplierClass && po.supplierClass !== '—'
+          ? po.supplierClass
+          : po?.rawPO?.supplierClass ||
+            po?.rawPO?.supplierType ||
+            po?.rawPO?.rfq?.supplierClass ||
+            po?.rawPO?.vendor?.supplierClass ||
+            po?.rawPO?.vendor?.category?.name ||
+            po?.rawPO?.vendor?.customFields?.supplierClass ||
+            '';
+
+      if (!supClass && itClass && itemClassesList.length > 0) {
+        const match = itemClassesList.find(
+          (c) => c.name.toLowerCase().trim() === itClass.toLowerCase().trim()
+        );
+        if (match?.supplierClassName) {
+          supClass = match.supplierClassName;
+        }
+      }
+
+      if (!itClass && supClass && itemClassesList.length > 0) {
+        const match = itemClassesList.find(
+          (c) => c.supplierClassName?.toLowerCase().trim() === supClass.toLowerCase().trim()
+        );
+        if (match?.name) {
+          itClass = match.name;
+        }
+      }
+
+      return {
+        itemClass: itClass || '—',
+        supplierClass: supClass || '—',
+      };
+    },
+    [itemClassesList]
+  );
   const [deleteTarget, setDeleteTarget] = useState<MockPO | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
@@ -1033,6 +1117,34 @@ export default function PurchaseOrdersPage() {
                           if (col.key === 'status') {
                             return <td key="status" className="px-4 py-3.5"><StatusBadge status={order.status} /></td>;
                           }
+                          if (col.key === 'itemClass') {
+                            const { itemClass } = resolveClasses(order);
+                            return (
+                              <td key="itemClass" className="px-4 py-3.5">
+                                {itemClass && itemClass !== '—' ? (
+                                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25 font-semibold text-xs py-0.5">
+                                    {itemClass}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </td>
+                            );
+                          }
+                          if (col.key === 'supplierClass') {
+                            const { supplierClass } = resolveClasses(order);
+                            return (
+                              <td key="supplierClass" className="px-4 py-3.5">
+                                {supplierClass && supplierClass !== '—' ? (
+                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25 font-semibold text-xs py-0.5">
+                                    {supplierClass}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </td>
+                            );
+                          }
                           if (col.key === 'expectedDelivery') {
                             return (
                               <td key="expectedDelivery" className="px-4 py-3.5 text-xs text-muted-foreground">
@@ -1312,27 +1424,117 @@ export default function PurchaseOrdersPage() {
               </div>
 
               {/* Order Metadata Grid */}
-              <div className="rounded-2xl border border-border/60 bg-secondary/30 p-4">
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Order Information</h3>
-                <dl className="grid gap-3 sm:grid-cols-2 text-sm">
-                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
-                    <dt className="text-muted-foreground font-medium">Department</dt>
-                    <dd className="font-semibold text-foreground">{detailPO.department || 'Procurement'}</dd>
+              {(() => {
+                const { itemClass, supplierClass } = resolveClasses(detailPO);
+                return (
+                  <div className="rounded-2xl border border-border/60 bg-secondary/30 p-4">
+                    <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Order Information</h3>
+                    <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                      <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                        <dt className="text-muted-foreground font-medium">Department</dt>
+                        <dd className="font-semibold text-foreground">{detailPO.department || 'Procurement'}</dd>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                        <dt className="text-muted-foreground font-medium">Created By</dt>
+                        <dd className="font-semibold text-foreground">{detailPO.createdBy}</dd>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                        <dt className="text-muted-foreground font-medium flex items-center gap-1.5">
+                          <Tag className="size-3.5 text-primary" />
+                          <span>Item Class</span>
+                        </dt>
+                        <dd className="font-semibold text-primary">
+                          {itemClass && itemClass !== '—' ? (
+                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25 font-semibold text-xs py-0.5">
+                              {itemClass}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground font-normal">—</span>
+                          )}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                        <dt className="text-muted-foreground font-medium flex items-center gap-1.5">
+                          <Truck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Supplier Class</span>
+                        </dt>
+                        <dd className="font-semibold text-foreground">
+                          {supplierClass && supplierClass !== '—' ? (
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25 font-semibold text-xs py-0.5">
+                              {supplierClass}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground font-normal">—</span>
+                          )}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                        <dt className="text-muted-foreground font-medium">Order Date</dt>
+                        <dd className="font-semibold text-foreground">{formatDate(detailPO.createdAt)}</dd>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                        <dt className="text-muted-foreground font-medium">RFQ Reference</dt>
+                        <dd className="font-semibold text-foreground">{detailPO.rfqNumber || 'Direct PO'}</dd>
+                      </div>
+                    </dl>
                   </div>
-                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
-                    <dt className="text-muted-foreground font-medium">Created By</dt>
-                    <dd className="font-semibold text-foreground">{detailPO.createdBy}</dd>
+                );
+              })()}
+
+              {/* Order Line Items */}
+              {Array.isArray(detailPO.items) && detailPO.items.length > 0 && (
+                <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
+                  <div className="p-3.5 px-4 border-b border-border/60 bg-muted/30 flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Order Line Items ({detailPO.items.length})
+                    </h3>
                   </div>
-                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
-                    <dt className="text-muted-foreground font-medium">Order Date</dt>
-                    <dd className="font-semibold text-foreground">{formatDate(detailPO.createdAt)}</dd>
+                  <div className="overflow-x-auto max-h-[220px]">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-muted/50 border-b border-border/60 text-muted-foreground font-semibold sticky top-0">
+                        <tr>
+                          <th className="py-2 px-3 w-10 text-center">#</th>
+                          <th className="py-2 px-3">Item Name</th>
+                          <th className="py-2 px-3">Item Class</th>
+                          <th className="py-2 px-3 text-center">Qty</th>
+                          <th className="py-2 px-3 text-right">Unit Price</th>
+                          <th className="py-2 px-3 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {detailPO.items.map((it: any, idx: number) => {
+                          const itemCls = it.itemClass || resolveClasses(detailPO).itemClass;
+                          return (
+                            <tr key={it.id || idx} className="hover:bg-muted/20">
+                              <td className="py-2 px-3 text-center text-muted-foreground font-mono">{idx + 1}</td>
+                              <td className="py-2 px-3 font-medium text-foreground">
+                                {it.itemName || it.name || it.description || 'Line Item'}
+                                {it.itemCode && <span className="block text-[10px] text-muted-foreground font-mono">Code: {it.itemCode}</span>}
+                              </td>
+                              <td className="py-2 px-3">
+                                {itemCls && itemCls !== '—' ? (
+                                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-primary/5 text-primary border-primary/20">
+                                    {itemCls}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-center font-mono font-medium">{it.quantity || 1} {it.unit || 'pcs'}</td>
+                              <td className="py-2 px-3 text-right font-mono text-muted-foreground">
+                                {formatAmount(Number(it.unitPrice || 0), companyDefaultCurrency)}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-foreground">
+                                {formatAmount(Number(it.totalPrice || it.total || 0), companyDefaultCurrency)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
-                    <dt className="text-muted-foreground font-medium">RFQ Reference</dt>
-                    <dd className="font-semibold text-foreground">{detailPO.rfqNumber || 'Direct PO'}</dd>
-                  </div>
-                </dl>
-              </div>
+                </div>
+              )}
 
               {/* Order Status Progress Tracker */}
               {detailPO.status === 'CANCELLED' ? (
