@@ -6431,11 +6431,55 @@ export default function CompanySettingsPage() {
                           <div
                             className="cs-dt-detail__editor-wrap"
                           >
-                            <div className="cs-dt-detail__editor-label">
-                              <FileSignature size={14} /> Contract Template Content
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="cs-dt-detail__editor-label flex items-center gap-2">
+                                <FileSignature size={14} /> Contract Template Content
+                              </div>
+                              {editedContractLayoutModel && (
+                                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-700/80">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditorMode('fixed')}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                                      editorMode === 'fixed'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <Eye size={12} /> Original PDF Layout
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditorMode('flowing');
+                                      if (!editedContractContent?.trim()) {
+                                        const fallbackText =
+                                          selectedContractTemplate?.ocrText ||
+                                          editedContractLayoutModel?.plainText ||
+                                          editedContractLayoutModel?.pages?.flatMap((p: any) => p.elements?.map((e: any) => e.text) || []).join('\n\n');
+                                        if (fallbackText) {
+                                          const html = fallbackText
+                                            .split(/\n\n+/)
+                                            .map((para: string) => `<p>${para.replace(/\n/g, '<br />')}</p>`)
+                                            .join('');
+                                          setEditedContractContent(html);
+                                          setContractTemplateDirty(true);
+                                        }
+                                      }
+                                    }}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                                      editorMode === 'flowing'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <FileText size={12} /> WYSIWYG Editor (TinyMCE)
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
-                            {editedContractLayoutModel ? (
+                            {editorMode === 'fixed' && editedContractLayoutModel ? (
                               <FixedLayoutDocumentViewer
                                 layoutModel={editedContractLayoutModel}
                                 originalFileUrl={selectedContractTemplate?.fileUrl}
