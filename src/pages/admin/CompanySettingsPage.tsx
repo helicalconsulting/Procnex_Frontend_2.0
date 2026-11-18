@@ -6440,9 +6440,13 @@ export default function CompanySettingsPage() {
                                         let layoutModel = (result as any).layoutModel;
                                         const ocrStatus = (result as any).ocrStatus || (extractedText || layoutModel ? 'COMPLETED' : null);
 
+                                        // Extract text from layoutModel if extractedText was empty
+                                        const textFromLayout = layoutModel?.plainText || layoutModel?.pages?.flatMap((p: any) => p.elements?.map((e: any) => e.text) || []).filter(Boolean).join('\n\n') || '';
+                                        const effectiveText = extractedText || textFromLayout;
+
                                         // Baseline fallback layoutModel: if layoutModel is missing or has no pages, build one
-                                        if ((!layoutModel || !layoutModel.pages || layoutModel.pages.length === 0) && (result.fileUrl || extractedText)) {
-                                          layoutModel = createFallbackLayoutModel(result.fileUrl, extractedText);
+                                        if ((!layoutModel || !layoutModel.pages || layoutModel.pages.length === 0) && (result.fileUrl || effectiveText)) {
+                                          layoutModel = createFallbackLayoutModel(result.fileUrl, effectiveText);
                                         }
 
                                         if (layoutModel) {
@@ -6450,7 +6454,9 @@ export default function CompanySettingsPage() {
                                           setEditorMode('fixed');
                                         }
 
-                                        const contentToSave = cleanHtml || (extractedText ? textToHtml(extractedText) : editedContractContent);
+                                        // Replace old content with the new document's extracted text/html
+                                        const contentToSave = cleanHtml || (effectiveText ? textToHtml(effectiveText) : '');
+                                        setEditedContractContent(contentToSave);
 
                                         await companySettingsService.saveContractTemplate(selectedContractType, {
                                           name: (editedContractName || selectedContractTemplate?.name || selectedContractType).trim(),

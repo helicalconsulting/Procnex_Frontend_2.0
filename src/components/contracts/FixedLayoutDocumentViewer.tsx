@@ -217,6 +217,12 @@ export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef
     );
 
     const pageSourceUrl = getOriginalPageSource(currentPage);
+    const resolvedPdfUrl = resolveBackendUrl(originalFileUrl);
+    const isPdfDoc = Boolean(
+      (originalFileName && /\.pdf$/i.test(originalFileName)) ||
+      (originalFileUrl && /\.pdf(\?|$)/i.test(originalFileUrl)) ||
+      fileType === 'application/pdf'
+    );
 
     // Update style on element
     const handleUpdateElementStyle = (elementId: string | null, updates: Partial<CanonicalElement>) => {
@@ -881,7 +887,24 @@ export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef
           >
             {viewMode === 'original' ? (
               <>
-                {pageSourceUrl ? (
+                {isPdfDoc && resolvedPdfUrl ? (
+                  <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#ffffff' }}>
+                    <iframe
+                      key={`${resolvedPdfUrl}#page=${activePageIndex + 1}`}
+                      src={`${resolvedPdfUrl}#page=${activePageIndex + 1}&toolbar=0&navpanes=0`}
+                      title={`Original PDF Page ${activePageIndex + 1}`}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        backgroundColor: '#ffffff',
+                      }}
+                    />
+                  </div>
+                ) : pageSourceUrl ? (
                   <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#ffffff' }}>
                     <img
                       key={pageSourceUrl}
