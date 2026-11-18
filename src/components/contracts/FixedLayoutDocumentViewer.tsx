@@ -33,7 +33,7 @@ import {
   FileSignature,
 } from 'lucide-react';
 import RichTextEditor, { type RichTextEditorRef } from '../shared/RichTextEditor';
-import { canonicalModelToHtml } from '../../utils/documentModelToHtml';
+import { canonicalModelToHtml, createFallbackLayoutModel } from '../../utils/documentModelToHtml';
 import type { CanonicalPage, CanonicalElement, ElementType } from '../../types/documentExtraction';
 import { API_BASE } from '../../api/client';
 import './FixedLayoutDocumentViewer.css';
@@ -64,6 +64,7 @@ interface FixedLayoutDocumentViewerProps {
   onContentHtmlChange?: (html: string) => void;
   editorRef?: React.RefObject<RichTextEditorRef | null>;
   onSwitchToWysiwyg?: () => void;
+  initialMode?: 'reconstructed' | 'original' | 'side-by-side' | 'wysiwyg';
 }
 
 export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef, FixedLayoutDocumentViewerProps>(
@@ -79,12 +80,15 @@ export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef
       onContentHtmlChange,
       editorRef,
       onSwitchToWysiwyg,
+      initialMode,
     },
     ref
   ) => {
     const [activePageIndex, setActivePageIndex] = useState<number>(0);
     // Default to Reconstructed (Fixed) as requested: user wants to edit directly on the reconstructed document
-    const [mode, setMode] = useState<'reconstructed' | 'original' | 'side-by-side' | 'wysiwyg'>('reconstructed');
+    const [mode, setMode] = useState<'reconstructed' | 'original' | 'side-by-side' | 'wysiwyg'>(
+      initialMode || 'reconstructed'
+    );
     const [zoom, setZoom] = useState<number>(1.0);
     const [model, setModel] = useState<CanonicalDocument>(layoutModel);
     const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -902,7 +906,10 @@ export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef
                     }}
                   >
                     <FileText size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
-                    <div>Original document preview not available</div>
+                    <div className="text-slate-300 font-medium">Original document preview not available</div>
+                    <div style={{ fontSize: 12, marginTop: 4, color: '#94a3b8' }}>
+                      Upload a PDF or document above to preview the original file.
+                    </div>
                   </div>
                 )}
               </>
@@ -946,7 +953,17 @@ export const FixedLayoutDocumentViewer = forwardRef<FixedLayoutDocumentViewerRef
               <button
                 type="button"
                 className={`fld-mode-tab ${mode === 'reconstructed' ? 'fld-mode-tab--active' : ''}`}
-                onClick={() => setMode('reconstructed')}
+                onClick={() => {
+                  setMode('reconstructed');
+                  if ((!model?.pages || !model.pages[0]?.elements?.length) && contentHtml?.trim()) {
+                    const text = contentHtml.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '').trim();
+                    if (text) {
+                      const fallback = createFallbackLayoutModel(originalFileUrl, text);
+                      setModel(fallback);
+                      if (onModelChange) onModelChange(fallback);
+                    }
+                  }
+                }}
                 title="Direct in-place visual editor on the reconstructed document preserving exact PDF geometry"
               >
                 <FileText size={13} /> Reconstructed (Fixed Editor)

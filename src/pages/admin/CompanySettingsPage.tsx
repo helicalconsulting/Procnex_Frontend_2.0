@@ -6501,50 +6501,40 @@ export default function CompanySettingsPage() {
                               <FileSignature size={14} /> Contract Template Content
                             </div>
 
-                            {(editedContractLayoutModel || selectedContractTemplate?.fileUrl) ? (
-                              <FixedLayoutDocumentViewer
-                                ref={fixedViewerRef}
-                                layoutModel={
-                                  editedContractLayoutModel ||
-                                  (selectedContractTemplate as any)?.layoutModel ||
-                                  createFallbackLayoutModel(selectedContractTemplate?.fileUrl, selectedContractTemplate?.ocrText)
-                                }
-                                originalFileUrl={selectedContractTemplate?.fileUrl}
-                                originalFileName={selectedContractTemplate?.fileName}
-                                fileType={selectedContractTemplate?.fileType}
-                                contentHtml={editedContractContent}
-                                onContentHtmlChange={handleContractContentChange}
-                                editorRef={contractEditorRef}
-                                onSwitchToWysiwyg={() => {
-                                  if (!editedContractContent?.trim()) {
-                                    const fallbackText =
-                                      selectedContractTemplate?.ocrText ||
-                                      editedContractLayoutModel?.plainText ||
-                                      editedContractLayoutModel?.pages?.flatMap((p: any) => p.elements?.map((e: any) => e.text) || []).join('\n\n');
-                                    if (fallbackText) {
-                                      const html = fallbackText
-                                        .split(/\n\n+/)
-                                        .map((para: string) => `<p>${para.replace(/\n/g, '<br />')}</p>`)
-                                        .join('');
-                                      setEditedContractContent(html);
-                                      setContractTemplateDirty(true);
-                                    }
+                            <FixedLayoutDocumentViewer
+                              ref={fixedViewerRef}
+                              layoutModel={
+                                editedContractLayoutModel ||
+                                (selectedContractTemplate as any)?.layoutModel ||
+                                createFallbackLayoutModel(selectedContractTemplate?.fileUrl, selectedContractTemplate?.ocrText || editedContractContent)
+                              }
+                              originalFileUrl={selectedContractTemplate?.fileUrl}
+                              originalFileName={selectedContractTemplate?.fileName}
+                              fileType={selectedContractTemplate?.fileType}
+                              contentHtml={editedContractContent}
+                              onContentHtmlChange={handleContractContentChange}
+                              editorRef={contractEditorRef}
+                              onSwitchToWysiwyg={() => {
+                                if (!editedContractContent?.trim()) {
+                                  const fallbackText =
+                                    selectedContractTemplate?.ocrText ||
+                                    editedContractLayoutModel?.plainText ||
+                                    editedContractLayoutModel?.pages?.flatMap((p: any) => p.elements?.map((e: any) => e.text) || []).join('\n\n');
+                                  if (fallbackText) {
+                                    const html = fallbackText
+                                      .split(/\n\n+/)
+                                      .map((para: string) => `<p>${para.replace(/\n/g, '<br />')}</p>`)
+                                      .join('');
+                                    setEditedContractContent(html);
+                                    setContractTemplateDirty(true);
                                   }
-                                }}
-                                onModelChange={(updated) => {
-                                  setEditedContractLayoutModel(updated);
-                                  setContractTemplateDirty(true);
-                                }}
-                              />
-                            ) : (
-                              <RichTextEditor
-                                ref={contractEditorRef}
-                                key={selectedContractType ?? 'none'}
-                                value={editedContractContent}
-                                onChange={handleContractContentChange}
-                                placeholder="Write contract template content here... Use {{contract_number}}, {{vendor_name}}, {{contract_value}}, etc."
-                              />
-                            )}
+                                }
+                              }}
+                              onModelChange={(updated) => {
+                                setEditedContractLayoutModel(updated);
+                                setContractTemplateDirty(true);
+                              }}
+                            />
                           </div>
                         </div>
 
