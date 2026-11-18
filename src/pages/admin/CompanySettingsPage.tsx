@@ -2093,13 +2093,13 @@ export default function CompanySettingsPage() {
       setSelectedContractType(type);
       setContractTemplateDirty(false);
       const tmpl = contractTemplates.find(t => t.type === type);
-      if (tmpl && tmpl.content && tmpl.layoutModel) {
-        setEditedContractContent(tmpl.content);
+      if (tmpl && tmpl.layoutModel) {
+        setEditedContractContent(tmpl.content || '');
         setEditedContractName(tmpl.name || type);
         setEditedContractDescription(tmpl?.description || '');
         setEditedContractIsActive(tmpl?.isActive ?? true);
-        setEditedContractLayoutModel(tmpl.layoutModel || null);
-        setEditorMode(tmpl.layoutModel ? 'fixed' : 'flowing');
+        setEditedContractLayoutModel(tmpl.layoutModel);
+        setEditorMode('fixed');
       } else {
         // Fetch from backend (which lazily generates layoutModel if missing for uploaded files)
         try {
@@ -2162,16 +2162,19 @@ export default function CompanySettingsPage() {
   }, []);
 
   const handleSaveContractTemplate = useCallback(async () => {
-    if (!selectedContractType || !editedContractContent) return;
+    if (!selectedContractType) return;
     setSavingContractTemplate(true);
     setPageMsg(null);
     try {
       const updated = await companySettingsService.saveContractTemplate(selectedContractType, {
-        name: editedContractName.trim(),
-        content: editedContractContent,
-        description: editedContractDescription.trim() || null,
+        name: (editedContractName || selectedContractTemplate?.name || selectedContractType).trim(),
+        content: editedContractContent || selectedContractTemplate?.content || (editedContractLayoutModel ? ' ' : ''),
+        description: editedContractDescription?.trim() || selectedContractTemplate?.description || null,
         isActive: editedContractIsActive,
-        layoutModel: editedContractLayoutModel || undefined,
+        fileUrl: selectedContractTemplate?.fileUrl || null,
+        fileName: selectedContractTemplate?.fileName || null,
+        fileType: selectedContractTemplate?.fileType || null,
+        layoutModel: editedContractLayoutModel || selectedContractTemplate?.layoutModel || undefined,
       });
       setContractTemplates((prev) => {
         const filtered = prev.filter(t => t.type !== selectedContractType);
@@ -2184,7 +2187,7 @@ export default function CompanySettingsPage() {
     } finally {
       setSavingContractTemplate(false);
     }
-  }, [selectedContractType, editedContractContent, editedContractName, editedContractDescription, editedContractIsActive]);
+  }, [selectedContractType, editedContractContent, editedContractName, editedContractDescription, editedContractIsActive, editedContractLayoutModel, selectedContractTemplate]);
 
   const handleResetContractTemplate = useCallback(async () => {
     if (!selectedContractType) return;
