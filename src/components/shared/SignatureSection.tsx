@@ -17,7 +17,11 @@ const PEN_COLORS = [
 
 const PEN_SIZES = [1, 2, 3, 4, 6];
 
-export default function SignatureSection() {
+interface SignatureSectionProps {
+  onInsertIntoDocument?: (dataUrl: string) => void;
+}
+
+export default function SignatureSection({ onInsertIntoDocument }: SignatureSectionProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [penColor, setPenColor] = useState('#1a1a2e');
@@ -221,13 +225,42 @@ export default function SignatureSection() {
 
       {/* ── Capture Area ── */}
       <div className="sig-section__card">
-        <div className="sig-section__card-header">
-          <PenLine size={16} />
-          <h3>My Signature</h3>
+        <div className="sig-section__card-header flex items-center justify-between">
+          <div className="flex items-center gap-1.5 font-semibold text-sm">
+            <PenLine size={16} />
+            <h3>My Signature</h3>
+          </div>
+          {onInsertIntoDocument && (
+            <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">
+              Sign & Drop Ready
+            </span>
+          )}
         </div>
 
+        {onInsertIntoDocument && (
+          <p className="text-[11px] text-slate-400 px-3 py-1 bg-slate-900/60 border-b border-slate-800">
+            Sign below, then click <strong className="text-emerald-400">Drop into Document</strong> or drag your signature into the editor.
+          </p>
+        )}
+
         {/* Canvas */}
-        <div className="sig-section__canvas-wrap">
+        <div
+          className={`sig-section__canvas-wrap ${hasDrawn ? 'cursor-grab active:cursor-grabbing ring-1 ring-emerald-500/30' : ''}`}
+          draggable={hasDrawn}
+          onDragStart={(e) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const dataUrl = canvas.toDataURL('image/png');
+            const sigHtml = `<div class="contract-signature-wrapper" style="display: inline-block; margin: 16px 0; text-align: left;">
+              <img src="${dataUrl}" alt="Company Signature" style="max-height: 70px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" />
+              <div style="border-top: 1.5px solid #475569; width: 220px; padding-top: 4px; font-size: 12px; color: #64748b; font-family: Arial, sans-serif;">Authorized Signature</div>
+            </div>`;
+            e.dataTransfer.setData('text/html', sigHtml);
+            e.dataTransfer.setData('text/plain', '{{company_signature}}');
+            e.dataTransfer.effectAllowed = 'copy';
+          }}
+          title={hasDrawn ? 'Drag and drop this signature directly into the document editor' : undefined}
+        >
           <canvas
             ref={canvasRef}
             className="sig-section__canvas"
@@ -278,7 +311,27 @@ export default function SignatureSection() {
         </div>
 
         {/* Action Buttons Row */}
-        <div className="sig-section__actions">
+        <div className="sig-section__actions flex-wrap gap-1.5">
+          {/* Direct Drop into Document Button */}
+          {onInsertIntoDocument && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const dataUrl = canvas.toDataURL('image/png');
+                onInsertIntoDocument(dataUrl);
+                flashSuccess('Signature dropped into document!');
+              }}
+              disabled={!hasDrawn}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1.5 shadow-sm w-full mb-1 justify-center"
+              title="Insert this signed signature directly into the active document editor"
+            >
+              <PenLine size={14} /> Drop into Document
+            </Button>
+          )}
+
           {/* Upload */}
           <label className="sig-section__upload-btn">
             <input type="file" accept="image/*" onChange={handleUpload} className="sig-section__upload-input" />
@@ -305,7 +358,21 @@ export default function SignatureSection() {
           <div className="sig-section__items">
             {savedSignatures.map(sig => (
               <div key={sig.id} className="sig-section__item">
-                <div className="sig-section__item-preview" onClick={() => setPreviewSig(sig)}>
+                <div
+                  className="sig-section__item-preview cursor-grab active:cursor-grabbing"
+                  onClick={() => setPreviewSig(sig)}
+                  draggable
+                  onDragStart={(e) => {
+                    const sigHtml = `<div class="contract-signature-wrapper" style="display: inline-block; margin: 16px 0; text-align: left;">
+                      <img src="${sig.dataUrl}" alt="${sig.name}" style="max-height: 70px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" />
+                      <div style="border-top: 1.5px solid #475569; width: 220px; padding-top: 4px; font-size: 12px; color: #64748b; font-family: Arial, sans-serif;">Authorized Signature</div>
+                    </div>`;
+                    e.dataTransfer.setData('text/html', sigHtml);
+                    e.dataTransfer.setData('text/plain', '{{company_signature}}');
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  title="Click to preview or drag & drop into document"
+                >
                   <img src={sig.dataUrl} alt={sig.name} />
                   {sig.isDefault && <span className="sig-section__item-default"><Star size={11} aria-hidden/> Default</span>}
                 </div>
@@ -319,6 +386,19 @@ export default function SignatureSection() {
                   </span>
                 </div>
                 <div className="sig-section__item-actions">
+                  {onInsertIntoDocument && (
+                    <button
+                      type="button"
+                      className="sig-section__item-action text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                      title="Drop / Insert this signature into document"
+                      onClick={() => {
+                        onInsertIntoDocument(sig.dataUrl);
+                        flashSuccess(`"${sig.name}" dropped into document!`);
+                      }}
+                    >
+                      <PenLine size={13} />
+                    </button>
+                  )}
                   {!sig.isDefault && (
                     <button className="sig-section__item-action" title="Set as default" onClick={() => handleSetDefault(sig.id)}>
                       <Star size={13} />

@@ -41,6 +41,7 @@ import { useAuth } from '../../context/AuthContext';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
 import { ALL_PLACEHOLDERS, PLACEHOLDER_CATEGORIES } from '../../utils/placeholderResolver';
+import { canonicalModelToHtml } from '../../utils/documentModelToHtml';
 
 // ─── Predictive Match Analysis ──────────────────────────────
 interface PredictiveMatchResult {
@@ -2033,6 +2034,22 @@ export default function CompanySettingsPage() {
     setTimeout(() => setInsertedPlaceholderNotice(null), 2500);
   };
 
+  const handleInsertSignatureIntoContract = useCallback((sigDataUrl: string) => {
+    const sigHtml = `<div class="contract-signature-wrapper" style="display: inline-block; margin: 16px 0; text-align: left;">
+      <img src="${sigDataUrl}" alt="Company Signature" style="max-height: 70px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" />
+      <div style="border-top: 1.5px solid #475569; width: 220px; padding-top: 4px; font-size: 12px; color: #64748b; font-family: Arial, sans-serif;">Authorized Signature</div>
+    </div>`;
+
+    if (contractEditorRef.current) {
+      contractEditorRef.current.insertHtml(sigHtml);
+    } else {
+      setEditedContractContent((prev) => `${prev || ''}\n${sigHtml}`);
+    }
+    setContractTemplateDirty(true);
+    setInsertedPlaceholderNotice('Company Signature dropped into document');
+    setTimeout(() => setInsertedPlaceholderNotice(null), 3000);
+  }, []);
+
   const filteredContractTemplates = useMemo(() => {
     return contractTemplates.filter(t => {
       const matchesSearch = !contractSearchQuery.trim() ||
@@ -2094,7 +2111,8 @@ export default function CompanySettingsPage() {
       setContractTemplateDirty(false);
       const tmpl = contractTemplates.find(t => t.type === type);
       if (tmpl && tmpl.layoutModel) {
-        setEditedContractContent(tmpl.content || '');
+        const initialContent = tmpl.content?.trim() ? tmpl.content : canonicalModelToHtml(tmpl.layoutModel);
+        setEditedContractContent(initialContent);
         setEditedContractName(tmpl.name || type);
         setEditedContractDescription(tmpl?.description || '');
         setEditedContractIsActive(tmpl?.isActive ?? true);
@@ -2112,8 +2130,10 @@ export default function CompanySettingsPage() {
             setEditorMode('flowing');
           }
 
-          if (result?.template?.content) {
+          if (result?.template?.content?.trim()) {
             setEditedContractContent(result.template.content);
+          } else if (result?.template?.layoutModel) {
+            setEditedContractContent(canonicalModelToHtml(result.template.layoutModel));
           } else if (result?.defaultContent) {
             setEditedContractContent(result.defaultContent);
           } else if (tmpl?.content) {
@@ -2466,6 +2486,22 @@ export default function CompanySettingsPage() {
     setInsertedDocPlaceholderNotice(tagCode);
     setTimeout(() => setInsertedDocPlaceholderNotice(null), 2500);
   };
+
+  const handleInsertSignatureIntoDoc = useCallback((sigDataUrl: string) => {
+    const sigHtml = `<div class="contract-signature-wrapper" style="display: inline-block; margin: 16px 0; text-align: left;">
+      <img src="${sigDataUrl}" alt="Company Signature" style="max-height: 70px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" />
+      <div style="border-top: 1.5px solid #475569; width: 220px; padding-top: 4px; font-size: 12px; color: #64748b; font-family: Arial, sans-serif;">Authorized Signature</div>
+    </div>`;
+
+    if (docEditorRef.current) {
+      docEditorRef.current.insertHtml(sigHtml);
+    } else {
+      setEditedDocContent((prev) => `${prev || ''}\n${sigHtml}`);
+    }
+    setDocTemplateDirty(true);
+    setInsertedDocPlaceholderNotice('Company Signature dropped into document');
+    setTimeout(() => setInsertedDocPlaceholderNotice(null), 3000);
+  }, []);
 
   // Derived values for the currently selected document template
   const selectedDocTemplate = useMemo(
@@ -6537,7 +6573,7 @@ export default function CompanySettingsPage() {
                               Draw or upload your official company signature below. It will automatically embed in generated contract agreements.
                             </p>
                             <div className="cs-dt-signature-block__content">
-                              <SignatureSection />
+                              <SignatureSection onInsertIntoDocument={handleInsertSignatureIntoContract} />
                             </div>
                           </div>
                         </div>
@@ -6781,7 +6817,7 @@ export default function CompanySettingsPage() {
                               Draw or upload your official company signature below. It will automatically embed in generated agreements.
                             </p>
                             <div className="cs-dt-signature-block__content">
-                              <SignatureSection />
+                              <SignatureSection onInsertIntoDocument={handleInsertSignatureIntoDoc} />
                             </div>
                           </div>
                         </div>

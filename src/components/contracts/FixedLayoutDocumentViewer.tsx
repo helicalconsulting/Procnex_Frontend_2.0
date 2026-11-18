@@ -19,6 +19,7 @@ import {
   PenTool,
 } from 'lucide-react';
 import RichTextEditor, { type RichTextEditorRef } from '../shared/RichTextEditor';
+import { canonicalModelToHtml } from '../../utils/documentModelToHtml';
 import type { CanonicalPage, CanonicalElement } from '../../types/documentExtraction';
 import { API_BASE } from '../../api/client';
 import './FixedLayoutDocumentViewer.css';
@@ -58,7 +59,7 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
   onSwitchToWysiwyg,
 }) => {
   const [activePageIndex, setActivePageIndex] = useState<number>(0);
-  const [mode, setMode] = useState<'reconstructed' | 'original' | 'side-by-side' | 'wysiwyg'>('side-by-side');
+  const [mode, setMode] = useState<'reconstructed' | 'original' | 'side-by-side' | 'wysiwyg'>('wysiwyg');
   const [zoom, setZoom] = useState<number>(1.0);
   const [model, setModel] = useState<CanonicalDocument>(layoutModel);
 
@@ -66,6 +67,16 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
   useEffect(() => {
     setModel(layoutModel);
   }, [layoutModel]);
+
+  // Ensure contentHtml has the reconstructed document text whenever WYSIWYG is active
+  useEffect(() => {
+    if ((!contentHtml || !contentHtml.trim() || contentHtml === '<p></p>') && layoutModel) {
+      const reconstructedHtml = canonicalModelToHtml(layoutModel);
+      if (reconstructedHtml && onContentHtmlChange) {
+        onContentHtmlChange(reconstructedHtml);
+      }
+    }
+  }, [contentHtml, layoutModel, onContentHtmlChange]);
 
   const pages = model?.pages || [];
   const totalPages = pages.length > 0 ? pages.length : 1;
@@ -639,6 +650,10 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
               className={`fld-mode-tab ${mode === 'wysiwyg' ? 'fld-mode-tab--active' : ''}`}
               onClick={() => {
                 setMode('wysiwyg');
+                if ((!contentHtml || !contentHtml.trim() || contentHtml === '<p></p>') && model) {
+                  const html = canonicalModelToHtml(model);
+                  if (html && onContentHtmlChange) onContentHtmlChange(html);
+                }
                 if (onSwitchToWysiwyg) onSwitchToWysiwyg();
               }}
               title="Full WYSIWYG rich text editor with all formatting tools"
@@ -647,6 +662,25 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
             </button>
           </div>
         </div>
+
+        {/* WYSIWYG Re-Sync helper button */}
+        {mode === 'wysiwyg' && (
+          <div className="fld-toolbar-group">
+            <button
+              type="button"
+              className="fld-tool-btn text-xs font-medium text-blue-400 hover:text-blue-300 flex items-center gap-1.5"
+              onClick={() => {
+                const freshHtml = canonicalModelToHtml(model);
+                if (freshHtml && onContentHtmlChange) {
+                  onContentHtmlChange(freshHtml);
+                }
+              }}
+              title="Re-populate TinyMCE editor with fresh reconstructed layout from PDF"
+            >
+              <RotateCcw size={12} /> Sync from Reconstructed
+            </button>
+          </div>
+        )}
 
         {/* Page Navigation (hidden in WYSIWYG mode) */}
         {mode !== 'wysiwyg' && totalPages > 1 && (

@@ -124,32 +124,43 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
           help: { title: 'Help', items: 'help' }
         },
         plugins: FREE_OPENSOURCE_PLUGINS,
-        toolbar:
-          'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | ' +
-          'forecolor backcolor | alignleft aligncenter alignright alignjustify | ' +
-          'bullist numlist outdent indent | table link image media | ' +
-          'accordion pagebreak emoticons charmap | searchreplace visualblocks code fullscreen preview print',
+        toolbar_mode: 'wrap',
+        toolbar: [
+          'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough superscript subscript | forecolor backcolor | removeformat',
+          'alignleft aligncenter alignright alignjustify | lineheight | bullist numlist outdent indent | hr pagebreak',
+          'table inserttable | link image media | emoticons charmap anchor insertdatetime | accordion | searchreplace visualchars visualblocks code fullscreen preview print help',
+        ],
         quickbars_selection_toolbar: 'bold italic | quicklink h2 h3 blockquote quicktable',
-        toolbar_mode: 'sliding',
         contextmenu: 'link image table',
         skin: isDark ? 'oxide-dark' : 'oxide',
         content_css: isDark ? 'dark' : 'default',
         content_style: `
+          html {
+            background-color: ${isDark ? '#0b0f19' : '#f1f5f9'};
+            padding: 20px 12px;
+            min-height: 100%;
+          }
           body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-            font-size: 15px;
+            font-family: Arial, Helvetica, "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            font-size: 14px;
             line-height: 1.6;
-            padding: 1.5rem;
-            max-width: 900px;
+            padding: 3rem 3.5rem;
+            max-width: 820px;
             margin: 0 auto;
-            background-color: ${isDark ? '#111827' : '#ffffff'};
-            color: ${isDark ? '#f3f4f6' : '#1e293b'};
+            background-color: #ffffff;
+            color: #1e293b;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            min-height: 1000px;
+            border-radius: 4px;
+            box-sizing: border-box;
           }
           .mce-pagebreak {
-            border: 1px dashed #64748b;
-            height: 1px;
-            margin: 2rem 0;
+            border-top: 2px dashed #94a3b8;
+            margin: 3rem 0;
             position: relative;
+            text-align: center;
+            height: auto;
+            background: transparent;
           }
           table {
             border-collapse: collapse;
@@ -157,8 +168,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             margin: 1rem 0;
           }
           table td, table th {
-            border: 1px solid ${isDark ? '#374151' : '#cbd5e1'};
+            border: 1px solid #cbd5e1;
             padding: 8px 12px;
+          }
+          img {
+            max-width: 100%;
+            height: auto;
+          }
+          .contract-signature-wrapper {
+            display: inline-block;
+            margin: 16px 0;
           }
         `,
         placeholder,
