@@ -32,6 +32,8 @@ export interface CanonicalDocument {
 interface FixedLayoutDocumentViewerProps {
   layoutModel: CanonicalDocument;
   originalFileUrl?: string | null;
+  originalFileName?: string | null;
+  fileType?: string | null;
   onModelChange?: (updatedModel: CanonicalDocument) => void;
   readOnly?: boolean;
 }
@@ -39,6 +41,8 @@ interface FixedLayoutDocumentViewerProps {
 export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps> = ({
   layoutModel,
   originalFileUrl,
+  originalFileName,
+  fileType,
   onModelChange,
   readOnly = false,
 }) => {
@@ -113,30 +117,39 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
         if (resolvedPreview) return { url: resolvedPreview, isPdf: false };
       }
 
-      // 2. If original file is an image, it is the highest fidelity original scan
       const resolvedFileUrl = resolveBackendUrl(originalFileUrl);
-      const isFilePdf = resolvedFileUrl ? /\.pdf(\?|$)/i.test(resolvedFileUrl) : false;
-      const isFileImage = resolvedFileUrl
-        ? /\.(jpe?g|png|webp|gif|bmp)(\?|$)/i.test(resolvedFileUrl)
-        : false;
+      if (!resolvedFileUrl) return null;
 
-      if (isFileImage && resolvedFileUrl) {
+      // Identify whether file is an image vs PDF
+      const isKnownImage = Boolean(
+        (/\.(jpe?g|png|webp|gif|bmp|svg)(\?|$)/i.test(resolvedFileUrl) ||
+         (fileType && fileType.startsWith('image/')) ||
+         (originalFileName && /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(originalFileName))) &&
+        !imageLoadError
+      );
+
+      const isKnownPdf = Boolean(
+        (originalFileName && /\.pdf$/i.test(originalFileName)) ||
+        (fileType && fileType.toLowerCase().includes('pdf')) ||
+        /\.pdf(\?|$)/i.test(resolvedFileUrl) ||
+        pages.length > 1 ||
+        !isKnownImage
+      );
+
+      if (isKnownImage && !isKnownPdf) {
         return { url: resolvedFileUrl, isPdf: false };
       }
 
-      // 3. Fallback to originalFileUrl (works for both images and PDFs)
-      if (resolvedFileUrl) {
-        if (isFilePdf && resolvedFileUrl.startsWith('https://res.cloudinary.com')) {
-          const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
-          const proxyUrl = `${backendBase}/api/vendors/pdf-view?url=${encodeURIComponent(resolvedFileUrl)}`;
-          return { url: proxyUrl, isPdf: true };
-        }
-        return { url: resolvedFileUrl, isPdf: isFilePdf };
+      // If PDF (or image preview failed), proxy Cloudinary documents through backend for inline delivery
+      if (resolvedFileUrl.startsWith('https://res.cloudinary.com')) {
+        const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+        const proxyUrl = `${backendBase}/api/vendors/pdf-view?url=${encodeURIComponent(resolvedFileUrl)}`;
+        return { url: proxyUrl, isPdf: true };
       }
 
-      return null;
+      return { url: resolvedFileUrl, isPdf: isKnownPdf };
     },
-    [originalFileUrl, imageLoadError]
+    [originalFileUrl, originalFileName, fileType, imageLoadError, pages.length]
   );
 
   const pageSource = getOriginalPageSource(currentPage);

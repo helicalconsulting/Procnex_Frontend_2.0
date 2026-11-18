@@ -6436,6 +6436,8 @@ export default function CompanySettingsPage() {
                               <FixedLayoutDocumentViewer
                                 layoutModel={editedContractLayoutModel}
                                 originalFileUrl={selectedContractTemplate?.fileUrl}
+                                originalFileName={selectedContractTemplate?.fileName}
+                                fileType={selectedContractTemplate?.fileType}
                                 onModelChange={(updated) => {
                                   setEditedContractLayoutModel(updated);
                                   setContractTemplateDirty(true);
