@@ -16,7 +16,9 @@ import {
   Check,
   RotateCcw,
   Loader2,
+  PenTool,
 } from 'lucide-react';
+import RichTextEditor, { type RichTextEditorRef } from '../shared/RichTextEditor';
 import type { CanonicalPage, CanonicalElement } from '../../types/documentExtraction';
 import { API_BASE } from '../../api/client';
 import './FixedLayoutDocumentViewer.css';
@@ -37,6 +39,10 @@ interface FixedLayoutDocumentViewerProps {
   fileType?: string | null;
   onModelChange?: (updatedModel: CanonicalDocument) => void;
   readOnly?: boolean;
+  contentHtml?: string;
+  onContentHtmlChange?: (html: string) => void;
+  editorRef?: React.RefObject<RichTextEditorRef | null>;
+  onSwitchToWysiwyg?: () => void;
 }
 
 export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps> = ({
@@ -46,9 +52,13 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
   fileType,
   onModelChange,
   readOnly = false,
+  contentHtml,
+  onContentHtmlChange,
+  editorRef,
+  onSwitchToWysiwyg,
 }) => {
   const [activePageIndex, setActivePageIndex] = useState<number>(0);
-  const [mode, setMode] = useState<'reconstructed' | 'original' | 'side-by-side'>('reconstructed');
+  const [mode, setMode] = useState<'reconstructed' | 'original' | 'side-by-side' | 'wysiwyg'>('side-by-side');
   const [zoom, setZoom] = useState<number>(1.0);
   const [model, setModel] = useState<CanonicalDocument>(layoutModel);
 
@@ -464,19 +474,21 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
 
     // Default: text element with optional NLP review pill
     const hasPendingCorrection = el.suggestedCorrection && !el.suggestedCorrection.accepted;
+    const safeFontSize = Math.min(Math.max(el.fontSize || 10, 8.5), 14);
     return (
       <div
         key={el.id}
         className="fld-element fld-element-text"
         style={{
           ...style,
-          fontSize: `${el.fontSize || 10}pt`,
+          fontSize: `${safeFontSize}pt`,
           fontWeight: el.fontWeight || 'normal',
           fontStyle: el.fontStyle || 'normal',
           textAlign: el.alignment || 'left',
           color: el.color || '#000000',
           fontFamily: normalizeFontFamily(el.fontFamily),
-          lineHeight: 1.15,
+          lineHeight: 1.2,
+          minHeight: `${Math.min(bbox.height, 22)}pt`,
         }}
         contentEditable={!readOnly}
         suppressContentEditableWarning
@@ -622,11 +634,22 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
             >
               <Columns size={13} /> Side-by-Side
             </button>
+            <button
+              type="button"
+              className={`fld-mode-tab ${mode === 'wysiwyg' ? 'fld-mode-tab--active' : ''}`}
+              onClick={() => {
+                setMode('wysiwyg');
+                if (onSwitchToWysiwyg) onSwitchToWysiwyg();
+              }}
+              title="Full WYSIWYG rich text editor with all formatting tools"
+            >
+              <PenTool size={13} /> WYSIWYG Editor (TinyMCE)
+            </button>
           </div>
         </div>
 
-        {/* Page Navigation */}
-        {totalPages > 1 && (
+        {/* Page Navigation (hidden in WYSIWYG mode) */}
+        {mode !== 'wysiwyg' && totalPages > 1 && (
           <div className="fld-toolbar-group fld-page-nav">
             <button
               type="button"
@@ -650,40 +673,52 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
           </div>
         )}
 
-        {/* Zoom Controls */}
-        <div className="fld-toolbar-group">
-          <button
-            type="button"
-            className="fld-tool-btn"
-            onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(2))))}
-            title="Zoom Out"
-          >
-            <ZoomOut size={13} />
-          </button>
-          <span style={{ fontSize: 12, minWidth: 42, textAlign: 'center', color: '#94a3b8' }}>
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            type="button"
-            className="fld-tool-btn"
-            onClick={() => setZoom((z) => Math.min(2.5, Number((z + 0.1).toFixed(2))))}
-            title="Zoom In"
-          >
-            <ZoomIn size={13} />
-          </button>
-          <button
-            type="button"
-            className="fld-tool-btn"
-            onClick={() => setZoom(1.0)}
-            title="Reset Zoom to 100%"
-          >
-            <RotateCcw size={12} />
-          </button>
-        </div>
+        {/* Zoom Controls (hidden in WYSIWYG mode) */}
+        {mode !== 'wysiwyg' && (
+          <div className="fld-toolbar-group">
+            <button
+              type="button"
+              className="fld-tool-btn"
+              onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(2))))}
+              title="Zoom Out"
+            >
+              <ZoomOut size={13} />
+            </button>
+            <span style={{ fontSize: 12, minWidth: 42, textAlign: 'center', color: '#94a3b8' }}>
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              type="button"
+              className="fld-tool-btn"
+              onClick={() => setZoom((z) => Math.min(2.5, Number((z + 0.1).toFixed(2))))}
+              title="Zoom In"
+            >
+              <ZoomIn size={13} />
+            </button>
+            <button
+              type="button"
+              className="fld-tool-btn"
+              onClick={() => setZoom(1.0)}
+              title="Reset Zoom to 100%"
+            >
+              <RotateCcw size={12} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Viewport Content */}
-      {mode === 'side-by-side' ? (
+      {mode === 'wysiwyg' ? (
+        <div className="fld-workspace fld-workspace--wysiwyg p-3 bg-slate-900/60 w-full min-h-[650px] overflow-y-auto">
+          <RichTextEditor
+            ref={editorRef}
+            value={contentHtml || ''}
+            onChange={onContentHtmlChange || (() => {})}
+            placeholder="Write contract template content here... Use {{contract_number}}, {{vendor_name}}, {{contract_value}}, etc."
+            minHeight={650}
+          />
+        </div>
+      ) : mode === 'side-by-side' ? (
         <div className="fld-split-viewport">
           <div className="fld-split-pane">
             <div className="fld-pane-title">

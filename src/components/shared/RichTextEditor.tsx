@@ -23,35 +23,30 @@ declare global {
 }
 
 const FREE_OPENSOURCE_PLUGINS = [
-  'accordion',
   'advlist',
-  'anchor',
   'autolink',
-  'autoresize',
-  'autosave',
-  'charmap',
-  'code',
-  'codesample',
-  'directionality',
-  'emoticons',
-  'fullscreen',
-  'help',
-  'image',
-  'importcss',
-  'insertdatetime',
-  'link',
   'lists',
+  'link',
+  'image',
+  'charmap',
+  'preview',
+  'anchor',
+  'searchreplace',
+  'visualblocks',
+  'code',
+  'fullscreen',
+  'insertdatetime',
   'media',
+  'table',
+  'help',
+  'wordcount',
+  'emoticons',
+  'accordion',
+  'directionality',
   'nonbreaking',
   'pagebreak',
-  'preview',
   'quickbars',
-  'save',
-  'searchreplace',
-  'table',
-  'visualblocks',
   'visualchars',
-  'wordcount',
 ];
 
 const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(function RichTextEditor(
@@ -67,6 +62,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorInstanceRef = useRef<any>(null);
   const [editorId] = useState(() => `tinymce_${Math.random().toString(36).substring(2, 9)}`);
+  const [isEditorReady, setIsEditorReady] = useState(false);
   const isUpdatingFromProp = useRef(false);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -97,11 +93,11 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
 
   useEffect(() => {
     let isMounted = true;
+    let pollTimer: any = null;
 
-    const initEditor = () => {
-      if (!window.tinymce || !textareaRef.current) return;
+    const initTinyMCE = () => {
+      if (!isMounted || !textareaRef.current || !window.tinymce) return;
 
-      // Remove any existing instance for this id
       try {
         window.tinymce.remove(`#${editorId}`);
       } catch {}
@@ -115,14 +111,14 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
         license_key: 'gpl',
         promotion: false,
         branding: false,
-        height: minHeight,
+        height: minHeight || 650,
         menubar: 'file edit view insert format tools table help',
         menu: {
-          file: { title: 'File', items: 'newdocument restoredraft | preview | print' },
+          file: { title: 'File', items: 'newdocument | preview | print' },
           edit: { title: 'Edit', items: 'undo redo | cut copy paste pastetext | selectall | searchreplace' },
           view: { title: 'View', items: 'code | visualaid visualchars visualblocks | preview fullscreen' },
-          insert: { title: 'Insert', items: 'image link media inserttable | charmap emoticons hr | pagebreak nonbreaking anchor | insertdatetime' },
-          format: { title: 'Format', items: 'bold italic underline strikethrough superscript subscript codeformat | styles blocks fontfamily fontsize align lineheight | forecolor backcolor | language | removeformat' },
+          insert: { title: 'Insert', items: 'image link media inserttable | charmap emoticons | pagebreak nonbreaking anchor | insertdatetime' },
+          format: { title: 'Format', items: 'bold italic underline strikethrough superscript subscript | styles blocks fontfamily fontsize align lineheight | forecolor backcolor | removeformat' },
           tools: { title: 'Tools', items: 'wordcount' },
           table: { title: 'Table', items: 'inserttable | cell row column | tableprops deletetable' },
           help: { title: 'Help', items: 'help' }
@@ -171,6 +167,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
 
           editor.on('init', () => {
             if (isMounted) {
+              setIsEditorReady(true);
               editor.setContent(value || '');
             }
           });
@@ -184,23 +181,32 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
       });
     };
 
-    if (!window.tinymce) {
+    if (window.tinymce) {
+      setTimeout(initTinyMCE, 40);
+    } else {
       const existingScript = document.querySelector('script[src*="tinymce.min.js"]');
       if (existingScript) {
-        existingScript.addEventListener('load', initEditor);
+        existingScript.addEventListener('load', () => setTimeout(initTinyMCE, 40));
       } else {
         const script = document.createElement('script');
         script.src = '/tinymce/tinymce.min.js';
         script.async = true;
-        script.onload = initEditor;
+        script.onload = () => setTimeout(initTinyMCE, 40);
         document.head.appendChild(script);
       }
-    } else {
-      initEditor();
+
+      pollTimer = setInterval(() => {
+        if (window.tinymce) {
+          clearInterval(pollTimer);
+          setTimeout(initTinyMCE, 40);
+        }
+      }, 80);
+      setTimeout(() => clearInterval(pollTimer), 6000);
     }
 
     return () => {
       isMounted = false;
+      if (pollTimer) clearInterval(pollTimer);
       try {
         if (window.tinymce) {
           window.tinymce.remove(`#${editorId}`);
@@ -210,9 +216,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
     };
   }, [editorId, minHeight, placeholder]);
 
-  // Handle external value changes (e.g. changing templates)
   useEffect(() => {
-    if (editorInstanceRef.current) {
+    if (editorInstanceRef.current && isEditorReady) {
       const current = editorInstanceRef.current.getContent();
       if (value !== current) {
         isUpdatingFromProp.current = true;
@@ -220,11 +225,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
         isUpdatingFromProp.current = false;
       }
     }
-  }, [value]);
+  }, [value, isEditorReady]);
 
   return (
-    <div ref={containerRef} className="tinymce-wrapper w-full h-full min-h-[500px]">
-      <textarea id={editorId} ref={textareaRef} style={{ display: 'none' }} defaultValue={value} />
+    <div ref={containerRef} className="tinymce-wrapper w-full h-full min-h-[550px] relative">
+      <textarea
+        id={editorId}
+        ref={textareaRef}
+        defaultValue={value}
+        className="w-full h-96 p-4 bg-slate-900 text-slate-100 rounded-lg border border-slate-700 font-mono text-sm resize-y"
+      />
     </div>
   );
 });
