@@ -17,7 +17,7 @@ import { MessageStrip, inferMessageType } from '../../components/shared/MessageS
 import { useBranding } from '../../context/BrandingContext';
 import { CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import RichTextEditor, { type RichTextEditorRef } from '../../components/shared/RichTextEditor';
-import FixedLayoutDocumentViewer from '../../components/contracts/FixedLayoutDocumentViewer';
+import FixedLayoutDocumentViewer, { type FixedLayoutDocumentViewerRef } from '../../components/contracts/FixedLayoutDocumentViewer';
 import '../../components/shared/RichTextEditor.css';
 import './CompanySettingsPage.css';
 import { Button } from '../../components/ui/button';
@@ -2019,11 +2019,15 @@ export default function CompanySettingsPage() {
   const [selectedPlaceholderCategory, setSelectedPlaceholderCategory] = useState<string>('all');
   const [insertedPlaceholderNotice, setInsertedPlaceholderNotice] = useState<string | null>(null);
   const contractEditorRef = useRef<RichTextEditorRef>(null);
+  const fixedViewerRef = useRef<FixedLayoutDocumentViewerRef>(null);
 
   const handleInsertPlaceholderTag = (tagCode: string) => {
+    if (fixedViewerRef.current) {
+      fixedViewerRef.current.insertPlaceholder(tagCode);
+    }
     if (contractEditorRef.current) {
       contractEditorRef.current.insertText(tagCode);
-    } else {
+    } else if (!fixedViewerRef.current) {
       setEditedContractContent((prev) => {
         const spacePrefix = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
         return `${prev}${spacePrefix}${tagCode} `;
@@ -2035,6 +2039,10 @@ export default function CompanySettingsPage() {
   };
 
   const handleInsertSignatureIntoContract = useCallback((sigDataUrl: string) => {
+    if (fixedViewerRef.current) {
+      fixedViewerRef.current.insertSignature(sigDataUrl);
+    }
+
     const sigHtml = `<div class="contract-signature-wrapper" style="display: inline-block; margin: 16px 0; text-align: left;">
       <img src="${sigDataUrl}" alt="Company Signature" style="max-height: 70px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" />
       <div style="border-top: 1.5px solid #475569; width: 220px; padding-top: 4px; font-size: 12px; color: #64748b; font-family: Arial, sans-serif;">Authorized Signature</div>
@@ -2042,7 +2050,7 @@ export default function CompanySettingsPage() {
 
     if (contractEditorRef.current) {
       contractEditorRef.current.insertHtml(sigHtml);
-    } else {
+    } else if (!fixedViewerRef.current) {
       setEditedContractContent((prev) => `${prev || ''}\n${sigHtml}`);
     }
     setContractTemplateDirty(true);
@@ -6471,6 +6479,7 @@ export default function CompanySettingsPage() {
 
                             {editedContractLayoutModel ? (
                               <FixedLayoutDocumentViewer
+                                ref={fixedViewerRef}
                                 layoutModel={editedContractLayoutModel}
                                 originalFileUrl={selectedContractTemplate?.fileUrl}
                                 originalFileName={selectedContractTemplate?.fileName}

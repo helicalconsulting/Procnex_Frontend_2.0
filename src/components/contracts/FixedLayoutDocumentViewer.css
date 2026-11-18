@@ -389,3 +389,54 @@
   align-items: center;
   justify-content: space-between;
 }
+
+/* In-Place Document Editor Toolbar & Selection */
+.fld-editor-toolbar {
+  background-color: #111827;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #1f2937;
+  width: 100%;
+}
+
+.fld-element--selected {
+  outline: 2px solid #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
+  border-radius: 2px;
+  z-index: 30 !important;
+}
+
+.fld-element-drag-handle {
+  position: absolute;
+  top: -16px;
+  right: -2px;
+  background: #3b82f6;
+  color: white;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 10px;
+  cursor: move;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: all;
+  user-select: none;
+  z-index: 35;
+}
+
+.fld-select-tool {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+
+.fld-select-tool:focus {
+  border-color: #3b82f6;
+}
+
