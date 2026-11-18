@@ -6385,8 +6385,8 @@ export default function CompanySettingsPage() {
                                         const contentToSave = cleanHtml || (extractedText ? textToHtml(extractedText) : editedContractContent);
 
                                         await companySettingsService.saveContractTemplate(selectedContractType, {
-                                          name: editedContractName,
-                                          content: contentToSave,
+                                          name: (editedContractName || selectedContractTemplate?.name || selectedContractType).trim(),
+                                          content: contentToSave || ' ',
                                           description: editedContractDescription || null,
                                           isActive: editedContractIsActive,
                                           fileUrl: result.fileUrl,
