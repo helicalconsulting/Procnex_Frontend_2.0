@@ -140,16 +140,13 @@ export const FixedLayoutDocumentViewer: React.FC<FixedLayoutDocumentViewerProps>
         return { url: resolvedFileUrl, isPdf: false };
       }
 
-      // If PDF (or image preview failed), proxy Cloudinary documents through backend for inline delivery
-      if (resolvedFileUrl.startsWith('https://res.cloudinary.com')) {
-        const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
-        const proxyUrl = `${backendBase}/api/vendors/pdf-view?url=${encodeURIComponent(resolvedFileUrl)}`;
-        return { url: proxyUrl, isPdf: true };
-      }
-
-      return { url: resolvedFileUrl, isPdf: isKnownPdf };
+      // Render the original PDF page cleanly as a high-res image via the backend renderer.
+      // This completely removes the nested browser PDF viewer chrome (dark toolbar, thumbnail sidebar, etc.)
+      const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+      const pageImageUrl = `${backendBase}/api/vendors/pdf-page-image?url=${encodeURIComponent(resolvedFileUrl)}&page=${activePageIndex + 1}`;
+      return { url: pageImageUrl, isPdf: false };
     },
-    [originalFileUrl, originalFileName, fileType, imageLoadError, pages.length]
+    [originalFileUrl, originalFileName, fileType, imageLoadError, pages.length, activePageIndex]
   );
 
   const pageSource = getOriginalPageSource(currentPage);
