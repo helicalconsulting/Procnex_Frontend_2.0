@@ -9,6 +9,7 @@ import {
   Save, Settings, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, ArrowLeft, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
   Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw, Wallet, Boxes, Truck,
+  Columns, Maximize2,
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -17,7 +18,6 @@ import { MessageStrip, inferMessageType } from '../../components/shared/MessageS
 import { useBranding } from '../../context/BrandingContext';
 import { CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import RichTextEditor, { type RichTextEditorRef } from '../../components/shared/RichTextEditor';
-import FixedLayoutDocumentViewer, { type FixedLayoutDocumentViewerRef } from '../../components/contracts/FixedLayoutDocumentViewer';
 import '../../components/shared/RichTextEditor.css';
 import './CompanySettingsPage.css';
 import { Button } from '../../components/ui/button';
@@ -41,7 +41,7 @@ import { useAuth } from '../../context/AuthContext';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
 import { ALL_PLACEHOLDERS, PLACEHOLDER_CATEGORIES } from '../../utils/placeholderResolver';
-import { canonicalModelToHtml, createFallbackLayoutModel } from '../../utils/documentModelToHtml';
+import { API_BASE } from '../../api/client';
 
 // ─── Predictive Match Analysis ──────────────────────────────
 interface PredictiveMatchResult {
@@ -2004,8 +2004,7 @@ export default function CompanySettingsPage() {
   const [editedContractIsActive, setEditedContractIsActive] = useState(true);
   const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const [contractTemplateDirty, setContractTemplateDirty] = useState(false);
-  const [editedContractLayoutModel, setEditedContractLayoutModel] = useState<any>(null);
-  const [editorMode, setEditorMode] = useState<'fixed' | 'flowing'>('fixed');
+  const [contractViewMode, setContractViewMode] = useState<'editor' | 'side-by-side'>('side-by-side');
   const [savingContractTemplate, setSavingContractTemplate] = useState(false);
   const [editingNewContractType, setEditingNewContractType] = useState(false);
   const [newContractTypeName, setNewContractTypeName] = useState('');
@@ -2019,15 +2018,21 @@ export default function CompanySettingsPage() {
   const [selectedPlaceholderCategory, setSelectedPlaceholderCategory] = useState<string>('all');
   const [insertedPlaceholderNotice, setInsertedPlaceholderNotice] = useState<string | null>(null);
   const contractEditorRef = useRef<RichTextEditorRef>(null);
-  const fixedViewerRef = useRef<FixedLayoutDocumentViewerRef>(null);
+
+  const resolveDocumentUrl = (url?: string | null): string => {
+    if (!url) return '';
+    if (url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    const backendBase = (API_BASE || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+    const cleanPath = url.startsWith('/') ? url : `/${url}`;
+    return `${backendBase}${cleanPath}`;
+  };
 
   const handleInsertPlaceholderTag = (tagCode: string) => {
-    if (fixedViewerRef.current) {
-      fixedViewerRef.current.insertPlaceholder(tagCode);
-    }
     if (contractEditorRef.current) {
       contractEditorRef.current.insertText(tagCode);
-    } else if (!fixedViewerRef.current) {
+    } else {
       setEditedContractContent((prev) => {
         const spacePrefix = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
         return `${prev}${spacePrefix}${tagCode} `;
@@ -2039,10 +2044,6 @@ export default function CompanySettingsPage() {
   };
 
   const handleInsertSignatureIntoContract = useCallback((sigDataUrl: string) => {
-    if (fixedViewerRef.current) {
-      fixedViewerRef.current.insertSignature(sigDataUrl);
-    }
-
     const sigHtml = `<div class="contract-signature-wrapper" style="display: inline-block; margin: 16px 0; text-align: left;">
       <img src="${sigDataUrl}" alt="Company Signature" style="max-height: 70px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" />
       <div style="border-top: 1.5px solid #475569; width: 220px; padding-top: 4px; font-size: 12px; color: #64748b; font-family: Arial, sans-serif;">Authorized Signature</div>
@@ -2050,7 +2051,7 @@ export default function CompanySettingsPage() {
 
     if (contractEditorRef.current) {
       contractEditorRef.current.insertHtml(sigHtml);
-    } else if (!fixedViewerRef.current) {
+    } else {
       setEditedContractContent((prev) => `${prev || ''}\n${sigHtml}`);
     }
     setContractTemplateDirty(true);
@@ -2118,58 +2119,41 @@ export default function CompanySettingsPage() {
       setSelectedContractType(type);
       setContractTemplateDirty(false);
       const tmpl = contractTemplates.find(t => t.type === type);
-      if (tmpl && tmpl.layoutModel) {
-        const initialContent = tmpl.content?.trim() ? tmpl.content : canonicalModelToHtml(tmpl.layoutModel);
-        setEditedContractContent(initialContent);
+      if (tmpl) {
         setEditedContractName(tmpl.name || type);
-        setEditedContractDescription(tmpl?.description || '');
-        setEditedContractIsActive(tmpl?.isActive ?? true);
-        setEditedContractLayoutModel(tmpl.layoutModel);
-        setEditorMode('fixed');
-      } else {
-        // Fetch from backend (which lazily generates layoutModel if missing for uploaded files)
-        try {
-          const result = await companySettingsService.getContractTemplate(type);
-          let lm = result?.template?.layoutModel || tmpl?.layoutModel;
-          const attachedFileUrl = result?.template?.fileUrl || tmpl?.fileUrl;
-          if (!lm && attachedFileUrl) {
-            lm = createFallbackLayoutModel(attachedFileUrl, result?.template?.ocrText || tmpl?.ocrText);
-          }
+        setEditedContractDescription(tmpl.description || '');
+        setEditedContractIsActive(tmpl.isActive ?? true);
+        setContractViewMode(tmpl.fileUrl ? 'side-by-side' : 'editor');
 
-          if (lm) {
-            setEditedContractLayoutModel(lm);
-            setEditorMode('fixed');
-          } else {
-            setEditedContractLayoutModel(null);
-            setEditorMode('flowing');
-          }
-
-          if (result?.template?.content?.trim()) {
-            setEditedContractContent(result.template.content);
-          } else if (lm) {
-            setEditedContractContent(canonicalModelToHtml(lm));
-          } else if (result?.defaultContent) {
-            setEditedContractContent(result.defaultContent);
-          } else if (tmpl?.content) {
-            setEditedContractContent(tmpl.content);
-          }
-
-          if (result?.template) {
-            setEditedContractName(result.template.name || type);
-            setEditedContractDescription(result.template.description || '');
-            setEditedContractIsActive(result.template.isActive ?? true);
-          } else {
-            setEditedContractName(type);
-            setEditedContractLayoutModel(null);
-            setEditorMode('flowing');
-          }
-        } catch { /* ignore */
-          const attachedFileUrl = tmpl?.fileUrl;
-          const lm = tmpl?.layoutModel || (attachedFileUrl ? createFallbackLayoutModel(attachedFileUrl, tmpl?.ocrText) : null);
-          setEditedContractName(tmpl?.name || type);
-          setEditedContractLayoutModel(lm);
-          setEditorMode(lm ? 'fixed' : 'flowing');
+        if (tmpl.content && tmpl.content.trim()) {
+          setEditedContractContent(tmpl.content);
+        } else if (tmpl.ocrText) {
+          setEditedContractContent(textToHtml(tmpl.ocrText));
+        } else if ((tmpl as any).layoutModel?.plainText) {
+          setEditedContractContent(textToHtml((tmpl as any).layoutModel.plainText));
         }
+      }
+
+      try {
+        const result = await companySettingsService.getContractTemplate(type);
+        if (result?.template) {
+          setEditedContractName(result.template.name || type);
+          setEditedContractDescription(result.template.description || '');
+          setEditedContractIsActive(result.template.isActive ?? true);
+          setContractViewMode(result.template.fileUrl ? 'side-by-side' : 'editor');
+
+          if (result.template.content && result.template.content.trim()) {
+            setEditedContractContent(result.template.content);
+          } else if (result.template.ocrText) {
+            setEditedContractContent(textToHtml(result.template.ocrText));
+          } else if (result.template.layoutModel?.plainText) {
+            setEditedContractContent(textToHtml(result.template.layoutModel.plainText));
+          } else if (result.defaultContent) {
+            setEditedContractContent(result.defaultContent);
+          }
+        }
+      } catch {
+        // keep local state
       }
     };
     if (contractTemplateDirty) {
@@ -2204,13 +2188,13 @@ export default function CompanySettingsPage() {
     try {
       const updated = await companySettingsService.saveContractTemplate(selectedContractType, {
         name: (editedContractName || selectedContractTemplate?.name || selectedContractType).trim(),
-        content: editedContractContent || selectedContractTemplate?.content || (editedContractLayoutModel ? ' ' : ''),
+        content: editedContractContent || ' ',
         description: editedContractDescription?.trim() || selectedContractTemplate?.description || null,
         isActive: editedContractIsActive,
         fileUrl: selectedContractTemplate?.fileUrl || null,
         fileName: selectedContractTemplate?.fileName || null,
         fileType: selectedContractTemplate?.fileType || null,
-        layoutModel: editedContractLayoutModel || selectedContractTemplate?.layoutModel || undefined,
+        layoutModel: null,
       });
       setContractTemplates((prev) => {
         const filtered = prev.filter(t => t.type !== selectedContractType);
@@ -2223,7 +2207,7 @@ export default function CompanySettingsPage() {
     } finally {
       setSavingContractTemplate(false);
     }
-  }, [selectedContractType, editedContractContent, editedContractName, editedContractDescription, editedContractIsActive, editedContractLayoutModel, selectedContractTemplate]);
+  }, [selectedContractType, editedContractContent, editedContractName, editedContractDescription, editedContractIsActive, selectedContractTemplate]);
 
   const handleResetContractTemplate = useCallback(async () => {
     if (!selectedContractType) return;
@@ -2248,11 +2232,12 @@ export default function CompanySettingsPage() {
             setEditedContractDescription('');
             setEditedContractIsActive(true);
           }
+          setContractViewMode('editor');
 
           // Clear file & OCR state locally
           setContractTemplates(prev => prev.map(t =>
             t.type === selectedContractType
-              ? { ...t, content: defaultHtml, fileUrl: null, fileName: null, fileType: null, ocrStatus: null, ocrText: null, ocrProcessedAt: null }
+              ? { ...t, content: defaultHtml, fileUrl: null, fileName: null, fileType: null, ocrStatus: null, ocrText: null, ocrProcessedAt: null, layoutModel: null }
               : t
           ));
 
@@ -2265,6 +2250,7 @@ export default function CompanySettingsPage() {
             fileUrl: null,
             fileName: null,
             fileType: null,
+            layoutModel: null,
           });
 
           setContractTemplateDirty(false);
@@ -6381,7 +6367,7 @@ export default function CompanySettingsPage() {
                                 <div className="cs-dt-upload-strip__file">
                                   <FileText size={13} />
                                   <span>{selectedContractTemplate.fileName || 'Uploaded document'}</span>
-                                  <a href={selectedContractTemplate.fileUrl} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
+                                  <a href={resolveDocumentUrl(selectedContractTemplate.fileUrl)} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
                                   <Button aria-label="Remove" variant="ghost" size="icon-sm"
                                     type="button"
                                     className="settings-action"
@@ -6398,7 +6384,7 @@ export default function CompanySettingsPage() {
                                           fileType: null,
                                           layoutModel: null,
                                         });
-                                        setEditedContractLayoutModel(null);
+                                        setContractViewMode('editor');
                                         setContractTemplateDirty(false);
                                         await fetchContractTemplates();
                                         setContractTemplates(prev => prev.map(t =>
@@ -6437,26 +6423,10 @@ export default function CompanySettingsPage() {
                                         const result = await companySettingsService.uploadContractTemplateFile(selectedContractType, file);
                                         const extractedText = (result as any).ocrText;
                                         const cleanHtml = (result as any).html;
-                                        let layoutModel = (result as any).layoutModel;
-                                        const ocrStatus = (result as any).ocrStatus || (extractedText || layoutModel ? 'COMPLETED' : null);
+                                        const contentToSave = cleanHtml || (extractedText ? textToHtml(extractedText) : editedContractContent || ' ');
 
-                                        // Extract text from layoutModel if extractedText was empty
-                                        const textFromLayout = layoutModel?.plainText || layoutModel?.pages?.flatMap((p: any) => p.elements?.map((e: any) => e.text) || []).filter(Boolean).join('\n\n') || '';
-                                        const effectiveText = extractedText || textFromLayout;
-
-                                        // Baseline fallback layoutModel: if layoutModel is missing or has no pages, build one
-                                        if ((!layoutModel || !layoutModel.pages || layoutModel.pages.length === 0) && (result.fileUrl || effectiveText)) {
-                                          layoutModel = createFallbackLayoutModel(result.fileUrl, effectiveText);
-                                        }
-
-                                        if (layoutModel) {
-                                          setEditedContractLayoutModel(layoutModel);
-                                          setEditorMode('fixed');
-                                        }
-
-                                        // Replace old content with the new document's extracted text/html
-                                        const contentToSave = cleanHtml || (effectiveText ? textToHtml(effectiveText) : '');
                                         setEditedContractContent(contentToSave);
+                                        setContractViewMode('side-by-side');
 
                                         await companySettingsService.saveContractTemplate(selectedContractType, {
                                           name: (editedContractName || selectedContractTemplate?.name || selectedContractType).trim(),
@@ -6466,7 +6436,7 @@ export default function CompanySettingsPage() {
                                           fileUrl: result.fileUrl,
                                           fileName: result.fileName,
                                           fileType: result.fileType,
-                                          layoutModel: layoutModel || null,
+                                          layoutModel: null,
                                         });
                                         setContractTemplateDirty(false);
                                         await fetchContractTemplates();
@@ -6476,15 +6446,15 @@ export default function CompanySettingsPage() {
                                             fileUrl: result.fileUrl,
                                             fileName: result.fileName,
                                             fileType: result.fileType,
-                                            ocrStatus: ocrStatus,
+                                            ocrStatus: extractedText ? 'COMPLETED' : null,
                                             ocrText: extractedText || t.ocrText,
-                                            layoutModel: layoutModel || t.layoutModel,
-                                            ocrProcessedAt: extractedText || layoutModel ? new Date().toISOString() : t.ocrProcessedAt,
+                                            content: contentToSave,
+                                            layoutModel: null,
+                                            ocrProcessedAt: extractedText ? new Date().toISOString() : t.ocrProcessedAt,
                                           } : t
                                         ));
                                         if (cleanHtml || extractedText) {
-                                          setEditedContractContent(cleanHtml || textToHtml(extractedText));
-                                          setPageMsg(`Document "${file.name}" uploaded and text extracted via OCR!`);
+                                          setPageMsg(`Document "${file.name}" uploaded and text converted into editor!`);
                                         } else {
                                           setPageMsg(`Document "${file.name}" uploaded and attached to template.`);
                                         }
@@ -6503,44 +6473,114 @@ export default function CompanySettingsPage() {
                           </div>
 
                           <div className="cs-dt-detail__editor-wrap">
-                            <div className="cs-dt-detail__editor-label flex items-center gap-2 mb-2">
-                              <FileSignature size={14} /> Contract Template Content
+                            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                              <div className="cs-dt-detail__editor-label flex items-center gap-2">
+                                <FileSignature size={14} /> Contract Template Content
+                              </div>
+
+                              {selectedContractTemplate?.fileUrl && (
+                                <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                                  <button
+                                    type="button"
+                                    onClick={() => setContractViewMode('side-by-side')}
+                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                                      contractViewMode === 'side-by-side'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                    }`}
+                                    title="Side-by-side view comparing original document with editable rich text"
+                                  >
+                                    <Columns size={13} />
+                                    Side-by-Side (PDF + Editor)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setContractViewMode('editor')}
+                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                                      contractViewMode === 'editor'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                    }`}
+                                    title="Full-width rich text editor"
+                                  >
+                                    <Maximize2 size={13} />
+                                    Full Editor
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
-                            <FixedLayoutDocumentViewer
-                              ref={fixedViewerRef}
-                              layoutModel={
-                                editedContractLayoutModel ||
-                                (selectedContractTemplate as any)?.layoutModel ||
-                                createFallbackLayoutModel(selectedContractTemplate?.fileUrl, selectedContractTemplate?.ocrText || editedContractContent)
-                              }
-                              originalFileUrl={selectedContractTemplate?.fileUrl}
-                              originalFileName={selectedContractTemplate?.fileName}
-                              fileType={selectedContractTemplate?.fileType}
-                              contentHtml={editedContractContent}
-                              onContentHtmlChange={handleContractContentChange}
-                              editorRef={contractEditorRef}
-                              onSwitchToWysiwyg={() => {
-                                if (!editedContractContent?.trim()) {
-                                  const fallbackText =
-                                    selectedContractTemplate?.ocrText ||
-                                    editedContractLayoutModel?.plainText ||
-                                    editedContractLayoutModel?.pages?.flatMap((p: any) => p.elements?.map((e: any) => e.text) || []).join('\n\n');
-                                  if (fallbackText) {
-                                    const html = fallbackText
-                                      .split(/\n\n+/)
-                                      .map((para: string) => `<p>${para.replace(/\n/g, '<br />')}</p>`)
-                                      .join('');
-                                    setEditedContractContent(html);
-                                    setContractTemplateDirty(true);
-                                  }
-                                }
-                              }}
-                              onModelChange={(updated) => {
-                                setEditedContractLayoutModel(updated);
-                                setContractTemplateDirty(true);
-                              }}
-                            />
+                            {contractViewMode === 'side-by-side' && selectedContractTemplate?.fileUrl ? (
+                              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                                {/* Left: Original Document */}
+                                <div className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden" style={{ minHeight: '680px', height: '680px' }}>
+                                  <div className="flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700/60 text-xs text-slate-300 shrink-0">
+                                    <div className="flex items-center gap-2 truncate font-medium">
+                                      <FileText size={14} className="text-blue-400 shrink-0" />
+                                      <span className="truncate">{selectedContractTemplate.fileName || 'Original Document'}</span>
+                                    </div>
+                                    <a
+                                      href={resolveDocumentUrl(selectedContractTemplate.fileUrl)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-medium text-[11px] shrink-0"
+                                    >
+                                      <Eye size={12} /> View Full
+                                    </a>
+                                  </div>
+                                  <div className="flex-1 w-full bg-slate-950 flex items-center justify-center p-0 overflow-hidden relative">
+                                    {selectedContractTemplate.fileType === 'pdf' || (selectedContractTemplate.fileUrl && selectedContractTemplate.fileUrl.toLowerCase().includes('.pdf')) ? (
+                                      <iframe
+                                        src={`${resolveDocumentUrl(selectedContractTemplate.fileUrl)}#toolbar=0&navpanes=0`}
+                                        className="w-full h-full border-0 bg-white"
+                                        style={{ minHeight: '640px', height: '100%' }}
+                                        title="Original Document PDF"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full p-4 overflow-auto flex items-center justify-center bg-slate-900/40">
+                                        <img
+                                          src={resolveDocumentUrl(selectedContractTemplate.fileUrl)}
+                                          alt="Original Document Preview"
+                                          className="max-w-full max-h-[640px] object-contain shadow-lg rounded"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Right: Single Unified TinyMCE Editor */}
+                                <div className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden" style={{ minHeight: '680px' }}>
+                                  <div className="flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700/60 text-xs text-slate-300 shrink-0">
+                                    <div className="flex items-center gap-2 font-medium">
+                                      <Edit3 size={14} className="text-emerald-400" />
+                                      <span>Editable Contract Template (TinyMCE)</span>
+                                    </div>
+                                    <span className="text-[11px] text-slate-400">Word-wrapped & formatted</span>
+                                  </div>
+                                  <div className="flex-1">
+                                    <RichTextEditor
+                                      ref={contractEditorRef}
+                                      key={selectedContractType ?? 'none'}
+                                      value={editedContractContent}
+                                      onChange={handleContractContentChange}
+                                      placeholder="Write or edit contract template content here..."
+                                      minHeight={630}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden">
+                                <RichTextEditor
+                                  ref={contractEditorRef}
+                                  key={selectedContractType ?? 'none'}
+                                  value={editedContractContent}
+                                  onChange={handleContractContentChange}
+                                  placeholder="Write or edit contract template content here..."
+                                  minHeight={650}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
 
