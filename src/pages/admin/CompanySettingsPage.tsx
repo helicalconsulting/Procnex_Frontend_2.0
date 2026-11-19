@@ -530,8 +530,86 @@ function textToHtml(text: string): string {
       }
     }
 
-    // ── Pattern 2: Two-Column Signature Table Box ──
-    if (/^(?:For\s+\[|SIGNATURES|Signed\s+by|On\s+behalf\s+of)/i.test(trimmed)) {
+    // ── Pattern 1.9: "In witness whereof" Preamble Block ──
+    if (/^In\s+witness\s+whereof/i.test(trimmed)) {
+      flushList();
+      let witnessText = trimmed;
+      let nextIdx = i + 1;
+      while (nextIdx < rawLines.length) {
+        const nextLine = rawLines[nextIdx].trim();
+        if (!nextLine) {
+          nextIdx++;
+          continue;
+        }
+        if (/^(?:For\s+|SIGNATURES|Signed|On\s+behalf|\d+[\.\)]|ANNEXURE|ARTICLE|SECTION)/i.test(nextLine)) {
+          break;
+        }
+        witnessText += ' ' + nextLine;
+        nextIdx++;
+      }
+      const escWitness = witnessText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      htmlBlocks.push(
+        `<p style="margin: 24px 0 16px; font-style: italic; color: #334155; line-height: 1.6; font-size: 14px;">${escWitness}</p>`
+      );
+      i = nextIdx;
+      continue;
+    }
+
+    // ── Pattern 2A: Two-Column Side-by-Side Signature Table (e.g. "For & on behalf of the ... For & on behalf of Canara Bank") ──
+    const isSigKeyword = /(?:For\s*(?:&|and)?\s*on\s+behalf\b|Signed\s+by|On\s+behalf\b|Authorized\s+Signat|Contractor\s+with\s+seal|with\s+seal|Bank\s+with\s+seal|First\s+Party|Second\s+Party|Party\s+of\s+the|Employer|Contractor|Client|Vendor|Canara\s+Bank)/i;
+    const splitCols = trimmed.split(/\s{3,}|\t/);
+
+    if (splitCols.length >= 2 && isSigKeyword.test(trimmed)) {
+      flushList();
+      const party1: string[] = [splitCols[0].trim()];
+      const party2: string[] = [splitCols.slice(1).join(' ').trim()];
+      let nextIdx = i + 1;
+
+      while (nextIdx < rawLines.length) {
+        const nextLine = rawLines[nextIdx].trim();
+        if (!nextLine) {
+          nextIdx++;
+          continue;
+        }
+        const nextCols = nextLine.split(/\s{3,}|\t/);
+        if (nextCols.length >= 2) {
+          party1.push(nextCols[0].trim());
+          party2.push(nextCols.slice(1).join(' ').trim());
+        } else if (party1.length > 0 && (nextLine.toLowerCase() === 'the' || nextLine.length < 30) && !/^(?:ANNEXURE|ARTICLE|SECTION|\d+[\.\)])/i.test(nextLine)) {
+          party1.push(nextLine);
+        } else {
+          break;
+        }
+        nextIdx++;
+      }
+
+      const p1Text = party1.join(' ').replace(/\bthe\s+the\b/gi, 'the').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const p2Text = party2.join(' ').replace(/\bthe\s+the\b/gi, 'the').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      htmlBlocks.push(`
+        <table style="width: 100%; border-collapse: collapse; margin-top: 32px; margin-bottom: 24px; border: 1.5px solid #cbd5e1; background-color: #ffffff;">
+          <tbody>
+            <tr>
+              <td style="width: 50%; vertical-align: top; padding: 18px 24px; border-right: 1.5px solid #cbd5e1;">
+                <p style="margin: 0 0 10px; font-weight: 700; color: #0f172a; font-size: 14px;">${p1Text}</p>
+                <div style="height: 48px;"></div>
+                <div style="border-top: 1px dashed #94a3b8; width: 80%; padding-top: 6px; font-size: 12px; color: #64748b;">(Authorized Signature &amp; Seal)</div>
+              </td>
+              <td style="width: 50%; vertical-align: top; padding: 18px 24px;">
+                <p style="margin: 0 0 10px; font-weight: 700; color: #0f172a; font-size: 14px;">${p2Text}</p>
+                <div style="height: 48px;"></div>
+                <div style="border-top: 1px dashed #94a3b8; width: 80%; padding-top: 6px; font-size: 12px; color: #64748b;">(Authorized Signature &amp; Seal)</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      `);
+      i = nextIdx;
+      continue;
+    }
+
+    // ── Pattern 2B: Sequential Two-Party Signature Table Box ──
+    if (/^(?:For\s*(?:&|and)?\s*on\s+behalf\b|For\s+\[|SIGNATURES|Signed\s+by|On\s+behalf\s+of)/i.test(trimmed)) {
       flushList();
       const party1Lines: string[] = [trimmed];
       const party2Lines: string[] = [];
@@ -6574,16 +6652,6 @@ export default function CompanySettingsPage() {
                                   <FileText size={13} />
                                   <span>{selectedContractTemplate.fileName || 'Uploaded document'}</span>
                                   <a href={resolveDocumentUrl(selectedContractTemplate.fileUrl)} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
-                                  <button
-                                    type="button"
-                                    onClick={handleTriggerContractOcr}
-                                    disabled={selectedContractTemplate?.ocrStatus === 'PROCESSING'}
-                                    className="px-2.5 py-1 text-xs font-medium rounded bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 transition-all flex items-center gap-1.5"
-                                    title="Re-run extraction from uploaded document and build formatted table"
-                                  >
-                                    <RefreshCw size={11} className={selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'animate-spin' : ''} />
-                                    {selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'Extracting…' : 'Run OCR & Build Table'}
-                                  </button>
                                   <Button aria-label="Remove" variant="ghost" size="icon-sm"
                                     type="button"
                                     className="settings-action"
@@ -6730,42 +6798,6 @@ export default function CompanySettingsPage() {
                                     </button>
                                   </div>
                                 )}
-
-                                {selectedContractTemplate?.fileUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={handleTriggerContractOcr}
-                                    disabled={selectedContractTemplate?.ocrStatus === 'PROCESSING'}
-                                    className="px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 bg-blue-950/70 text-blue-300 border border-blue-800 hover:bg-blue-900/80 hover:text-white"
-                                    title="Re-extract fresh text and build tables from the uploaded PDF"
-                                  >
-                                    <RefreshCw size={13} className={selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'animate-spin' : ''} />
-                                    {selectedContractTemplate?.ocrStatus === 'PROCESSING' ? 'Extracting OCR…' : 'Run OCR & Build Table'}
-                                  </button>
-                                )}
-
-                                {/* Clean & Re-align Formatting Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (selectedContractTemplate?.fileUrl) {
-                                      handleTriggerContractOcr();
-                                      return;
-                                    }
-                                    const raw = selectedContractTemplate?.ocrText || (editedContractContent ? editedContractContent.replace(/<[^>]+>/g, '\n') : '');
-                                    if (raw) {
-                                      const cleaned = textToHtml(raw);
-                                      setEditedContractContent(cleaned);
-                                      setContractTemplateDirty(true);
-                                      setPageMsg('Document alignment, spacing, and table grids cleaned & formatted!');
-                                    }
-                                  }}
-                                  className="px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 bg-indigo-950/70 text-indigo-300 border border-indigo-800 hover:bg-indigo-900/80 hover:text-white"
-                                  title="Clean OCR spacing, fix broken words, and reconstruct table grids"
-                                >
-                                  <Sparkles size={13} />
-                                  Clean & Re-align
-                                </button>
 
                                 {/* Full Screen Toggle */}
                                 <button
