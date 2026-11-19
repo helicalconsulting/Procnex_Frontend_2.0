@@ -165,3 +165,10 @@ export interface DocumentExtractionSummary {
   createdAt: string;
 }
 
+// Runtime exports for Vite dev-server module resolution
+export const CanonicalPage = {} as any;
+export const DocumentExtractionSummary = {} as any;
+export const UserPageEdits = {} as any;
+export const QualityValidationReport = {} as any;
+export const CanonicalElement = {} as any;
+

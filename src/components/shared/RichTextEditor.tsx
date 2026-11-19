@@ -139,7 +139,6 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
           'border-collapse': 'collapse',
           width: '100%',
         },
-        table_responsive_width: true,
         table_grid: true,
         table_appearance_options: true,
         skin: isDark ? 'oxide-dark' : 'oxide',
@@ -178,7 +177,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             margin: 1.25rem 0 !important;
             border: 1.5px solid #64748b !important;
           }
-          table th {
+          table th, .mce-item-table th {
             background-color: #f1f5f9 !important;
             border: 1px solid #94a3b8 !important;
             padding: 8px 12px !important;
@@ -186,7 +185,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             text-align: left;
             color: #0f172a !important;
           }
-          table td {
+          table td, .mce-item-table td {
             border: 1px solid #cbd5e1 !important;
             padding: 8px 12px !important;
             vertical-align: top;
@@ -211,14 +210,20 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
           editor.on('init', () => {
             if (isMounted) {
               setIsEditorReady(true);
-              editor.setContent(value || '');
+              try {
+                editor.setContent(value || '');
+              } catch {}
             }
           });
 
-          editor.on('change input undo redo keyup SetContent', () => {
-            if (isUpdatingFromProp.current) return;
-            const content = editor.getContent();
-            onChangeRef.current?.(content);
+          editor.on('change input undo redo keyup', () => {
+            if (isUpdatingFromProp.current || !editor || !editor.serializer) return;
+            try {
+              const content = editor.getContent();
+              onChangeRef.current?.(content);
+            } catch {
+              // Ignore serialization errors during editor lifecycle transitions
+            }
           });
         },
       });
@@ -261,11 +266,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
 
   useEffect(() => {
     if (editorInstanceRef.current && isEditorReady) {
-      const current = editorInstanceRef.current.getContent();
-      if (value !== current) {
-        isUpdatingFromProp.current = true;
-        editorInstanceRef.current.setContent(value || '');
-        isUpdatingFromProp.current = false;
+      try {
+        if (!editorInstanceRef.current.serializer) return;
+        const current = editorInstanceRef.current.getContent();
+        if (value !== current) {
+          isUpdatingFromProp.current = true;
+          editorInstanceRef.current.setContent(value || '');
+          isUpdatingFromProp.current = false;
+        }
+      } catch {
+        // Prevent unhandled serialize error during editor lifecycle transitions
       }
     }
   }, [value, isEditorReady]);

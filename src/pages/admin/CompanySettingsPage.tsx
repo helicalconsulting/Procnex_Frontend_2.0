@@ -246,9 +246,27 @@ function PredictiveMatchCard({
 // ─── Utility: Clean spaced-out OCR text & artifacts ───────────
 function cleanSpacedText(str: string): string {
   if (!str) return '';
-  let s = str
-    // Collapse single-letter runs separated by space (e.g. "T o b e m a d e o n" -> "To be made on", "A n n e x u r e" -> "Annexure")
-    .replace(/(?<=\b[A-Za-z])\s+(?=[A-Za-z]\b)/g, '')
+  let s = str;
+
+  // Handle single-letter spaced words like "A n n e x u r e" or "A G R E E M E N T"
+  if (/^[A-Za-z](\s+[A-Za-z]){2,}$/.test(s.trim())) {
+    s = s.replace(/\s+/g, '');
+  } else if (/ {2,}/.test(s)) {
+    s = s
+      .split(/ {2,}/)
+      .map((part) => {
+        const trimmedPart = part.trim();
+        if (/^[A-Za-z](\s+[A-Za-z]){2,}$/.test(trimmedPart)) {
+          return trimmedPart.replace(/\s+/g, '');
+        }
+        return part;
+      })
+      .join(' ');
+  }
+
+  s = s
+    .replace(/\bTobemadeon\b/gi, 'To be made on')
+    .replace(/\bNonJudicialStampPaper\b/gi, 'Non Judicial Stamp Paper')
     // Fix common OCR broken words where letters were split
     .replace(/\bAnn\s+e\s*xu\s*r\s*e\b/gi, 'Annexure')
     .replace(/\bD\s*r\s*af\s*t\b/gi, 'Draft')
@@ -3108,6 +3126,21 @@ export default function CompanySettingsPage() {
       const result = await companySettingsService.uploadDocumentTemplateFile(type, file);
       const extractedText = (result as any).ocrText;
       const ocrStatus = (result as any).ocrStatus || (extractedText ? 'COMPLETED' : null);
+      const formattedHtml = extractedText ? textToHtml(extractedText) : editedDocContent;
+
+      if (selectedDocId) {
+        await companySettingsService.updateDocumentTemplateById(selectedDocId, {
+          name: editedDocName.trim(),
+          content: formattedHtml,
+          isActive: true,
+          fileUrl: result.fileUrl,
+          fileName: result.fileName,
+          fileType: result.fileType,
+        });
+      }
+
+      setEditedDocContent(formattedHtml);
+      setDocTemplateDirty(false);
 
       setDocumentTemplates(prev => prev.map(t =>
         t.id === selectedDocId
@@ -3118,25 +3151,20 @@ export default function CompanySettingsPage() {
               fileType: result.fileType,
               ocrStatus: ocrStatus,
               ocrText: extractedText || t.ocrText,
+              content: formattedHtml,
               ocrProcessedAt: extractedText ? new Date().toISOString() : t.ocrProcessedAt,
             }
           : t
       ));
 
-      if (extractedText) {
-        setEditedDocContent(textToHtml(extractedText));
-        setDocTemplateDirty(true);
-        setPageMsg(`Document "${file.name}" uploaded and text extracted via OCR successfully!`);
-      } else {
-        setPageMsg(`Document "${file.name}" uploaded successfully! Click "Run OCR" to extract text.`);
-      }
+      setPageMsg(`Document "${file.name}" uploaded and text automatically extracted into editor!`);
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setDocFileUploading(false);
       e.target.value = '';
     }
-  }, [selectedDocTemplate, selectedDocId]);
+  }, [selectedDocTemplate, selectedDocId, editedDocName, editedDocContent]);
 
   const handleRemoveDocumentFile = useCallback(async () => {
     if (!selectedDocTemplate) return;
@@ -6642,8 +6670,8 @@ export default function CompanySettingsPage() {
                             <div className="cs-dt-upload-strip__left">
                               <FileText size={16} className="cs-dt-upload-strip__icon" />
                               <div>
-                                <div className="cs-dt-upload-strip__label">Contract Document (PDF/DOC) (optional)</div>
-                                <div className="cs-dt-upload-strip__desc">Upload a document file or extract text into the rich editor below</div>
+                                <div className="cs-dt-upload-strip__label">Contract Document / Image (PDF, DOC, PNG, JPG) (optional)</div>
+                                <div className="cs-dt-upload-strip__desc">Upload any document or image to automatically run OCR, reconstruct tables, and load into editor</div>
                               </div>
                             </div>
                             <div className="cs-dt-upload-strip__right">
@@ -7100,8 +7128,8 @@ export default function CompanySettingsPage() {
                             <div className="cs-dt-upload-strip__left">
                                       <FileText size={16} className="cs-dt-upload-strip__icon" />
                               <div>
-                                <div className="cs-dt-upload-strip__label">Upload PDF/DOC (optional)</div>
-                                <div className="cs-dt-upload-strip__desc">Upload a document file or extract text into the rich editor below</div>
+                                <div className="cs-dt-upload-strip__label">Upload Document / Image (PDF, DOC, PNG, JPG) (optional)</div>
+                                <div className="cs-dt-upload-strip__desc">Upload any document or image to automatically run OCR, extract text, and load into editor</div>
                               </div>
                             </div>
                             <div className="cs-dt-upload-strip__right">
@@ -7117,36 +7145,9 @@ export default function CompanySettingsPage() {
                               ) : (
                                 <label className="cs-dt-upload-strip__btn">
                                   <input type="file" accept={ALLOWED_CONTRACT_UPLOAD_EXTENSIONS} style={{ display: 'none' }} onChange={handleUploadDocumentFile} />
-                                  {docFileUploading ? <><Loader2 size={13} className="cs-spin" /> Uploading…</> : <><Upload size={13} /> Choose File</>}
+                                  {docFileUploading ? <><Loader2 size={13} className="cs-spin" /> Uploading & Extracting…</> : <><Upload size={13} /> Choose File</>}
                                 </label>
                               )}
-
-                              <Button
-                                type="button" variant="outline" className="settings-action"
-                                onClick={() => {
-                                  if (!selectedDocTemplate?.fileUrl) {
-                                    setPageMsg('Please upload a PDF/DOC file first before running OCR.');
-                                    return;
-                                  }
-                                  const validDocOcrText = selectedDocTemplate?.ocrText;
-                                  if (validDocOcrText && validDocOcrText !== 'No readable text detected.' && !validDocOcrText.startsWith('OCR failed')) {
-                                    setEditedDocContent(textToHtml(validDocOcrText));
-                                    setDocTemplateDirty(true);
-                                    setDocumentTemplates(prev => prev.map(t => t.id === selectedDocId ? { ...t, ocrStatus: 'COMPLETED' } : t));
-                                    setPageMsg('Extracted OCR text applied to rich editor!');
-                                  } else {
-                                    handleTriggerDocumentOcr();
-                                  }
-                                }}
-                                disabled={selectedDocTemplate?.ocrStatus === 'PROCESSING' || docFileUploading}
-                                title="Run OCR on document and insert text into editor"
-                              >
-                                {selectedDocTemplate?.ocrStatus === 'PROCESSING' ? (
-                                  <><Loader2 size={13} className="cs-spin" /> Processing OCR…</>
-                                ) : (
-                                  <><FileText size={13} /> Run OCR & Insert Text</>
-                                )}
-                              </Button>
                             </div>
                           </div>
 
