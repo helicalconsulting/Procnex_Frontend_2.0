@@ -165,10 +165,3 @@ export interface DocumentExtractionSummary {
   createdAt: string;
 }
 
-// Runtime stubs to support value imports in Vite bundler
-export const CanonicalPage = {};
-export const CanonicalElement = {};
-export const DocumentExtractionSummary = {};
-export const QualityValidationReport = {};
-export const UserPageEdits = {};
-
