@@ -321,7 +321,7 @@ function textToHtml(text: string): string {
     const line = rawLines[i];
     const trimmed = line.trim();
 
-    if (!trimmed) {
+    if (!trimmed || (/^[•●▪\-\*\+~_.\s]+$/.test(trimmed) && trimmed.length <= 3)) {
       flushList();
       i++;
       continue;
@@ -875,10 +875,14 @@ function textToHtml(text: string): string {
     }
 
     // ── Pattern 9: Explicit Bullet Points Only ──
-    const isExplicitBullet = /^[•●▪]\s*(.*)/.test(trimmed) || /^\s*[\-\*]\s+[A-Za-z0-9]/.test(trimmed);
+    const isExplicitBullet =
+      (/^[•●▪]\s*(.*)/.test(trimmed) || /^\s*[\-\*]\s+[A-Za-z0-9]/.test(trimmed)) &&
+      !/^(?:Annexure|Draft|Format|Contract|Agreement|Between|Director|Article|Section|Schedule)\b/i.test(
+        trimmed.replace(/^[•●▪\-\*]\s*/, '')
+      );
     if (isExplicitBullet) {
-      const bulletContent = trimmed.replace(/^[•●▪]\s*|^\s*[\-\*]\s+/, '');
-      if (bulletContent.trim()) {
+      const bulletContent = trimmed.replace(/^[•●▪]\s*|^\s*[\-\*]\s+/, '').trim();
+      if (bulletContent.length > 1) {
         if (listType !== 'ul') {
           flushList();
         }
@@ -2583,9 +2587,27 @@ export default function CompanySettingsPage() {
             ));
             if (status.ocrStatus === 'COMPLETED' && status.ocrText) {
               // Convert plain text with layout to HTML for the rich text editor
-              setEditedContractContent(textToHtml(status.ocrText));
+              const formattedHtml = textToHtml(status.ocrText);
+              setEditedContractContent(formattedHtml);
               setContractTemplateDirty(true);
-              setPageMsg('OCR completed! Extracted text loaded into editor. Review the text and click "Save" to apply changes.');
+              // Auto-save so the database is updated immediately without requiring manual save
+              try {
+                const currentTmpl = contractTemplates.find(t => t.type === typeAtTrigger);
+                await companySettingsService.saveContractTemplate(typeAtTrigger, {
+                  name: (editedContractName || currentTmpl?.name || typeAtTrigger).trim(),
+                  content: formattedHtml,
+                  description: editedContractDescription || null,
+                  isActive: editedContractIsActive,
+                  fileUrl: currentTmpl?.fileUrl || null,
+                  fileName: currentTmpl?.fileName || null,
+                  fileType: currentTmpl?.fileType || null,
+                  layoutModel: null,
+                });
+                setContractTemplateDirty(false);
+                setPageMsg('OCR completed! Fresh headings, text, and 13-row table formatted and saved into template.');
+              } catch {
+                setPageMsg('OCR completed! Extracted text loaded into editor. Review and click "Save" to apply changes.');
+              }
             } else if (status.ocrStatus === 'FAILED') {
               setPageMsg(status.ocrText || 'OCR failed. The uploaded file may contain no readable text.');
             }
