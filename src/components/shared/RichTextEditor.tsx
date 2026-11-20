@@ -141,7 +141,6 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
         },
         table_grid: true,
         table_appearance_options: true,
-        table_responsive_width: false,
         skin: isDark ? 'oxide-dark' : 'oxide',
         content_css: isDark ? 'dark' : 'default',
         content_style: `
@@ -154,13 +153,13 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             font-family: Arial, Helvetica, "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             font-size: 14px;
             line-height: 1.6;
-            padding: 3rem 3.5rem;
+            padding: 2rem 2.5rem;
             max-width: 820px;
             margin: 0 auto;
             background-color: #ffffff;
             color: #1e293b;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-            min-height: 1000px;
+            min-height: 100%;
             border-radius: 4px;
             box-sizing: border-box;
           }
@@ -172,12 +171,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             box-shadow: none;
           }
           .mce-pagebreak {
-            border-top: 2px dashed #94a3b8;
-            margin: 3rem 0;
+            border: none;
+            border-top: 1.5px dashed #94a3b8;
+            margin: 1.25rem 0;
             position: relative;
             text-align: center;
-            height: auto;
+            height: 18px;
+            line-height: 18px;
             background: transparent;
+            font-size: 11px;
+            color: #64748b;
           }
           table:not(.contract-ocr-table) {
             border-collapse: collapse !important;
@@ -210,10 +213,51 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             display: inline-block;
             margin: 16px 0;
           }
+          .contract-checkbox {
+            display: inline-block !important;
+            width: 16px !important;
+            height: 16px !important;
+            border: 1.5px solid #2563eb !important;
+            border-radius: 3px !important;
+            vertical-align: -2px !important;
+            margin-right: 8px !important;
+            text-align: center !important;
+            line-height: 14px !important;
+            font-size: 11px !important;
+            font-weight: bold !important;
+            cursor: pointer !important;
+            user-select: none !important;
+            box-sizing: border-box !important;
+            transition: all 0.12s ease !important;
+          }
+          .contract-checkbox:hover {
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+            transform: scale(1.08);
+          }
         `,
         placeholder,
         setup: (editor: any) => {
           editorInstanceRef.current = editor;
+
+          // Interactive Checkbox Toggle on Click & Mousedown (Capturing Phase)
+          const toggleCheckbox = (target: any) => {
+            if (!target) return false;
+            const cb = target.closest?.('.contract-checkbox') || (target.classList?.contains('contract-checkbox') ? target : null);
+            if (cb) {
+              const currentVal = cb.getAttribute('data-checked');
+              const wasChecked = currentVal === 'true' || cb.getAttribute('aria-checked') === 'true' || cb.innerHTML.indexOf('&#10003;') !== -1 || (cb.textContent && cb.textContent.indexOf('\u2713') !== -1);
+              const nowChecked = !wasChecked;
+              cb.setAttribute('data-checked', nowChecked ? 'true' : 'false');
+              cb.setAttribute('aria-checked', nowChecked ? 'true' : 'false');
+              cb.style.backgroundColor = nowChecked ? '#2563eb' : '#ffffff';
+              cb.style.color = nowChecked ? '#ffffff' : 'transparent';
+              cb.innerHTML = nowChecked ? '&#10003;' : '&nbsp;';
+              editor.setDirty(true);
+              editor.fire('change');
+              return true;
+            }
+            return false;
+          };
 
           editor.on('init', () => {
             if (isMounted) {
@@ -222,6 +266,28 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
                 editor.setContent(value || '');
               } catch {}
             }
+            try {
+              const body = editor.getBody();
+              if (body) {
+                body.addEventListener('click', (e: MouseEvent) => {
+                  if (toggleCheckbox(e.target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }, true);
+                body.addEventListener('mousedown', (e: MouseEvent) => {
+                  const cb = (e.target as any)?.closest?.('.contract-checkbox') || ((e.target as any)?.classList?.contains('contract-checkbox') ? e.target : null);
+                  if (cb) {
+                    e.preventDefault();
+                    toggleCheckbox(cb);
+                  }
+                }, true);
+              }
+            } catch {}
+          });
+
+          editor.on('click mousedown', (e: any) => {
+            toggleCheckbox(e.target);
           });
 
           editor.on('change input undo redo keyup', () => {

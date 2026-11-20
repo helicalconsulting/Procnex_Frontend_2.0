@@ -17,6 +17,63 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function cleanTokenSpacing(text: string): string {
+  if (!text) return '';
+  let s = text
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\bwitha\b/gi, 'with a')
+    .replace(/\bfora\b/gi, 'for a')
+    .replace(/\bina\b/gi, 'in a')
+    .replace(/\bofa\b/gi, 'of a')
+    .replace(/\basa\b/gi, 'as a')
+    .replace(/\bisby\b/gi, 'is by')
+    .replace(/\bmadeon\b/gi, 'made on')
+    .replace(/\beachreferred\b/gi, 'each referred')
+    .replace(/\btoasa\b/gi, 'to as a')
+    .replace(/\bPartyand\b/gi, 'Party and')
+    .replace(/\bvaluableconsideration\b/gi, 'valuable consideration')
+    .replace(/\bhiresthe\b/gi, 'hires the')
+    .replace(/\bunderthe\b/gi, 'under the')
+    .replace(/\btermsand\b/gi, 'terms and')
+    .replace(/\buponbythe\b/gi, 'upon by the')
+    .replace(/\bforother\b/gi, 'for other')
+    .replace(/\bgoodand\b/gi, 'good and')
+    .replace(/\bcheckall\b/gi, 'check all')
+    .replace(/\bcheckone\b/gi, 'check one')
+    .replace(/\bthatapply\b/gi, 'that apply')
+    .replace(/\bCONTRACTAGREEMENT\b/gi, 'CONTRACT AGREEMENT')
+    .replace(/\bKNOWALLMENBYTHESEPRESENTS\b/gi, 'KNOW ALL MEN BY THESE PRESENTS')
+    .replace(/\bCORRUGATEDBOXESFORTHEDOCUMENTPROCESSING\b/gi, 'CORRUGATED BOXES FOR THE DOCUMENT PROCESSING')
+    .replace(/\bDIVISIONANDOTHEROFFICESOFBIR\b/gi, 'DIVISION AND OTHER OFFICES OF BIR')
+    .replace(/\bSTO\.TOMAS,BATANGAS\b/gi, 'STO. TOMAS, BATANGAS')
+    .replace(/\bBUREAUOFINTERNALREVENUE\b/gi, 'BUREAU OF INTERNAL REVENUE')
+    .replace(/\bSTANLEYBRADLEYTRADINGINC\b/gi, 'STANLEY BRADLEY TRADING INC')
+    .replace(/\bNOWTHISAGREEMENTWITNESSETHASFOLLOWS\b/gi, 'NOW THIS AGREEMENT WITNESSETH AS FOLLOWS')
+    .replace(/\bPAYMENTAMOUNT\b/gi, 'PAYMENT AMOUNT')
+    .replace(/\bPOLICYINFORMATION\b/gi, 'POLICY INFORMATION')
+    .replace(/\bENDORSEMENTNO\b/gi, 'ENDORSEMENT NO.')
+    .replace(/\bISSUEDATE\b/gi, 'ISSUE DATE')
+    .replace(/\bNAMEDINSURED\b/gi, 'NAMED INSURED')
+    .replace(/\bEachOccurrence\b/gi, 'Each Occurrence')
+    .replace(/\bPerClaim\b/gi, 'Per Claim')
+    .replace(/\bInsuranceCompany\b/gi, 'Insurance Company')
+    .replace(/\bPolicyNo\b/gi, 'Policy No.')
+    .replace(/\bPolicyPeriod\b/gi, 'Policy Period')
+    .replace(/\bCOMMERCIALGENERALLIABILITY\b/gi, 'COMMERCIAL GENERAL LIABILITY')
+    .replace(/\bCOMPREHENSIVEGENERALLIABILITY\b/gi, 'COMPREHENSIVE GENERAL LIABILITY')
+    .replace(/\bOWNERS&CONTRACTORSPROTECTIVE\b/gi, 'OWNERS & CONTRACTORS PROTECTIVE')
+    .replace(/\bGENERALLIABILITY\b/gi, 'GENERAL LIABILITY')
+    .replace(/\bPRODUCTS-COMPLETEDOPERATIONS\b/gi, 'PRODUCTS-COMPLETED OPERATIONS')
+    .replace(/\bPERSONAL&ADVERTISINGINJURY\b/gi, 'PERSONAL & ADVERTISING INJURY')
+    .replace(/\bFIRELEGALLIABILITY\b/gi, 'FIRE LEGAL LIABILITY')
+    .replace(/\bCONTRACTUALLIABILITY\b/gi, 'CONTRACTUAL LIABILITY')
+    .replace(/\bSANDIEGOCOUNTYWATERAUTHORITY\b/gi, 'SAN DIEGO COUNTY WATER AUTHORITY')
+    .replace(/\bAUTHORIZEDREPRESENTATIVE\b/gi, 'AUTHORIZED REPRESENTATIVE')
+    .replace(/\bENDORSEMENTHOLDER\b/gi, 'ENDORSEMENT HOLDER')
+    .replace(/\bADDITIONALINSURED\b/gi, 'ADDITIONAL INSURED');
+  return s;
+}
+
 export function canonicalModelToHtml(model: CanonicalDocument): string {
   if (!model || !model.pages || model.pages.length === 0) {
     if (model?.plainText) {
@@ -33,212 +90,274 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
   for (let pIdx = 0; pIdx < model.pages.length; pIdx++) {
     const page: CanonicalPage = model.pages[pIdx];
     const pageWidth = page.width || 595.28;
-    const elements: CanonicalElement[] = [...(page.elements || [])].sort((a, b) => {
-      // Sort primarily by vertical Y position, then by horizontal X position
-      const diffY = a.bbox.y - b.bbox.y;
-      if (Math.abs(diffY) > 8) return diffY;
-      return a.bbox.x - b.bbox.x;
-    });
+    const rawElements: CanonicalElement[] = page.elements || [];
 
-    const lines: string[] = [];
+    const blockElements: { y: number; html: string }[] = [];
 
-    for (const el of elements) {
-      // 1. Table Elements
+    // 1. Table Elements
+    for (const el of rawElements) {
       if (el.type === 'table' && el.tableData) {
         const rows = el.tableData.rows || 1;
         const cells = el.tableData.cells || [];
         const isSigTable =
           Boolean((el.tableData as any).isSignatureTable) ||
           cells.some((c) =>
-            /(?:For\s+\[|For\s+&|For\s+the\b|Position:|Name:|Authorized Signat|Contractor with seal|Canara Bank)/i.test(
+            /(?:For\s+\[|For\s+&|For\s+the\b|Position:|Name:|Authorized Signat|AUTHORIZED REPRESENTATIVE|ENDORSEMENT\s+HOLDER|Contractor with seal|Canara Bank)/i.test(
               c.content || ''
             )
           );
 
         if (isSigTable) {
-          // Render as 2-column signature block table matching source PDF box
           let tableHtml =
-            '<table border="1" style="width: 100%; border-collapse: collapse; border: 1.5px solid #475569; margin: 24px 0; background-color: #ffffff; table-layout: fixed;"><tbody><tr>';
+            '<table border="1" style="width: 100%; border-collapse: collapse; border: 1.5px solid #475569; margin: 20px 0; background-color: #ffffff; table-layout: fixed;"><tbody>';
+          const maxCols = Math.max(1, ...(cells.map((c) => c.col + (c.colspan || 1))));
+          const defaultColWidth = `${Math.floor(100 / maxCols)}%`;
 
-          const row0Cells = cells.filter((c) => c.row === 0).sort((a, b) => a.col - b.col);
-          const colWidth = row0Cells.length > 0 ? `${Math.floor(100 / row0Cells.length)}%` : '50%';
-
-          for (const cell of row0Cells) {
-            const linesInCell = (cell.content || '').split('\n');
-            const formattedContent = linesInCell
-              .map((rawL) => {
-                const l = rawL.trim();
-                if (!l) return '<div style="height: 10px;"></div>';
-                if (/^For\s+/i.test(l)) {
-                  return `<strong style="font-size: 13.5px; display: block; margin-bottom: 12px; color: #0f172a;">${escapeHtml(l)}</strong>`;
-                }
-                const fieldMatch = l.match(/^([A-Za-z\s]+:)\s*(.*)/);
-                if (fieldMatch) {
-                  return `<div style="margin: 8px 0; font-size: 13px; color: #1e293b;"><strong style="display: inline-block; min-width: 65px; color: #0f172a;">${escapeHtml(fieldMatch[1])}</strong> ${escapeHtml(fieldMatch[2])}</div>`;
-                }
-                return `<div style="margin: 4px 0; font-size: 13px; color: #1e293b;">${escapeHtml(l)}</div>`;
-              })
-              .join('');
-
-            tableHtml += `<td style="width: ${colWidth}; border: 1.5px solid #475569; padding: 16px 20px; vertical-align: top; line-height: 1.8; color: #1e293b; background-color: #ffffff;">${formattedContent}</td>`;
+          for (let r = 0; r < rows; r++) {
+            const rCells = cells.filter((c) => c.row === r).sort((a, b) => a.col - b.col);
+            if (rCells.length === 0) continue;
+            tableHtml += '<tr>';
+            for (const cell of rCells) {
+              const linesInCell = (cell.content || '').split('\n');
+              const formattedContent = linesInCell
+                .map((rawL) => {
+                  const l = rawL.trim();
+                  if (!l) return '<div style="height: 8px;"></div>';
+                  if (/^(?:For\s+|AUTHORIZED\s+REPRESENTATIVE|ENDORSEMENT\s+HOLDER)/i.test(l)) {
+                    return `<strong style="font-size: 13px; display: block; margin-bottom: 8px; color: #0f172a;">${escapeHtml(l)}</strong>`;
+                  }
+                  const fieldMatch = l.match(/^([A-Za-z\s]+:)\s*(.*)/);
+                  if (fieldMatch) {
+                    return `<div style="margin: 6px 0; font-size: 12.5px; color: #1e293b;"><strong style="display: inline-block; min-width: 65px; color: #0f172a;">${escapeHtml(fieldMatch[1])}</strong> ${escapeHtml(fieldMatch[2])}</div>`;
+                  }
+                  return `<div style="margin: 4px 0; font-size: 12.5px; color: #1e293b;">${escapeHtml(l)}</div>`;
+                })
+                .join('');
+              const w = cell.colspan > 1 ? `${Math.floor((100 * cell.colspan) / maxCols)}%` : defaultColWidth;
+              tableHtml += `<td style="width: ${w}; border: 1.5px solid #475569; padding: 10px 14px; vertical-align: top; line-height: 1.6; color: #1e293b; background-color: #ffffff;" ${cell.rowspan > 1 ? `rowspan="${cell.rowspan}"` : ''} ${cell.colspan > 1 ? `colspan="${cell.colspan}"` : ''}>${formattedContent || '&nbsp;'}</td>`;
+            }
+            tableHtml += '</tr>';
           }
-          tableHtml += '</tr></tbody></table>';
-          lines.push(tableHtml);
+          tableHtml += '</tbody></table>';
+          blockElements.push({ y: el.bbox?.y ?? 0, html: tableHtml });
           continue;
         }
 
         // Standard structured data table
         let tableHtml =
-          '<table border="1" style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #64748b; font-family: Arial, sans-serif; font-size: 13px;"><tbody>';
+          '<table border="1" style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #64748b; font-family: Arial, Helvetica, sans-serif; font-size: 12.5px; background-color: #ffffff;"><tbody>';
         for (let r = 0; r < rows; r++) {
-          tableHtml += '<tr>';
           const rowCells = cells.filter((c) => c.row === r).sort((a, b) => a.col - b.col);
+          if (rowCells.length === 0) continue;
+          tableHtml += '<tr>';
           for (const cell of rowCells) {
-            const tag = cell.isHeader ? 'th' : 'td';
-            const cellVal = escapeHtml(cell.content || '').replace(/\n/g, '<br />');
-            tableHtml += `<${tag} style="border: 1px solid ${cell.isHeader ? '#64748b' : '#cbd5e1'}; padding: 8px 12px; text-align: ${cell.horizontalAlign || 'left'}; font-weight: ${cell.isHeader ? 'bold' : 'normal'}; background-color: ${cell.backgroundColor || (cell.isHeader ? '#f1f5f9' : (r % 2 === 0 ? '#ffffff' : '#f8fafc'))};" ${cell.rowspan ? `rowspan="${cell.rowspan}"` : ''} ${cell.colspan ? `colspan="${cell.colspan}"` : ''}>${cellVal}</${tag}>`;
+            const isHeader = cell.isHeader || (r === 0 && rows > 1);
+            const tag = isHeader ? 'th' : 'td';
+            let cellVal = cleanTokenSpacing(escapeHtml(cell.content || '')).replace(/\n/g, '<br />');
+            cellVal = cellVal.replace(
+              /\[\s*\]/g,
+              '<span class="contract-checkbox" data-checked="false" contenteditable="false" style="display: inline-block; width: 14px; height: 14px; border: 1.5px solid #2563eb; border-radius: 2px; vertical-align: -2px; margin: 0 4px; background-color: #ffffff; text-align: center; line-height: 12px; font-size: 10px; font-weight: bold; color: transparent; cursor: pointer; user-select: none;">&nbsp;</span>'
+            );
+            cellVal = cellVal.replace(
+              /\[[✓xX]\]/g,
+              '<span class="contract-checkbox" data-checked="true" contenteditable="false" style="display: inline-block; width: 14px; height: 14px; border: 1.5px solid #2563eb; border-radius: 2px; vertical-align: -2px; margin: 0 4px; background-color: #2563eb; text-align: center; line-height: 12px; font-size: 10px; font-weight: bold; color: #ffffff; cursor: pointer; user-select: none;">&#10003;</span>'
+            );
+            const wStyle = (cell as any).widthPercent
+              ? `width: ${(cell as any).widthPercent}%; `
+              : (rowCells.length === 2 ? 'width: 50%; ' : (rowCells.length === 1 ? 'width: 100%; ' : ''));
+            tableHtml += `<${tag} style="${wStyle}border: 1px solid ${isHeader ? '#64748b' : '#cbd5e1'}; padding: 6px 10px; vertical-align: top; text-align: ${cell.horizontalAlign || 'left'}; font-weight: ${isHeader ? 'bold' : 'normal'}; background-color: ${cell.backgroundColor || (isHeader ? '#f1f5f9' : (r % 2 === 0 ? '#ffffff' : '#f8fafc'))}; word-break: normal; white-space: normal;" ${cell.rowspan > 1 ? `rowspan="${cell.rowspan}"` : ''} ${cell.colspan > 1 ? `colspan="${cell.colspan}"` : ''}>${cellVal || '&nbsp;'}</${tag}>`;
           }
           tableHtml += '</tr>';
         }
         tableHtml += '</tbody></table>';
-        lines.push(tableHtml);
+        blockElements.push({ y: el.bbox?.y ?? 0, html: tableHtml });
         continue;
       }
 
-      // 2. Form Lines (fill-in lines or horizontal dividing rules)
       if (el.type === 'form_line') {
-        if ((el.bbox?.width || 0) > 360 && !el.text) {
-          lines.push('<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 16px 0;" />');
-        } else if (el.text) {
-          lines.push(
-            `<p style="margin: 6px 0; font-family: Arial, sans-serif; line-height: 1.5;"><strong>${escapeHtml(el.text)}</strong> ____________________________________</p>`
-          );
+        const w = el.bbox?.width || 0;
+        const h = el.bbox?.height || 0;
+        if (h >= 18 && w >= 120 && !el.text) {
+          // Large blank input box (e.g. Services description area in contracts)
+          blockElements.push({
+            y: el.bbox?.y ?? 0,
+            html: `<div style="border: 1.5px solid #94a3b8; border-radius: 4px; min-height: ${Math.max(45, Math.min(140, Math.round(h)))}px; margin: 12px 0; background-color: #ffffff; padding: 10px;">&nbsp;</div>`
+          });
+          continue;
+        } else if (w > 320 && !el.text) {
+          blockElements.push({
+            y: el.bbox?.y ?? 0,
+            html: '<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 8px 0;" />'
+          });
+          continue;
         }
-        continue;
       }
-
-      // 3. Checkboxes
-      if (el.type === 'checkbox') {
-        const isChecked = el.checked || el.checkboxState === 'checked';
-        lines.push(
-          `<p style="margin: 6px 0; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;"><span contenteditable="false" style="display: inline-block; width: 14px; height: 14px; border: 1.5px solid #334155; border-radius: 2px; vertical-align: -2px; margin-right: 8px; background-color: #ffffff; text-align: center; line-height: 12px; font-size: 11px; font-weight: bold; color: #0f172a; user-select: none;">${isChecked ? '✓' : '&nbsp;'}</span>${escapeHtml(el.text || '')}</p>`
-        );
-        continue;
-      }
-
-      // 4. Dividers
       if (el.type === 'divider') {
-        lines.push('<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 16px 0;" />');
+        blockElements.push({
+          y: el.bbox?.y ?? 0,
+          html: '<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 8px 0;" />'
+        });
         continue;
       }
-
-      // 5. Images / Stamps / Signatures
       if (el.type === 'image' && el.imageData?.assetUrl) {
-        lines.push(
-          `<p style="text-align: center; margin: 12px 0;"><img src="${el.imageData.assetUrl}" alt="Document graphic" style="max-height: 120px; object-fit: contain;" /></p>`
-        );
+        blockElements.push({
+          y: el.bbox?.y ?? 0,
+          html: `<p style="text-align: center; margin: 12px 0;"><img src="${el.imageData.assetUrl}" alt="Document graphic" style="max-height: 120px; object-fit: contain;" /></p>`
+        });
         continue;
-      }
-
-      // 6. Text Elements
-      if (el.text && el.text.trim()) {
-        const text = el.text.trim();
-        const lower = text.toLowerCase();
-
-        // 6A. Preamble Conjunctions: "between", "and"
-        if (lower === 'between' || lower === 'and') {
-          lines.push(
-            `<p style="text-align: center; font-size: 11pt; font-weight: 700; text-transform: lowercase; color: #475569; margin: 4px 0; line-height: 1.4; font-family: Arial, sans-serif;">${escapeHtml(text)}</p>`
-          );
-          continue;
-        }
-
-        // 6B. Named Parties under BETWEEN / AND
-        const isParty = /^(?:NGO\s*\/UN\s+agency|Company\/agent|Director|Managing\s+Director|Secretary|Collector|represented\s+by|--+\s*Successful\s+bidder|M\/s\b|The\s+Client\b|The\s+Contractor\b)/i.test(
-          text
-        );
-        if (isParty) {
-          lines.push(
-            `<p style="text-align: center; font-weight: 600; font-size: 11pt; margin: 4px 0; line-height: 1.4; color: #1e293b; font-family: Arial, sans-serif;">${escapeHtml(text)}</p>`
-          );
-          continue;
-        }
-
-        // 6C. Page Footer: "Page X of Y"
-        if (/^Page\s+\d+\s+of\s+\d+$/i.test(text)) {
-          lines.push(
-            `<p style="text-align: center; font-size: 9.5pt; color: #64748b; margin-top: 20px; margin-bottom: 6px; font-family: Arial, sans-serif;">${escapeHtml(text)}</p>`
-          );
-          continue;
-        }
-
-        // Checkbox inside text (e.g. "[ ] On the date..." or "☐ Option")
-        if (/^(?:\[(?:\s*|[✓xX])\]|☐|☑)\s*/.test(text)) {
-          const isChecked = /^(?:\[[✓xX]\]|☑)/.test(text);
-          const clean = text.replace(/^(?:\[(?:\s*|[✓xX])\]|☐|☑)\s*/, '');
-          lines.push(
-            `<p style="margin: 6px 0; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;"><span contenteditable="false" style="display: inline-block; width: 14px; height: 14px; border: 1.5px solid #334155; border-radius: 2px; vertical-align: -2px; margin-right: 8px; background-color: #ffffff; text-align: center; line-height: 12px; font-size: 11px; font-weight: bold; color: #0f172a; user-select: none;">${isChecked ? '✓' : '&nbsp;'}</span>${escapeHtml(clean)}</p>`
-          );
-          continue;
-        }
-
-        const isMainHeading =
-          text.length < 55 &&
-          /^(?:[A-Z0-9\s.,–—:-]+)$/.test(text) &&
-          (/AGREEMENT|CONTRACT|ANNEXURE|DEED|SCHEDULE|TURNKEY/i.test(text) ||
-            el.alignment === 'center' ||
-            (Math.abs(el.bbox.x - (pageWidth - (el.bbox.x + el.bbox.width))) < 35 && el.bbox.width < pageWidth * 0.65));
-
-        const isCentered = isMainHeading;
-
-        const isClauseHeading =
-          /^(NOW THIS AGREEMENT|IN WITNESS WHEREOF|SIGNATURES|ARTICLE\s+[0-9IVX]+|SECTION\s+[0-9]+|\d+\.\s+[A-Z]|KNOW ALL MEN)/i.test(
-            text
-          );
-
-        const isNumberedClause = /^[0-9]+(\.[0-9]+)*\s+[A-Z]/.test(text) || /^\([a-z0-9]+\)\s+/i.test(text);
-
-        const textAlign = isCentered ? 'center' : 'left';
-        const fontWeight = isMainHeading || isClauseHeading || el.fontWeight === 'bold' ? 'bold' : 'normal';
-
-        let fontSize = '10.5pt';
-        let marginTop = '4px';
-        let marginBottom = '4px';
-
-        if (isMainHeading) {
-          fontSize = '14pt';
-          marginTop = '14px';
-          marginBottom = '6px';
-        } else if (isClauseHeading) {
-          fontSize = '12pt';
-          marginTop = '14px';
-          marginBottom = '6px';
-        } else if (isNumberedClause) {
-          fontSize = '10.5pt';
-          marginTop = '6px';
-          marginBottom = '4px';
-        }
-
-        // Detect if text contains signatures header
-        if (/^SIGNATURES$/i.test(text)) {
-          lines.push(
-            `<p style="text-align: left; font-weight: bold; font-size: 12pt; margin-top: 20px; margin-bottom: 8px; font-family: Arial, sans-serif; color: #1e293b;">SIGNATURES</p>`
-          );
-          continue;
-        }
-
-        lines.push(
-          `<p style="text-align: ${textAlign}; font-weight: ${fontWeight}; font-size: ${fontSize}; margin-top: ${marginTop}; margin-bottom: ${marginBottom}; line-height: 1.6; font-family: Arial, Helvetica, sans-serif; color: #1e293b;">${escapeHtml(text)}</p>`
-        );
       }
     }
 
-    pageHtmls.push(lines.join('\n'));
+    // 2. Text and Checkbox Elements: Horizontal Visual Line Clustering
+    const textAndCbElements = rawElements.filter(
+      (e) => (e.type === 'text' || e.type === 'checkbox' || (e.type === 'form_line' && e.text)) && (e.text || e.type === 'checkbox')
+    );
+
+    const visualLines: { y: number; elements: CanonicalElement[] }[] = [];
+    const sortedTokens = [...textAndCbElements].sort((a, b) => a.bbox.y - b.bbox.y);
+
+    for (const tok of sortedTokens) {
+      let placed = false;
+      for (const line of visualLines) {
+        if (Math.abs(tok.bbox.y - line.y) <= 6) {
+          line.elements.push(tok);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        visualLines.push({ y: tok.bbox.y, elements: [tok] });
+      }
+    }
+
+    visualLines.sort((a, b) => a.y - b.y);
+
+    interface FormattedLine {
+      y: number;
+      text: string;
+      isCheckbox: boolean;
+      isChecked: boolean;
+      isHeading: boolean;
+      isClause: boolean;
+      alignment: 'center' | 'left';
+      fontSize: string;
+      fontWeight: 'bold' | 'normal';
+    }
+
+    const formattedLines: FormattedLine[] = [];
+
+    for (const line of visualLines) {
+      line.elements.sort((a, b) => a.bbox.x - b.bbox.x);
+
+      const firstTok = line.elements[0];
+      const hasCheckbox = firstTok.type === 'checkbox' || /^(?:\[(?:\s*|[✓xX])\]|☐|☑|1\s*[-–—]|[-–—•\*])\s*/.test(firstTok.text || '');
+      const isChecked = firstTok.checked || /^(?:\[[✓xX]\]|☑)/.test(firstTok.text || '');
+
+      const parts: string[] = [];
+      let prevTok: CanonicalElement | null = null;
+      for (const tok of line.elements) {
+        let t = tok.text || '';
+        if (prevTok) {
+          const gap = tok.bbox.x - (prevTok.bbox.x + prevTok.bbox.width);
+          if (gap >= 32) {
+            parts.push(' ____________________ ');
+          } else {
+            parts.push(' ');
+          }
+        }
+        if (tok === firstTok && hasCheckbox) {
+          t = t.replace(/^(?:\[(?:\s*|[✓xX])\]|☐|☑|1\s*[-–—]|[-–—•\*])\s*/, '');
+        }
+        parts.push(t);
+        prevTok = tok;
+      }
+
+      const fullText = cleanTokenSpacing(parts.join('').replace(/\s+/g, ' ').trim());
+      if (!fullText && !hasCheckbox) continue;
+
+      const firstBox = line.elements[0].bbox;
+      const totalWidth = line.elements[line.elements.length - 1].bbox.x + line.elements[line.elements.length - 1].bbox.width - firstBox.x;
+
+      const isMainHeading =
+        fullText.length < 65 &&
+        /^(?:[A-Z0-9\s.,–—:-]+)$/.test(fullText) &&
+        (/AGREEMENT|CONTRACT|ANNEXURE|DEED|SCHEDULE|TURNKEY|ENDORSEMENT/i.test(fullText) ||
+          Math.abs(firstBox.x - (pageWidth - (firstBox.x + totalWidth))) < 35);
+
+      const isClauseHeading =
+        /^(NOW THIS AGREEMENT|IN WITNESS WHEREOF|SIGNATURES|ARTICLE\s+[0-9IVX]+|SECTION\s+[0-9]+|\d+\.\s+[A-Z]|KNOW ALL MEN)/i.test(fullText);
+
+      const isSubClause = /^\([a-z0-9]+\)\s+/i.test(fullText) || /^[0-9]+(\.[0-9]+)+\s+/i.test(fullText);
+
+      formattedLines.push({
+        y: line.y,
+        text: fullText,
+        isCheckbox: hasCheckbox,
+        isChecked,
+        isHeading: isMainHeading || isClauseHeading,
+        isClause: isSubClause,
+        alignment: isMainHeading ? 'center' : 'left',
+        fontSize: isMainHeading ? '13.5pt' : (isClauseHeading ? '12pt' : '10.5pt'),
+        fontWeight: isMainHeading || isClauseHeading ? 'bold' : 'normal',
+      });
+    }
+
+    const textHtmlBlocks: { y: number; html: string }[] = [];
+    let currentPara: FormattedLine[] = [];
+
+    const flushPara = () => {
+      if (currentPara.length === 0) return;
+      const first = currentPara[0];
+      const joinedText = currentPara.map((l) => l.text).join(' ');
+      const escaped = escapeHtml(joinedText);
+
+      let innerContent = escaped;
+      if (first.isCheckbox) {
+        innerContent = `<span class="contract-checkbox" data-checked="${first.isChecked ? 'true' : 'false'}" contenteditable="false" style="display: inline-block; width: 16px; height: 16px; border: 1.5px solid #2563eb; border-radius: 3px; vertical-align: -2px; margin-right: 8px; background-color: ${first.isChecked ? '#2563eb' : '#ffffff'}; text-align: center; line-height: 14px; font-size: 11px; font-weight: bold; color: ${first.isChecked ? '#ffffff' : 'transparent'}; cursor: pointer; user-select: none;">${first.isChecked ? '&#10003;' : '&nbsp;'}</span>${escaped}`;
+      }
+
+      const marginTop = first.isHeading ? '14px' : (first.isClause ? '8px' : '4px');
+      const marginBottom = first.isHeading ? '6px' : '4px';
+
+      textHtmlBlocks.push({
+        y: first.y,
+        html: `<p style="text-align: ${first.alignment}; font-weight: ${first.fontWeight}; font-size: ${first.fontSize}; margin-top: ${marginTop}; margin-bottom: ${marginBottom}; line-height: 1.6; font-family: Arial, Helvetica, sans-serif; color: #1e293b;">${innerContent}</p>`
+      });
+      currentPara = [];
+    };
+
+    for (let i = 0; i < formattedLines.length; i++) {
+      const line = formattedLines[i];
+
+      if (line.isHeading || line.isCheckbox || line.isClause) {
+        flushPara();
+        currentPara.push(line);
+        flushPara();
+        continue;
+      }
+
+      if (currentPara.length === 0) {
+        currentPara.push(line);
+      } else {
+        const prev = currentPara[currentPara.length - 1];
+        const gapY = line.y - prev.y;
+        if (gapY <= 20) {
+          currentPara.push(line);
+        } else {
+          flushPara();
+          currentPara.push(line);
+        }
+      }
+    }
+    flushPara();
+
+    const allPageBlocks = [...blockElements, ...textHtmlBlocks].sort((a, b) => a.y - b.y);
+    pageHtmls.push(allPageBlocks.map((b) => b.html).join('\n'));
   }
 
   // Separate multiple pages with standard TinyMCE page break
   return pageHtmls.join(
-    '\n<p><!-- pagebreak --></p>\n<div class="mce-pagebreak" data-mce-placeholder="true" style="page-break-after: always; margin: 2rem 0; border-top: 2px dashed #94a3b8; text-align: center; font-size: 11px; color: #64748b; padding-top: 4px;">--- Page Break ---</div>\n'
+    '\n<div class="mce-pagebreak" data-mce-placeholder="true" style="page-break-after: always; margin: 1.25rem 0; border: none; border-top: 1.5px dashed #94a3b8; text-align: center; font-size: 11px; color: #64748b; height: 18px; line-height: 18px;">--- Page Break ---</div>\n'
   );
 }
 
