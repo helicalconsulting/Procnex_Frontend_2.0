@@ -141,6 +141,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
         },
         table_grid: true,
         table_appearance_options: true,
+        table_responsive_width: false,
         skin: isDark ? 'oxide-dark' : 'oxide',
         content_css: isDark ? 'dark' : 'default',
         content_style: `
@@ -163,6 +164,13 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             border-radius: 4px;
             box-sizing: border-box;
           }
+          body:has(.contract-ocr-page) {
+            max-width: none;
+            min-height: 0;
+            padding: 0;
+            background: transparent;
+            box-shadow: none;
+          }
           .mce-pagebreak {
             border-top: 2px dashed #94a3b8;
             margin: 3rem 0;
@@ -171,13 +179,13 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             height: auto;
             background: transparent;
           }
-          table {
+          table:not(.contract-ocr-table) {
             border-collapse: collapse !important;
             width: 100% !important;
             margin: 1.25rem 0 !important;
             border: 1.5px solid #64748b !important;
           }
-          table th, .mce-item-table th {
+          table:not(.contract-ocr-table) th {
             background-color: #f1f5f9 !important;
             border: 1px solid #94a3b8 !important;
             padding: 8px 12px !important;
@@ -185,13 +193,13 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             text-align: left;
             color: #0f172a !important;
           }
-          table td, .mce-item-table td {
+          table:not(.contract-ocr-table) td {
             border: 1px solid #cbd5e1 !important;
             padding: 8px 12px !important;
             vertical-align: top;
             color: #1e293b !important;
           }
-          table tr:nth-child(even) td {
+          table:not(.contract-ocr-table) tr:nth-child(even) td {
             background-color: #f8fafc;
           }
           img {
@@ -217,7 +225,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
           });
 
           editor.on('change input undo redo keyup', () => {
-            if (isUpdatingFromProp.current || !editor || !editor.serializer) return;
+            if (isUpdatingFromProp.current || !editor || !editor.initialized || editor.destroyed || !editor.serializer || typeof editor.getContent !== 'function') return;
             try {
               const content = editor.getContent();
               onChangeRef.current?.(content);
@@ -267,11 +275,12 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
   useEffect(() => {
     if (editorInstanceRef.current && isEditorReady) {
       try {
-        if (!editorInstanceRef.current.serializer) return;
-        const current = editorInstanceRef.current.getContent();
+        const editor = editorInstanceRef.current;
+        if (!editor || !editor.initialized || editor.destroyed || !editor.serializer || typeof editor.getContent !== 'function') return;
+        const current = editor.getContent();
         if (value !== current) {
           isUpdatingFromProp.current = true;
-          editorInstanceRef.current.setContent(value || '');
+          editor.setContent(value || '');
           isUpdatingFromProp.current = false;
         }
       } catch {

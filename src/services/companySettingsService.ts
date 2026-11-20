@@ -1572,12 +1572,12 @@ async function apiTriggerContractOcr(type: string): Promise<void> {
   });
 }
 
-async function mockGetContractOcrStatus(type: string): Promise<{ ocrText: string | null; ocrStatus: string | null; ocrProcessedAt: string | null }> {
+async function mockGetContractOcrStatus(type: string): Promise<{ ocrText: string | null; ocrStatus: string | null; ocrProcessedAt: string | null; layoutModel?: ContractTemplate['layoutModel'] }> {
   await new Promise(r => setTimeout(r, 150));
   return { ocrText: null, ocrStatus: null, ocrProcessedAt: null };
 }
 
-async function apiGetContractOcrStatus(type: string): Promise<{ ocrText: string | null; ocrStatus: string | null; ocrProcessedAt: string | null }> {
+async function apiGetContractOcrStatus(type: string): Promise<{ ocrText: string | null; ocrStatus: string | null; ocrProcessedAt: string | null; layoutModel?: ContractTemplate['layoutModel'] }> {
   return apiRequest(`/company-settings/contract-templates/${encodeURIComponent(type)}/ocr/status`, { cacheTtlMs: 0 });
 }
 
