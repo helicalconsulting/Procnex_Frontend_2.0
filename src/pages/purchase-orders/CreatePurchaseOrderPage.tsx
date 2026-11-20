@@ -1047,18 +1047,38 @@ export default function CreatePurchaseOrderPage() {
         if (i.id !== id) return i;
         const updated = { ...i, [field]: value };
         if (field === 'itemCode' && value.trim()) {
-          const matched = inventoryItems.find((itm) => itm.itemCode === value.trim());
+          const matched = inventoryItems.find((itm) => itm.itemCode?.toLowerCase() === value.trim().toLowerCase());
           if (matched) {
             updated.itemName = matched.itemName;
             updated.description = matched.description || '';
-            if (matched.standardPrice !== undefined) updated.unitPrice = matched.standardPrice;
+            if (matched.standardPrice !== undefined) {
+              const itemCurrency = matched.currency || companyDefaultCurrency || 'AED';
+              const poCurrency = currency || companyDefaultCurrency || 'USD';
+              if (itemCurrency && poCurrency && itemCurrency.toUpperCase() !== poCurrency.toUpperCase()) {
+                const converted = convert(Number(matched.standardPrice), itemCurrency, poCurrency);
+                updated.unitPrice = Math.round(converted * 100) / 100;
+              } else {
+                updated.unitPrice = matched.standardPrice;
+              }
+            }
+            if (matched.uom) updated.unit = matched.uom;
           }
         } else if (field === 'itemName' && value.trim()) {
-          const matched = inventoryItems.find((itm) => itm.itemName === value.trim());
+          const matched = inventoryItems.find((itm) => itm.itemName?.toLowerCase() === value.trim().toLowerCase());
           if (matched) {
             updated.itemCode = matched.itemCode;
             updated.description = matched.description || '';
-            if (matched.standardPrice !== undefined) updated.unitPrice = matched.standardPrice;
+            if (matched.standardPrice !== undefined) {
+              const itemCurrency = matched.currency || companyDefaultCurrency || 'AED';
+              const poCurrency = currency || companyDefaultCurrency || 'USD';
+              if (itemCurrency && poCurrency && itemCurrency.toUpperCase() !== poCurrency.toUpperCase()) {
+                const converted = convert(Number(matched.standardPrice), itemCurrency, poCurrency);
+                updated.unitPrice = Math.round(converted * 100) / 100;
+              } else {
+                updated.unitPrice = matched.standardPrice;
+              }
+            }
+            if (matched.uom) updated.unit = matched.uom;
           }
         }
         return updated;

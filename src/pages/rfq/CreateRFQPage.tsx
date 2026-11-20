@@ -191,9 +191,9 @@ export default function CreateRFQPage() {
     { cacheTtlMs: 60000 }
   );
   // Dynamic units from backend
-  const { data: unitOptions } = useServiceData(
-    () => companySettingsService.listUnits().then((units) => units.map((u) => u.name)),
-    [] as string[],
+  const { data: rawUnits } = useServiceData(
+    () => companySettingsService.listUnits(),
+    [] as Unit[],
     [],
     { cacheTtlMs: 120000 }
   );
@@ -206,8 +206,62 @@ export default function CreateRFQPage() {
     { cacheKey: 'form-configs:rfq_information' }
   );
 
-  // Fallback if no units configured yet
-  const UNIT_OPTIONS = useMemo(() => unitOptions.length > 0 ? unitOptions : ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Set', 'Nos', 'Pair'], [unitOptions]);
+  // Derived structured unit options from Company Settings with standard fallbacks
+  const UNIT_OPTIONS = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { value: string; label: string }[] = [];
+
+    (rawUnits || []).forEach((u) => {
+      const name = u.name?.trim();
+      if (!name) return;
+      const abbr = u.abbreviation?.trim();
+      const val = abbr || name;
+      const label = abbr && abbr.toLowerCase() !== name.toLowerCase()
+        ? `${name} (${abbr})`
+        : name;
+
+      if (!seen.has(val.toLowerCase())) {
+        seen.add(val.toLowerCase());
+        options.push({ value: val, label });
+      }
+    });
+
+    const standardDefaults = [
+      { value: 'EA', label: 'EA (Each)' },
+      { value: 'Pcs', label: 'Pieces (Pcs)' },
+      { value: 'Box', label: 'Box' },
+      { value: 'Kg', label: 'Kg' },
+      { value: 'Ltr', label: 'Ltr' },
+      { value: 'Mtr', label: 'Mtr' },
+      { value: 'Set', label: 'Set' },
+      { value: 'Nos', label: 'Nos' },
+      { value: 'Pair', label: 'Pair' },
+      { value: 'Month', label: 'Month' },
+      { value: 'Year', label: 'Year' },
+    ];
+
+    standardDefaults.forEach((d) => {
+      if (!seen.has(d.value.toLowerCase())) {
+        seen.add(d.value.toLowerCase());
+        options.push(d);
+      }
+    });
+
+    return options;
+  }, [rawUnits]);
+
+  const findMatchingUnit = useCallback((uom?: string | null): string => {
+    if (!uom?.trim()) return 'Pcs';
+    const target = uom.trim().toLowerCase();
+    const found = UNIT_OPTIONS.find(
+      (opt) =>
+        opt.value.toLowerCase() === target ||
+        opt.label.toLowerCase() === target ||
+        opt.label.toLowerCase().includes(`(${target})`) ||
+        opt.label.toLowerCase().startsWith(target)
+    );
+    return found ? found.value : uom.trim();
+  }, [UNIT_OPTIONS]);
 
   const [isEditLocked, setIsEditLocked] = useState(false);
   const [currentRfq, setCurrentRfq] = useState<any>(null);
@@ -804,20 +858,39 @@ export default function CreateRFQPage() {
       prev.map((i) => {
         if (i.id !== id) return i;
         const updated = { ...i, [field]: value };
+
+        let matched: ItemMaster | undefined;
         if (field === 'itemCode' && value.trim()) {
-          const matched = inventoryItems.find(
-            (s) => s.itemCode.toLowerCase() === value.trim().toLowerCase()
+          matched = inventoryItems.find(
+            (s) => s.itemCode?.toLowerCase() === value.trim().toLowerCase()
           );
-          if (matched) {
-            if (!updated.itemName || updated.itemName === '') updated.itemName = matched.itemName;
-            if (!updated.description || updated.description === '') updated.description = matched.description || '';
-            if (!updated.unit || updated.unit === '') updated.unit = matched.uom || 'EA';
+        } else if (field === 'itemName' && value.trim()) {
+          matched = inventoryItems.find(
+            (s) => s.itemName?.toLowerCase() === value.trim().toLowerCase()
+          );
+        }
+
+        if (matched) {
+          if (field === 'itemCode' && (!updated.itemName || updated.itemName === '')) {
+            updated.itemName = matched.itemName;
+          }
+          if (field === 'itemName' && (!updated.itemCode || updated.itemCode === '')) {
+            updated.itemCode = matched.itemCode;
+          }
+          if (!updated.description || updated.description === '') {
+            updated.description = matched.description || '';
+          }
+          if (matched.productClass && (!updated.itemClass || updated.itemClass === '')) {
+            updated.itemClass = matched.productClass;
+          }
+          if (matched.uom) {
+            updated.unit = findMatchingUnit(matched.uom);
           }
         }
         return updated;
       })
     );
-  }, [inventoryItems]);
+  }, [inventoryItems, findMatchingUnit]);
 
   // Form state — Vendors
   const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
@@ -2094,13 +2167,25 @@ export default function CreateRFQPage() {
                       </td>
                       <td>
                         <select
-                          value={item.unit}
+                          value={
+                            UNIT_OPTIONS.find(
+                              (opt) => opt.value.toLowerCase() === (item.unit || '').toLowerCase()
+                            )?.value || item.unit
+                          }
                           onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
                         >
                           <option value="">— Select unit —</option>
                           {UNIT_OPTIONS.map((u) => (
-                            <option key={u} value={u}>{u}</option>
+                            <option key={u.value} value={u.value}>
+                              {u.label}
+                            </option>
                           ))}
+                          {item.unit &&
+                            !UNIT_OPTIONS.some(
+                              (opt) => opt.value.toLowerCase() === item.unit.toLowerCase()
+                            ) && (
+                              <option value={item.unit}>{item.unit}</option>
+                            )}
                         </select>
                       </td>
                       <td>
