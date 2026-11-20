@@ -241,7 +241,10 @@ export const VendorSpendRiskOverview: React.FC<VendorSpendRiskOverviewProps> = (
   const remainingDash = circumference - topDash;
 
   // Format currency cleanly without raw decimal noise
-  const formatCleanCurrency = (val: number | string, prefix = data.displayCurrency || 'KSh') => {
+  const defaultPrefix = typeof window !== 'undefined'
+    ? (localStorage.getItem('company_default_currency') || 'KES')
+    : 'KES';
+  const formatCleanCurrency = (val: number | string, prefix = data.displayCurrency || (defaultPrefix === 'KES' ? 'KSh' : defaultPrefix)) => {
     if (typeof val === 'number') {
       return `${prefix} ${Math.round(val).toLocaleString()}`;
     }

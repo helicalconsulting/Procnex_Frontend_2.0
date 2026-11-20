@@ -92,14 +92,16 @@ function buildAdaptiveOverviewData(
     return rawOverview;
   }
 
-  // Detect currency from text or default to KSh
-  let curr = 'KSh';
+  // Detect currency from text or default to company default currency
+  const appDefaultCurr = typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES';
+  let curr = appDefaultCurr === 'KES' ? 'KSh' : appDefaultCurr;
   if (text.includes('₹') || text.includes('INR')) curr = '₹';
   else if (text.includes('$') || text.includes('USD')) curr = '$';
   else if (text.includes('€') || text.includes('EUR')) curr = '€';
   else if (text.includes('£') || text.includes('GBP')) curr = '£';
   else if (text.includes('USh') || text.includes('UGX')) curr = 'USh';
   else if (text.includes('TSh') || text.includes('TZS')) curr = 'TSh';
+  else if (text.includes('AED')) curr = 'AED';
 
   // Parse markdown tables if present
   const lines = text.split('\n');

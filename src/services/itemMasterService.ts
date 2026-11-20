@@ -331,6 +331,11 @@ export const itemMasterService = {
   },
 
   async create(payload: CreateItemMasterPayload): Promise<ItemMaster> {
+    // Logic: If availableForPr is true, force availableForRfq to true
+    if (payload.availableForPr) {
+      payload.availableForRfq = true;
+    }
+    
     if (USE_MOCK) {
       const newItem: ItemMaster = {
         id: `mock-${Date.now()}`,
@@ -349,7 +354,7 @@ export const itemMasterService = {
         availableForRfq: payload.availableForRfq ?? true,
         preferredSupplierName: payload.preferredSupplierName,
         standardPrice: payload.standardPrice ?? 0,
-        currency: payload.currency || 'AED',
+        currency: payload.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
         status: payload.status || 'ACTIVE',
         brand: payload.brand,
         partNumber: payload.partNumber,
@@ -370,6 +375,11 @@ export const itemMasterService = {
   },
 
   async update(id: string, payload: UpdateItemMasterPayload): Promise<ItemMaster> {
+    // Logic: If availableForPr is true, force availableForRfq to true
+    if (payload.availableForPr) {
+      payload.availableForRfq = true;
+    }
+    
     if (USE_MOCK) {
       const idx = FALLBACK_ITEMS.findIndex((i) => i.id === id);
       if (idx === -1) throw new Error('Item not found');
@@ -408,10 +418,16 @@ export const itemMasterService = {
   },
 
   async exportCsv(): Promise<void> {
-    const token = localStorage.getItem('token') || '';
-    const response = await fetch('/api/inventory-master/export', {
+    const token = localStorage.getItem('heliflow_token') || localStorage.getItem('heliflow_vendor_token') || '';
+    const companyCode = localStorage.getItem('heliflow_company_code') || '';
+    
+    // Using the same endpoint pattern as other services, adding /api if needed
+    // The client handles API_BASE + path
+    const response = await fetch(`${window.location.protocol}//${window.location.hostname}:3000/api/inventory-master/export`, {
       headers: {
-        Authorization: token ? `Bearer ${token}` : '',
+        'Authorization': token ? `Bearer ${token}` : '',
+        'X-Company-Code': companyCode,
+        'Accept': 'text/csv',
       },
     });
     if (!response.ok) {

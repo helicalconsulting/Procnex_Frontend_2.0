@@ -12,6 +12,7 @@ import type { DocumentAttachment } from '../invoices/InvoiceDocumentViewerModal'
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import DocumentQRCode from '../common/DocumentQRCode';
+import { formatBranchDisplay } from '../purchase-orders/PurchaseOrderDocument';
 import './BankPaymentVoucherModal.css';
 
 export interface PaymentVoucherItem {
@@ -76,6 +77,10 @@ export interface PaymentVoucherDocData {
   currency?: string;
   matchStatus?: 'MATCHED' | 'DISCREPANCY';
   discrepancyReason?: string;
+  branchId?: string;
+  branchCode?: string;
+  branchName?: string;
+  branch?: any;
   items?: PaymentVoucherItem[];
   attachments?: DocumentAttachment[];
   approvers?: {
@@ -86,6 +91,10 @@ export interface PaymentVoucherDocData {
     status: 'APPROVED' | 'PENDING';
     comments?: string;
     signatureUrl?: string;
+    branchId?: string;
+    branchCode?: string;
+    branchName?: string;
+    branch?: any;
   }[];
 }
 
@@ -423,6 +432,9 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
       status: 'APPROVED' as const,
       comments: 'Approved & Digitally Signed',
       signatureUrl: sigL1,
+      branchName: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.approverBranchName) || (data as any).branchName || null,
+      branchCode: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.approverBranchCode) || (data as any).branchCode || null,
+      branchId: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.approverBranchId) || (data as any).branchId || null,
     },
     {
       level: 'Level 2',
@@ -432,6 +444,9 @@ function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
       status: 'APPROVED' as const,
       comments: 'Approved & Digitally Signed',
       signatureUrl: sigL2,
+      branchName: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.approverBranchName) || (data as any).branchName || null,
+      branchCode: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.approverBranchCode) || (data as any).branchCode || null,
+      branchId: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.approverBranchId) || (data as any).branchId || null,
     },
   ];
 }
@@ -442,7 +457,7 @@ interface BankPaymentVoucherModalProps {
 }
 
 export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVoucherModalProps) {
-  const { formatAmount } = useCurrency();
+  const { formatAmount, companyDefaultCurrency } = useCurrency();
   const { companyName: brandingCompanyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
 
@@ -460,8 +475,15 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
     || (displayCompanyName.toLowerCase().includes('procnex') ? ('/Procnex-logo.jpeg' || procnexLogo) : null)
     || (displayCompanyName.toLowerCase().includes('helical') ? defaultHeliflowLogo : null);
 
-  const currency = data.currency || 'INR';
+  const currency = data.currency || companyDefaultCurrency;
   const isMatched = data.matchStatus !== 'DISCREPANCY';
+
+  const rawBranchName = (data as any).branchName || (data as any).branch?.name || null;
+  const rawBranchCode = (data as any).branchCode || (data as any).branch?.code || (data as any).branchId || null;
+  const showBranch = profile?.showBranchOnDocuments !== false;
+  const showApproverBranch = profile?.showApproverBranchOnDocs !== false;
+  const showBranchId = profile?.showBranchIdOnDocuments !== false;
+  const branchDisplay = showBranch ? formatBranchDisplay(rawBranchName, rawBranchCode, showBranchId) : '';
 
   const handlePrint = () => {
     if (printableRef.current) {
@@ -827,6 +849,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             }
             if (sigUrl) usedSigUrls.add(sigUrl);
 
+            const docSig = uniqueDocSigs.find((d: any) => Number(d.levelNumber) === levelNum);
             return {
               level: `Level ${levelNum}`,
               name,
@@ -835,6 +858,10 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               status: isApproved ? ('APPROVED' as const) : ('PENDING' as const),
               comments: isApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
               signatureUrl: sigUrl,
+              branchId: item.approverBranchId || docSig?.approverBranchId || null,
+              branchCode: item.approverBranchCode || docSig?.approverBranchCode || null,
+              branchName: item.approverBranchName || docSig?.approverBranchName || null,
+              branch: item.approverBranch || docSig?.approverBranch || null,
             };
           });
         } else {
@@ -891,6 +918,10 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
                 comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
                 signatureUrl: sigUrl,
+                branchId: docSig?.approverBranchId || lvl.approverBranchId || null,
+                branchCode: docSig?.approverBranchCode || lvl.approverBranchCode || null,
+                branchName: docSig?.approverBranchName || lvl.approverBranchName || null,
+                branch: docSig?.approverBranch || lvl.approverBranch || null,
               };
             });
           } else {
@@ -910,6 +941,9 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
                 comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
                 signatureUrl: sigL1,
+                branchId: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.approverBranchId) || (data as any).branchId || null,
+                branchCode: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.approverBranchCode) || (data as any).branchCode || null,
+                branchName: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 1)?.approverBranchName) || (data as any).branchName || null,
               },
               {
                 level: 'Level 2',
@@ -919,6 +953,9 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 status: isVoucherApproved ? ('APPROVED' as const) : ('PENDING' as const),
                 comments: isVoucherApproved ? 'Approved & Digitally Signed' : 'Awaiting Approval',
                 signatureUrl: sigL2,
+                branchId: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.approverBranchId) || (data as any).branchId || null,
+                branchCode: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.approverBranchCode) || (data as any).branchCode || null,
+                branchName: (uniqueDocSigs.find((d: any) => Number(d.levelNumber) === 2)?.approverBranchName) || (data as any).branchName || null,
               },
             ];
           }
@@ -1054,6 +1091,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 <h3>BANK PAYMENT VOUCHER</h3>
                 <div className="bpv-sheet__voucher-no">{data.voucherNumber}</div>
                 <p>Date: <strong>{data.voucherDate}</strong></p>
+                {branchDisplay ? <p>Branch: <strong>{branchDisplay}</strong></p> : null}
               </div>
               <DocumentQRCode
                 docType="PAYMENT_VOUCHER"
@@ -1080,6 +1118,9 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               <div className="bpv-box">
                 <div className="bpv-box__title">REMITTER (PAYER) BANK ACCOUNT</div>
                 <div className="bpv-box__row"><span>Account Name:</span> <strong>{displayCompanyName}</strong></div>
+                {branchDisplay ? (
+                  <div className="bpv-box__row"><span>Originating Branch:</span> <strong>{branchDisplay}</strong></div>
+                ) : null}
                 <div className="bpv-box__row">
                   <span>Bank Name:</span> <strong>{data.remitterBankName || profile?.bankName || '—'}</strong>
                 </div>
@@ -1258,6 +1299,18 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                       {app.name && (
                         <div className="bpv-stamp-name">{app.name}</div>
                       )}
+                      {showApproverBranch && (() => {
+                        const appBranch = formatBranchDisplay(
+                          (app as any).branchName || (app as any).approverBranchName || (app as any).branch?.name,
+                          (app as any).branchCode || (app as any).approverBranchCode || (app as any).branchId || (app as any).branch?.code,
+                          showBranchId
+                        );
+                        return appBranch ? (
+                          <div className="bpv-stamp-date" style={{ color: '#2563eb', fontWeight: 500 }}>
+                            Branch: <strong>{appBranch}</strong>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="bpv-stamp-date">Date: <strong>{app.date}</strong></div>
                     </div>
 
@@ -1318,7 +1371,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
 /**
  * Universal Currency-Aware Number-to-Words Converter
  */
-function formatAmountInWords(num: number, currency: string = 'INR'): string {
+function formatAmountInWords(num: number, currency: string = 'KES'): string {
   if (!num || isNaN(num) || num <= 0) return 'Zero';
 
   const roundedNum = Math.round(num);

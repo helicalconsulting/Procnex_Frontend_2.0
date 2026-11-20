@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer, X, PackageCheck, CheckCircle2, FileText, MapPin, Building2, ShieldCheck } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
+import { useCurrency } from '../shared/CurrencyMaster';
 import { printElementInIframe } from '../../utils/pdfDownload';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
@@ -53,6 +54,7 @@ interface PrintGRNModalProps {
   data?: GRNPrintData;
   grn?: GRNPrintData;
   po?: any;
+  currency?: string;
   onClose: () => void;
 }
 
@@ -69,10 +71,14 @@ export function PrintGRNModal({
   data: dataProp,
   grn: grnProp,
   po,
+  currency: currencyProp,
   onClose,
 }: PrintGRNModalProps) {
   const data = dataProp || grnProp;
   if (!data) return null;
+
+  const { companyDefaultCurrency, formatAmount } = useCurrency();
+  const currency = currencyProp || data.purchaseOrder?.currency || (data as any).currency || po?.currency || companyDefaultCurrency;
 
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
@@ -378,7 +384,7 @@ export function PrintGRNModal({
                 <th className="text-center" style={{ width: 80 }}>Accepted</th>
                 <th className="text-center" style={{ width: 75 }}>Rejected</th>
                 <th className="text-center" style={{ width: 55 }}>Unit</th>
-                {totalValue > 0 && <th className="text-right" style={{ width: 95 }}>Total Value</th>}
+                {totalValue > 0 && <th className="text-right" style={{ width: 95 }}>Total Value ({currency})</th>}
                 <th style={{ width: 160 }}>Inspection Remarks</th>
               </tr>
             </thead>
@@ -400,7 +406,7 @@ export function PrintGRNModal({
                   <td className="text-center text-slate-600">{item.unit}</td>
                   {totalValue > 0 && (
                     <td className="text-right font-semibold">
-                      {item.totalPrice ? `₹${item.totalPrice.toLocaleString('en-IN')}` : '—'}
+                      {item.totalPrice ? formatAmount(item.totalPrice, currency) : '—'}
                     </td>
                   )}
                   <td className="text-slate-600 text-[11px]">{item.remarks}</td>
@@ -419,7 +425,7 @@ export function PrintGRNModal({
                 <td className="text-center text-slate-600">items</td>
                 {totalValue > 0 && (
                   <td className="text-right font-bold text-emerald-900">
-                    ₹{totalValue.toLocaleString('en-IN')}
+                    {formatAmount(totalValue, currency)}
                   </td>
                 )}
                 <td className="text-slate-500 text-[11px]">

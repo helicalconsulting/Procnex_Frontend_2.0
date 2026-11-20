@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -156,6 +156,13 @@ export default function VendorCreateInvoicePage() {
   });
   const [paymentTerms, setPaymentTerms] = useState<string>('Net 30');
   const [currency, setCurrency] = useState<string>(companyDefaultCurrency);
+  const userChangedCurrencyRef = useRef(false);
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (!currency || currency === 'KES')) {
+      setCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
   const [buyerName, setBuyerName] = useState<string>(() => (companyName && companyName !== 'Organization') ? companyName : '');
   const [notes, setNotes] = useState<string>('');
 
@@ -426,6 +433,7 @@ export default function VendorCreateInvoicePage() {
   // Handle Currency Change with conversion of line item unit prices
   const handleCurrencyChange = useCallback((newCurrency: string) => {
     if (!newCurrency || newCurrency === currency) return;
+    userChangedCurrencyRef.current = true;
     const prevCurrency = currency || companyDefaultCurrency || 'KES';
     setCurrency(newCurrency);
 

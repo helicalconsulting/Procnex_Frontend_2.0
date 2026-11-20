@@ -510,7 +510,7 @@ function renderFieldComponent(
       {type === 'currency' && (
         <CurrencyAmountInput
           amount={defaultValue ? Number(defaultValue) : ''}
-          currency={field.currency || 'KES'}
+          currency={field.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES')}
           onAmountChange={() => {}}
           onCurrencyChange={(code) => {
             field.currency = code;

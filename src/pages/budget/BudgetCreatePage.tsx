@@ -114,7 +114,7 @@ export default function BudgetCreatePage() {
   const [periodGranularity, setPeriodGranularity] = useState('MONTHLY');
   const [startDate, setStartDate] = useState(`${new Date().getFullYear()}-01-01`);
   const [endDate, setEndDate] = useState(`${new Date().getFullYear()}-12-31`);
-  const [currency, setCurrency] = useState(companyDefaultCurrency || 'AED');
+  const [currency, setCurrency] = useState(companyDefaultCurrency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'));
   const userChangedCurrencyRef = useRef(false);
   const [fxSource, setFxSource] = useState('LIVE_MARKET');
   const [vatTreatment, setVatTreatment] = useState('EXCLUSIVE');
@@ -149,7 +149,7 @@ export default function BudgetCreatePage() {
 
   // Keep currency synced with company default unless user explicitly changed it
   useEffect(() => {
-    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (currency === 'KES' || !currency)) {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (currency === 'KES' || currency === 'AED' || !currency)) {
       setCurrency(companyDefaultCurrency);
     }
   }, [companyDefaultCurrency]);
@@ -255,7 +255,7 @@ export default function BudgetCreatePage() {
                 budgetName: b.budgetName,
                 budgetLogic: logic,
                 fiscalYear: b.fiscalYear,
-                currency: b.currency || 'AED',
+                currency: b.currency || companyDefaultCurrency || 'KES',
                 totalAllocated: b.totalAllocated || 0,
                 status: b.status || 'ACTIVE',
                 lines: dynamicLines.length > 0 ? dynamicLines : generateInitialLinesForLogic(logic),

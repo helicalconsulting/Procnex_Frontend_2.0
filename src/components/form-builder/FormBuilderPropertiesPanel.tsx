@@ -150,7 +150,7 @@ export default function FormBuilderPropertiesPanel({
           <div className={fieldGroupClass}>
             <label className={labelClass}>Default Currency</label>
             <CurrencySelector
-              value={selectedField.currency || 'KES'}
+              value={selectedField.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES')}
               onChange={(code) => handleChange('currency', code)}
               size="sm"
             />

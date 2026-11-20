@@ -882,7 +882,7 @@ export default function FormsPage() {
                           ) : field.type === 'currency' ? (
                             <CurrencyAmountInput
                               amount={val}
-                              currency={formData[`${field.id}_currency`] || field.currency || 'KES'}
+                              currency={formData[`${field.id}_currency`] || field.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES')}
                               onAmountChange={(v) => handleFieldChange(field.id, v)}
                               onCurrencyChange={(c) => handleFieldChange(`${field.id}_currency`, c)}
                               placeholder={field.placeholder || '0.00'}

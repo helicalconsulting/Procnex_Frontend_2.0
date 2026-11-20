@@ -10,6 +10,8 @@ import defaultHeliflowLogo from '../assets/heliflow.png';
 import QRCode from 'qrcode';
 import { signatureService } from '../services/signatureService';
 import { approvalService } from '../services/approvalService';
+import { companySettingsService } from '../services/companySettingsService';
+import { formatBranchDisplay } from '../components/purchase-orders/PurchaseOrderDocument';
 
 import { cleanDuplicateSignatures } from './cleanSignatures';
 
@@ -490,12 +492,21 @@ export async function downloadPurchaseOrderAsPdf(
   const poNum = (order.poNumber || (order.id ? `PO-${order.id}` : 'PO-DRAFT')).trim();
   const targetRef = order.poNumber || String(order.id);
 
-  // 1. Fetch approval chain, document signatures, and saved signatures in parallel
-  const [chainRes, rawDocSigs, savedSigs] = await Promise.all([
+  // 1. Fetch approval chain, document signatures, saved signatures, and company profile in parallel
+  const [chainRes, rawDocSigs, savedSigs, companyProfile] = await Promise.all([
     approvalService.getChain('PurchaseOrders', targetRef).catch(() => null),
     signatureService.getDocumentSignatures('PurchaseOrders', targetRef).catch(() => []),
     signatureService.list().catch(() => []),
+    companySettingsService.getCompanyProfile().catch(() => null),
   ]);
+
+  const showBranch = companyProfile?.showBranchOnDocuments !== false;
+  const showApproverBranch = companyProfile?.showApproverBranchOnDocs !== false;
+  const showBranchId = companyProfile?.showBranchIdOnDocuments !== false;
+
+  const rawBranchName = order.branchName || order.branch?.name || null;
+  const rawBranchCode = order.branchCode || order.branch?.code || order.branchId || null;
+  const branchDisplay = showBranch ? formatBranchDisplay(rawBranchName, rawBranchCode, showBranchId) : '';
 
   let docSigs = Array.isArray(rawDocSigs) ? rawDocSigs : [];
   if (docSigs.length === 0 && order.id && order.poNumber) {
@@ -557,6 +568,7 @@ export async function downloadPurchaseOrderAsPdf(
     level: string;
     role: string;
     name: string;
+    branch?: string;
     date: string;
     isApproved: boolean;
     signatureUrl?: string;
@@ -595,10 +607,17 @@ export async function downloadPurchaseOrderAsPdf(
         ? formatDate(lvl.actionDate || lvl.actionAt || lvl.signedAt || lvl.date)
         : formatDate(order.createdAt || order.orderDate);
 
+      const appBranchName = lvl.approverBranchName || lvl.approverBranch?.name || lvl.branchName || lvl.branch?.name;
+      const appBranchCode = lvl.approverBranchCode || lvl.approverBranch?.code || lvl.approverBranchId || lvl.branchCode || lvl.branchId;
+      const appBranchDisplay = (showApproverBranch && (appBranchName || appBranchCode))
+        ? formatBranchDisplay(appBranchName, appBranchCode, showBranchId)
+        : '';
+
       return {
         level: `LEVEL ${lvlNum}`,
         role: formattedRole,
         name: signerName || (lvlNum === 1 ? 'Mahi Agarwal' : 'Nischal Agarwal'),
+        branch: appBranchDisplay,
         date: dateStr,
         isApproved: isLevelApproved,
         signatureUrl: isLevelApproved ? sigUrl : undefined,
@@ -620,11 +639,24 @@ export async function downloadPurchaseOrderAsPdf(
       normalizedDocSigs[1]?.dataUrl ||
       localSigNischal;
 
+    const l1BranchName = explicitApprovers[0]?.branchName || explicitApprovers[0]?.approverBranchName || order.branchName || null;
+    const l1BranchCode = explicitApprovers[0]?.branchCode || explicitApprovers[0]?.approverBranchCode || explicitApprovers[0]?.branchId || order.branchCode || null;
+    const l1BranchDisplay = (showApproverBranch && (l1BranchName || l1BranchCode))
+      ? formatBranchDisplay(l1BranchName, l1BranchCode, showBranchId)
+      : '';
+
+    const l2BranchName = explicitApprovers[1]?.branchName || explicitApprovers[1]?.approverBranchName || order.branchName || null;
+    const l2BranchCode = explicitApprovers[1]?.branchCode || explicitApprovers[1]?.approverBranchCode || explicitApprovers[1]?.branchId || order.branchCode || null;
+    const l2BranchDisplay = (showApproverBranch && (l2BranchName || l2BranchCode))
+      ? formatBranchDisplay(l2BranchName, l2BranchCode, showBranchId)
+      : '';
+
     stamps = [
       {
         level: 'LEVEL 1',
         role: 'Purchase Clerk',
         name: explicitApprovers[0]?.signedByName || explicitApprovers[0]?.approverName || normalizedDocSigs[0]?.signedByName || 'Mahi Agarwal',
+        branch: l1BranchDisplay,
         date: formatDate(explicitApprovers[0]?.date || normalizedDocSigs[0]?.signedAt || order.createdAt || order.orderDate),
         isApproved: isApproved || Boolean(sigMahi),
         signatureUrl: (isApproved || Boolean(sigMahi)) ? sigMahi : undefined,
@@ -633,6 +665,7 @@ export async function downloadPurchaseOrderAsPdf(
         level: 'LEVEL 2',
         role: 'Purchase Manager',
         name: explicitApprovers[1]?.signedByName || explicitApprovers[1]?.approverName || normalizedDocSigs[1]?.signedByName || 'Nischal Agarwal',
+        branch: l2BranchDisplay,
         date: formatDate(explicitApprovers[1]?.date || normalizedDocSigs[1]?.signedAt || order.createdAt || order.orderDate),
         isApproved: isApproved || Boolean(sigNischal),
         signatureUrl: (isApproved || Boolean(sigNischal)) ? (sigNischal || sigMahi) : undefined,
@@ -800,6 +833,7 @@ export async function downloadPurchaseOrderAsPdf(
                       <tbody>
                         <tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Date</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${formatDate(order.orderDate)}</td></tr>
                         <tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Number</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${order.poNumber}</td></tr>
+                        ${branchDisplay ? `<tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">Branch</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${branchDisplay}</td></tr>` : ''}
                         ${order.rfqNumber && order.rfqNumber !== 'RFQ-N/A' ? `<tr><td style="padding: 1px 0 1px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">RFQ Ref</td><td style="padding: 1px 0 1px 6px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${order.rfqNumber}</td></tr>` : ''}
                       </tbody>
                     </table>
@@ -837,8 +871,9 @@ export async function downloadPurchaseOrderAsPdf(
               </div>
 
               <!-- PO Info Grid -->
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+              <div style="display: grid; grid-template-columns: repeat(${branchDisplay ? '4' : '3'}, 1fr); gap: 6px; margin-bottom: 14px; padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
                 <div><span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Requisitioner</span><span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${requisitioner}</span></div>
+                ${branchDisplay ? `<div><span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Originating Branch</span><span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${branchDisplay}</span></div>` : ''}
                 <div><span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Ship Via</span><span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${shipVia}</span></div>
                 <div><span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">FOB</span><span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${fob}</span></div>
                 <div><span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Payment Terms</span><span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${paymentTerms}</span></div>
@@ -914,6 +949,8 @@ export async function downloadPurchaseOrderAsPdf(
                         </span>
                       </div>
                       <div style="font-size: 11px; font-weight: 800; color: #0f172a;">${stamp.role}</div>
+                      ${stamp.name ? `<div style="font-size: 10px; font-weight: 600; color: #334155;">${stamp.name}</div>` : ''}
+                      ${stamp.branch ? `<div style="font-size: 9px; color: #2563eb; font-weight: 600;">Branch: <strong>${stamp.branch}</strong></div>` : ''}
                       <div style="font-size: 9.5px; color: #64748b; margin-bottom: 4px;">Date: <strong>${stamp.date}</strong></div>
                       <div style="background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 4px; padding: 4px; text-align: center; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                         ${stamp.isApproved ? (

@@ -346,13 +346,13 @@ Delivery Terms: <strong>{{delivery_terms}}</strong>.</p>
         rfqNumber: payload.rfqId || 'RFQ-DIRECT',
         effectiveDate: payload.effectiveDate || new Date().toLocaleDateString('en-GB'),
         contractValue: payload.contractValue || 0,
-        currency: payload.currency || 'KES',
+        currency: payload.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
         paymentTerms: payload.paymentTerms || 'Net 30',
         deliveryTerms: payload.deliveryTerms || 'FOB Destination',
       }
     ),
     contractValue: payload.contractValue || 0,
-    currency: payload.currency || 'KES',
+    currency: payload.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
     effectiveDate: payload.effectiveDate,
     expirationDate: payload.expirationDate || null,
     autoRenewal: payload.autoRenewal || false,
@@ -557,7 +557,7 @@ async function mockGetContractBalance(id: string): Promise<ContractBalance> {
   await new Promise(r => setTimeout(r, 300));
   return {
     contractValue: 100000,
-    currency: 'KES',
+    currency: (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
     consumedValue: 50000,
     remainingValue: 50000,
     totalPOs: 1,
@@ -654,7 +654,7 @@ async function mockGenerateFromTemplate(rfqId: string, templateType: string, con
     title: `Contract from ${templateType}`,
     contractType: templateType,
     contractValue: contractValue || 0,
-    currency: currency || 'KES',
+    currency: currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
     effectiveDate: new Date().toISOString().slice(0, 10),
   });
 }

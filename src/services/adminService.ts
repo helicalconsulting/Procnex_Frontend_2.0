@@ -453,7 +453,7 @@ async function mockCreateApprovalLevel(payload: CreateApprovalLevelPayload): Pro
     levelNumber: targetLevelNum,
     requiredRole: payload.requiredRole,
     timeLimitHours: payload.timeLimitHours ?? 24,
-    currency: payload.currency || 'KES',
+    currency: payload.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
     minValue: payload.minValue ?? null,
     maxValue: payload.maxValue ?? null,
   };

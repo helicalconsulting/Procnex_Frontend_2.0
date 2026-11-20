@@ -58,7 +58,14 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
   const [vendorName, setVendorName] = useState(initialVendorName || '');
   const [vendorList, setVendorList] = useState<Array<{ id: string; name: string; email?: string }>>([]);
   const [contractValue, setContractValue] = useState<number | string>(150000);
-  const [currency, setCurrency] = useState(companyDefaultCurrency || 'KES');
+  const [currency, setCurrency] = useState(companyDefaultCurrency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'));
+  const userChangedCurrencyRef = useRef(false);
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (!currency || currency === 'KES')) {
+      setCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10));
   const [expiryDate, setExpiryDate] = useState(new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10));
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
@@ -355,18 +362,16 @@ export const CustomDocumentBuilderModal: React.FC<CustomDocumentBuilderModalProp
                     onChange={(e) => setContractValue(e.target.value)}
                   />
                 </div>
-                <div className="cdbm-field" style={{ width: 90 }}>
+                <div className="cdbm-field" style={{ minWidth: 120 }}>
                   <label className="cdbm-field__label">Currency</label>
-                  <select
-                    className="cdbm-select"
+                  <CurrencySelector
                     value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                  >
-                    <option value="KES">KES</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="INR">INR</option>
-                  </select>
+                    onChange={(c) => {
+                      userChangedCurrencyRef.current = true;
+                      setCurrency(c);
+                    }}
+                    size="sm"
+                  />
                 </div>
               </div>
 

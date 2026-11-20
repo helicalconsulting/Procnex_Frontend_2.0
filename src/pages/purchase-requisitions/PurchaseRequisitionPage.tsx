@@ -16,7 +16,7 @@ import {
   AlertCircle, Download, FileCheck, ShieldAlert, CheckCircle2, PieChart, IndianRupee, Pencil,
   ArrowLeftRight, Globe, Receipt, Check, ChevronDown, Layers,
 } from 'lucide-react';
-import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
+import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan, type Unit } from '../../services/companySettingsService';
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
 import '../../components/vendor/vendor-rfq-workspace.css';
 import { useBranding } from '../../context/BrandingContext';
@@ -109,12 +109,17 @@ function sanitizePrItems(rawItems: any[]): PurchaseRequisitionItem[] {
   });
 }
 
-function formatCurrency(amount: number, currency: string = 'INR'): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
+function formatCurrency(amount: number, currency?: string): string {
+  const safeCurr = currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES');
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: safeCurr,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${safeCurr} ${Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+  }
 }
 
 function getStatusLabel(status: string): string {
@@ -233,6 +238,23 @@ export default function PurchaseRequisitionPage() {
 
   // Payment Terms & Custom Payment Plans state
   const [paymentTermsList, setPaymentTermsList] = useState<PaymentTerm[]>([]);
+  const [unitsList, setUnitsList] = useState<Unit[]>([]);
+
+  const unitOptions = useMemo(() => {
+    if (!unitsList || unitsList.length === 0) {
+      return ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Set'];
+    }
+    const seen = new Set<string>();
+    const options: string[] = [];
+    unitsList.forEach((u) => {
+      const val = u.abbreviation?.trim() || u.name?.trim();
+      if (val && !seen.has(val.toLowerCase())) {
+        seen.add(val.toLowerCase());
+        options.push(val);
+      }
+    });
+    return options.length > 0 ? options : ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Set'];
+  }, [unitsList]);
   const [customPlans, setCustomPlans] = useState<PaymentPlan[]>([]);
   const [selectedPaymentPlanId, setSelectedPaymentPlanId] = useState<string | null>(null);
   const [showCustomPlanModal, setShowCustomPlanModal] = useState(false);
@@ -342,6 +364,14 @@ export default function PurchaseRequisitionPage() {
       .then((plans) => {
         if (plans && Array.isArray(plans)) {
           setCustomPlans(plans);
+        }
+      })
+      .catch(() => {});
+
+    companySettingsService.listUnits()
+      .then((units) => {
+        if (units && Array.isArray(units)) {
+          setUnitsList(units.filter((u) => u.isActive !== false));
         }
       })
       .catch(() => {});
@@ -670,7 +700,7 @@ export default function PurchaseRequisitionPage() {
             return defWh?.phone || '';
           })(),
           poDate: new Date().toISOString().slice(0, 10),
-          currency: contract?.currency || rfqData.currency || 'INR',
+          currency: contract?.currency || rfqData.currency || companyDefaultCurrency || 'KES',
           requisitioner: '',
           shipVia: 'Surface',
           fob: 'Destination',
@@ -2498,7 +2528,12 @@ export default function PurchaseRequisitionPage() {
                     </td>
                     <td className="pr-td--unit">
                       <select value={item.unit} disabled={isFormDisabled} onChange={e => updateItem(idx, 'unit', e.target.value)}>
-                        <option>Pcs</option><option>Kg</option><option>Ltr</option><option>Mtr</option><option>Box</option><option>Set</option>
+                        {unitOptions.map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                        {item.unit && !unitOptions.some(uo => uo.toLowerCase() === item.unit.toLowerCase()) && (
+                          <option value={item.unit}>{item.unit}</option>
+                        )}
                       </select>
                     </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.unitPrice ? 'pr-item__cell--error' : ''}`}>
@@ -2767,7 +2802,7 @@ export default function PurchaseRequisitionPage() {
         docNumber={pr?.poNumber}
         vendorName={pr?.vendorName}
         amount={pr?.grandTotal}
-        currency={pr?.currency || 'INR'}
+        currency={pr?.currency || companyDefaultCurrency || 'KES'}
         mode="approval"
       />
     </div>

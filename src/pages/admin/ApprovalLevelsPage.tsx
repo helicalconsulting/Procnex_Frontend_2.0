@@ -46,6 +46,12 @@ export default function ApprovalLevelsPage() {
   const [deleteError, setDeleteError] = useState('');
   const [form, setForm] = useState({ module: '', role: '', hours: '24', min: '', max: '', currency: companyDefaultCurrency });
   const returnFocus = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !editing && (!form.currency || form.currency === 'KES')) {
+      setForm((prev) => ({ ...prev, currency: companyDefaultCurrency }));
+    }
+  }, [companyDefaultCurrency, editing]);
   const moduleInput = useRef<HTMLSelectElement>(null);
   const roleInput = useRef<HTMLSelectElement>(null);
   const addTrigger = useRef<HTMLButtonElement>(null);

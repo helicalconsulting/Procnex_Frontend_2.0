@@ -99,7 +99,7 @@ async function apiList(params?: { page?: number; limit?: number }): Promise<List
         status: vo.status || 'CONFIRMED',
         createdAt: vo.orderDate || new Date().toISOString(),
         paymentTerms: vo.paymentTerms || (vo as any).payment_terms || 'Net 30',
-        currency: vo.currency || (vo as any).currency || 'KES',
+        currency: vo.currency || (vo as any).currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
         buyerCompany: vo.buyerCompany || (vo as any).companyName || 'Procnex',
         buyerName: vo.buyerName || (vo as any).requisitioner || 'Buyer',
         vendor: {

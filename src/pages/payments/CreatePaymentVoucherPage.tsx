@@ -705,7 +705,7 @@ export default function CreatePaymentVoucherPage() {
                 receivedValue,
                 shortfallValue,
                 status: shortfallQty > 0 ? 'SHORTFALL' : 'MATCHED',
-                remarks: shortfallQty > 0 ? `${shortfallQty} units missing (Value: Ksh ${shortfallValue.toLocaleString()})` : 'Fully delivered & matched',
+                remarks: shortfallQty > 0 ? `${shortfallQty} units missing (Value: ${formatAmount(shortfallValue, inv.currency || companyDefaultCurrency)})` : 'Fully delivered & matched',
               });
             }
 

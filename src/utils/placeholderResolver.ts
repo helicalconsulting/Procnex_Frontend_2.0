@@ -225,7 +225,7 @@ export function resolvePlaceholders(templateText: string, context: ResolverConte
 
   let result = templateText;
 
-  const defaultCurrency = context.currency || 'KES';
+  const defaultCurrency = context.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES');
   const rawValue = context.contractValue;
   const formattedValue =
     typeof rawValue === 'number'

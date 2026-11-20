@@ -72,6 +72,10 @@ export interface PurchaseRequisition {
   deliveryDate: string;
   shippingTerms: string;
   vendorFulfillmentAllowed?: 'DISPATCH_AND_INVOICE' | 'DISPATCH_ONLY' | 'INVOICE_ONLY';
+  branchId?: string;
+  branchCode?: string;
+  branchName?: string;
+  branch?: any;
 
   // Items
   items: PurchaseRequisitionItem[];
@@ -124,7 +128,7 @@ function generateMockPR(rfqId: string): PurchaseRequisition {
     shipToPhone: '+91-120-4567891',
 
     poDate: new Date().toISOString().slice(0, 10),
-    currency: 'INR',
+    currency: (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
     requisitioner: 'Procurement Manager',
     shipVia: 'Surface',
     fob: 'Destination',

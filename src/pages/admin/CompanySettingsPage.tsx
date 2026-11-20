@@ -1761,6 +1761,9 @@ export default function CompanySettingsPage() {
   const [brandingCompanyCountry, setBrandingCompanyCountry] = useState('');
   const [brandingBankName, setBrandingBankName] = useState('');
   const [brandingShowValuesOnVerification, setBrandingShowValuesOnVerification] = useState(true);
+  const [brandingShowBranchOnDocuments, setBrandingShowBranchOnDocuments] = useState(true);
+  const [brandingShowApproverBranchOnDocs, setBrandingShowApproverBranchOnDocs] = useState(true);
+  const [brandingShowBranchIdOnDocuments, setBrandingShowBranchIdOnDocuments] = useState(true);
   const [brandingSenderDisplayName, setBrandingSenderDisplayName] = useState('');
   const [brandingSenderEmail, setBrandingSenderEmail] = useState('');
   const [brandingReplyToEmail, setBrandingReplyToEmail] = useState('');
@@ -1800,6 +1803,9 @@ export default function CompanySettingsPage() {
       setBrandingCompanyCountry(profile.companyCountry || '');
       setBrandingBankName(profile.bankName || '');
       setBrandingShowValuesOnVerification(profile.showValuesOnVerification !== false);
+      setBrandingShowBranchOnDocuments(profile.showBranchOnDocuments !== false);
+      setBrandingShowApproverBranchOnDocs(profile.showApproverBranchOnDocs !== false);
+      setBrandingShowBranchIdOnDocuments(profile.showBranchIdOnDocuments !== false);
       setBrandingSenderDisplayName(profile.senderDisplayName || '');
       setBrandingSenderEmail(profile.senderEmail || '');
       setBrandingReplyToEmail(profile.replyToEmail || '');
@@ -1832,6 +1838,15 @@ export default function CompanySettingsPage() {
       if (brandingShowValuesOnVerification !== (profile?.showValuesOnVerification !== false)) {
         payload.showValuesOnVerification = brandingShowValuesOnVerification;
       }
+      if (brandingShowBranchOnDocuments !== (profile?.showBranchOnDocuments !== false)) {
+        payload.showBranchOnDocuments = brandingShowBranchOnDocuments;
+      }
+      if (brandingShowApproverBranchOnDocs !== (profile?.showApproverBranchOnDocs !== false)) {
+        payload.showApproverBranchOnDocs = brandingShowApproverBranchOnDocs;
+      }
+      if (brandingShowBranchIdOnDocuments !== (profile?.showBranchIdOnDocuments !== false)) {
+        payload.showBranchIdOnDocuments = brandingShowBranchIdOnDocuments;
+      }
 
       if (Object.keys(payload).length === 0) {
         setPageMsg('No changes to save.');
@@ -1853,7 +1868,8 @@ export default function CompanySettingsPage() {
     canCreateSettings, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
     brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, brandingCompanyWebsite,
     brandingCompanyAddress, brandingCompanyCity, brandingCompanyState, brandingCompanyCountry,
-    brandingBankName, brandingShowValuesOnVerification, profile, applyBranding
+    brandingBankName, brandingShowValuesOnVerification, brandingShowBranchOnDocuments,
+    brandingShowApproverBranchOnDocs, brandingShowBranchIdOnDocuments, profile, applyBranding
   ]);
 
   const markBrandingDirty = useCallback(() => {
@@ -4902,6 +4918,111 @@ export default function CompanySettingsPage() {
                   </span>
                 </SettingsField>
 
+                {/* Show Branch on Documents (Yes / No) */}
+                <SettingsField className="company-settings__field cs-branding-field--full" style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                    <Building2 size={16} className="text-blue-600" />
+                    Show Originating Branch on Printed Documents (PO, Invoice, Payment Voucher)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="docShowBranch"
+                        value="yes"
+                        checked={brandingShowBranchOnDocuments === true}
+                        onChange={() => { setBrandingShowBranchOnDocuments(true); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>Yes</strong> — Print the originating branch where the document was created</span>
+                    </label>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="docShowBranch"
+                        value="no"
+                        checked={brandingShowBranchOnDocuments === false}
+                        onChange={() => { setBrandingShowBranchOnDocuments(false); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>No</strong> — Hide branch name on printed documents</span>
+                    </label>
+                  </div>
+                  <span className="cs-field-hint">
+                    Controls whether the originating company branch/office is displayed on official Purchase Orders, Tax Invoices, and Bank Payment Vouchers.
+                  </span>
+                </SettingsField>
+
+                {/* Show Approver Branch on Documents (Yes / No) */}
+                <SettingsField className="company-settings__field cs-branding-field--full" style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                    <Users size={16} className="text-blue-600" />
+                    Show Approvers' Branch in Document Signatures & Stamps
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="docShowApproverBranch"
+                        value="yes"
+                        checked={brandingShowApproverBranchOnDocs === true}
+                        onChange={() => { setBrandingShowApproverBranchOnDocs(true); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>Yes</strong> — Show which branch each approver belongs to in authorization stamps</span>
+                    </label>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="docShowApproverBranch"
+                        value="no"
+                        checked={brandingShowApproverBranchOnDocs === false}
+                        onChange={() => { setBrandingShowApproverBranchOnDocs(false); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>No</strong> — Hide approver branch details in authorization stamps</span>
+                    </label>
+                  </div>
+                  <span className="cs-field-hint">
+                    Displays each approver's assigned branch in the approval hierarchy and signature stamps on official documents.
+                  </span>
+                </SettingsField>
+
+                {/* Show Branch ID / Code on Documents (Yes / No) */}
+                <SettingsField className="company-settings__field cs-branding-field--full" style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                    <Hash size={16} className="text-blue-600" />
+                    Display Branch ID / Code on Documents
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="docShowBranchId"
+                        value="yes"
+                        checked={brandingShowBranchIdOnDocuments === true}
+                        onChange={() => { setBrandingShowBranchIdOnDocuments(true); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>Yes</strong> — Show Branch ID / Code alongside Branch Name (e.g. Nairobi HQ (BR-001))</span>
+                    </label>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <input
+                        type="radio"
+                        name="docShowBranchId"
+                        value="no"
+                        checked={brandingShowBranchIdOnDocuments === false}
+                        onChange={() => { setBrandingShowBranchIdOnDocuments(false); markBrandingDirty(); }}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span><strong>No</strong> — Show Branch Name only without Branch ID</span>
+                    </label>
+                  </div>
+                  <span className="cs-field-hint">
+                    Controls whether system Branch ID / Code (e.g. BR-001) is displayed alongside the Branch Name on printed documents and approver stamps.
+                  </span>
+                </SettingsField>
+
                 {/* Save Button */}
                 {brandingDirty && (
                   <div className="cs-branding-actions">
@@ -4933,6 +5054,9 @@ export default function CompanySettingsPage() {
                           setBrandingCompanyCountry(profile.companyCountry || '');
                           setBrandingBankName(profile.bankName || '');
                           setBrandingShowValuesOnVerification(profile.showValuesOnVerification !== false);
+                          setBrandingShowBranchOnDocuments(profile.showBranchOnDocuments !== false);
+                          setBrandingShowApproverBranchOnDocs(profile.showApproverBranchOnDocs !== false);
+                          setBrandingShowBranchIdOnDocuments(profile.showBranchIdOnDocuments !== false);
                         }
                       }}
                     >
@@ -7471,7 +7595,7 @@ export default function CompanySettingsPage() {
       {activeTab === 'budget-logic' && (
         <BudgetLogicWorkspace
           canManage={canCreateSettings}
-          defaultCurrency={profile?.defaultCurrency || 'KES'}
+          defaultCurrency={profile?.defaultCurrency || ctxDefaultCurrency || 'KES'}
         />
       )}
       </DetailTabPanel>

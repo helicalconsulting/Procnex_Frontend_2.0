@@ -1265,7 +1265,7 @@ export default function RFQDetailModal({
                           <div>
                             <span className="text-muted-foreground block">Min Required Value</span>
                             <strong className="text-sm font-medium text-foreground">
-                              {rfq.bidSecurityMinCurrency || rfq.bidSecurityCurrency || 'KES'} {Number(rfq.bidSecurityMinValue ?? rfq.bidSecurityValue).toLocaleString('en-IN')}
+                              {rfq.bidSecurityMinCurrency || rfq.bidSecurityCurrency || companyDefaultCurrency || 'KES'} {Number(rfq.bidSecurityMinValue ?? rfq.bidSecurityValue).toLocaleString('en-IN')}
                             </strong>
                           </div>
                         )}
@@ -1289,7 +1289,7 @@ export default function RFQDetailModal({
                           <div>
                             <span className="text-muted-foreground block">Min Bond Value</span>
                             <strong className="text-sm font-medium text-foreground">
-                              {rfq.bidBondMinCurrency || 'KES'} {Number(rfq.bidBondMinValue).toLocaleString('en-IN')}
+                              {rfq.bidBondMinCurrency || companyDefaultCurrency || 'KES'} {Number(rfq.bidBondMinValue).toLocaleString('en-IN')}
                             </strong>
                           </div>
                         )}
@@ -1891,7 +1891,7 @@ export default function RFQDetailModal({
                             <div className="rfq-modal__info-item">
                               <span className="rfq-modal__info-label">Min Required Value</span>
                               <span className="rfq-modal__info-value">
-                                {rfq.bidSecurityMinCurrency || rfq.bidSecurityCurrency || 'KES'} {Number(rfq.bidSecurityMinValue ?? rfq.bidSecurityValue).toLocaleString('en-IN')}
+                                {rfq.bidSecurityMinCurrency || rfq.bidSecurityCurrency || companyDefaultCurrency || 'KES'} {Number(rfq.bidSecurityMinValue ?? rfq.bidSecurityValue).toLocaleString('en-IN')}
                               </span>
                             </div>
                           )}
@@ -1915,7 +1915,7 @@ export default function RFQDetailModal({
                             <div className="rfq-modal__info-item">
                               <span className="rfq-modal__info-label">Min Bond Value</span>
                               <span className="rfq-modal__info-value">
-                                {rfq.bidBondMinCurrency || 'KES'} {Number(rfq.bidBondMinValue).toLocaleString('en-IN')}
+                                {rfq.bidBondMinCurrency || companyDefaultCurrency || 'KES'} {Number(rfq.bidBondMinValue).toLocaleString('en-IN')}
                               </span>
                             </div>
                           )}

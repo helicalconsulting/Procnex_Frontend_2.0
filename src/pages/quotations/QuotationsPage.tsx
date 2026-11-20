@@ -123,6 +123,7 @@ interface ListingRenderCtx {
   convertPrice: (amount: number, fromCurrency: string) => { converted: number; original: number };
   activeDisplayCurrency: string;
   displayCurrency: string;
+  companyDefaultCurrency?: string;
   openRfqDetail: (rfqId: number, rfqNumber: string) => void;
   onViewPlan: (plan: { name: string; milestones: Array<{ id: string; title: string; percentage: number }> }) => void;
 }
@@ -186,14 +187,16 @@ const ALL_LISTING_COLUMNS: ListingColumnDef[] = [
   {
     key: 'totalPrice', label: 'Total Price', defaultVisible: true, width: '130px', align: 'right',
     render: (q, ctx) => {
-      const { converted, original } = ctx.convertPrice(q.totalPriceNum, q.currency || DEFAULT_CURRENCY);
-      const isConverted = ctx.displayCurrency && ctx.displayCurrency !== (q.currency || DEFAULT_CURRENCY);
+      const fallbackCurr = ctx.companyDefaultCurrency || DEFAULT_CURRENCY;
+      const baseCur = q.currency || fallbackCurr;
+      const { converted, original } = ctx.convertPrice(q.totalPriceNum, baseCur);
+      const isConverted = ctx.displayCurrency && ctx.displayCurrency !== baseCur;
       return (
         <span className="quot-listing-table__amount" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-          {ctx.formatAmount(converted, ctx.activeDisplayCurrency || q.currency || DEFAULT_CURRENCY)}
+          {ctx.formatAmount(converted, ctx.activeDisplayCurrency || baseCur)}
           {isConverted && (
-            <span className="quot-compare__converted-hint" title={`Original: ${ctx.formatAmount(original, q.currency || DEFAULT_CURRENCY)}`}>
-              ~{ctx.formatAmount(original, q.currency || DEFAULT_CURRENCY)}
+            <span className="quot-compare__converted-hint" title={`Original: ${ctx.formatAmount(original, baseCur)}`}>
+              ~{ctx.formatAmount(original, baseCur)}
             </span>
           )}
         </span>
@@ -649,7 +652,7 @@ function ViewQuotationModal({
     : (fullQuot?.rfq?.items || (q as any).rfq?.items || (fullQuot?.rfq?.lineItems || []));
   const items = Array.isArray(rawItems) ? rawItems : [];
   const attachments = fullQuot?.attachments || q.attachments || [];
-  const defCur = q.currency || DEFAULT_CURRENCY;
+  const defCur = q.currency || companyDefaultCurrency || DEFAULT_CURRENCY;
   // Only convert when user explicitly selected a display currency (not when falling back to company default)
   const isConverting = viewDisplayCurrency !== '' && viewDisplayCurrency !== defCur;
   const displayCur = isConverting ? viewDisplayCurrency : defCur;
@@ -949,7 +952,7 @@ function ViewQuotationModal({
             maxPossible: 45,
             percentage: priceScore,
             weightedScore: (priceScore * 45) / 100,
-            desc: `Quoted Amount: ${fullQuot?.currency || q.currency || 'KES'} ${Number(q.totalPriceNum || q.totalPrice || fullQuot?.totalPrice || 0).toLocaleString()}`,
+            desc: `Quoted Amount: ${fullQuot?.currency || q.currency || companyDefaultCurrency || 'KES'} ${Number(q.totalPriceNum || q.totalPrice || fullQuot?.totalPrice || 0).toLocaleString()}`,
           },
           {
             categoryName: 'Delivery / Lead Time',
@@ -1281,7 +1284,7 @@ function ViewQuotationModal({
                         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                           <span>Type: Bid Bond</span>
                           {(rfq as any).bidSecurityValueType === 'FIXED_AMOUNT' && (rfq as any).bidSecurityValue != null && (
-                            <span>Value: {(rfq as any).bidSecurityCurrency || 'KES'} {Number((rfq as any).bidSecurityValue).toLocaleString('en-IN')}</span>
+                            <span>Value: {(rfq as any).bidSecurityCurrency || companyDefaultCurrency || 'KES'} {Number((rfq as any).bidSecurityValue).toLocaleString('en-IN')}</span>
                           )}
                           {(rfq as any).bidSecurityValueType === 'PERCENTAGE' && (rfq as any).bidSecurityValue != null && (
                             <span>Value: {Number((rfq as any).bidSecurityValue)}% of Bid Value</span>
@@ -1320,7 +1323,7 @@ function ViewQuotationModal({
                               <span><strong>Value:</strong>{' '}
                                 {bidSecurityDoc.bidSecurityValueType === 'PERCENTAGE'
                                   ? `${Number(bidSecurityDoc.bidSecurityValue)}% of Bid Value`
-                                  : `${bidSecurityDoc.bidSecurityCurrency || 'KES'} ${Number(bidSecurityDoc.bidSecurityValue).toLocaleString('en-IN')}`}
+                                  : `${bidSecurityDoc.bidSecurityCurrency || companyDefaultCurrency || 'KES'} ${Number(bidSecurityDoc.bidSecurityValue).toLocaleString('en-IN')}`}
                               </span>
                             )}
                             {bidSecurityDoc.bidSecurityValidityValue != null && (
@@ -1375,7 +1378,7 @@ function ViewQuotationModal({
                               {bidSecurityDoc.bondNumber && <span><strong>Bond #:</strong> {bidSecurityDoc.bondNumber}</span>}
                               {bidSecurityDoc.issuer && <span><strong>Issuer:</strong> {bidSecurityDoc.issuer}</span>}
                               {bidSecurityDoc.bondAmount != null && (
-                                <span><strong>Amount:</strong> {formatAmount(bidSecurityDoc.bondAmount, bidSecurityDoc.bondCurrency || 'KES')}</span>
+                                <span><strong>Amount:</strong> {formatAmount(bidSecurityDoc.bondAmount, bidSecurityDoc.bondCurrency || companyDefaultCurrency || 'KES')}</span>
                               )}
                               {bidSecurityDoc.issueDate && (
                                 <span><strong>Issue Date:</strong> {new Date(bidSecurityDoc.issueDate).toLocaleDateString('en-IN')}</span>
@@ -2170,7 +2173,7 @@ function QuotationAcceptedModalInner({
           <div className="qam-accepted__row">
             <span className="qam-accepted__label">Total Amount</span>
             <span className="qam-accepted__value qam-accepted__value--price">
-              {formatAmount(q.totalPriceNum, q.currency || DEFAULT_CURRENCY)}
+              {formatAmount(q.totalPriceNum, q.currency || companyDefaultCurrency || DEFAULT_CURRENCY)}
             </span>
           </div>
           <div className="qam-accepted__row">
@@ -2361,7 +2364,7 @@ function ActionModalInner({
             {[
               { label: 'Vendor',      value: q.vendorName || '—' },
               { label: 'RFQ',         value: q.rfqNumber || '—' },
-              { label: 'Total Price', value: q.totalPrice, highlight: true, isPrice: true, currency: q.currency || DEFAULT_CURRENCY },
+              { label: 'Total Price', value: q.totalPrice, highlight: true, isPrice: true, currency: q.currency || companyDefaultCurrency || DEFAULT_CURRENCY },
               { label: 'Lead Time',   value: q.leadTimeDays ? `${q.leadTimeDays} days` : '—' },
               { label: 'Payment',     value: q.paymentTerms || '—', isPaymentTerms: true, paymentPlanSnapshot: q.paymentPlanSnapshot },
               { label: 'Submitted',   value: formatDate(q.submittedAt) },
@@ -3667,7 +3670,7 @@ export default function QuotationsPage() {
       const first = sortedQuots[0];
       const rfqTitle = first?.rfqTitle || first?.rfqNumber || rfqNumber;
       const bestPrice = Math.min(...sortedQuots.map(q => q.totalPriceNum));
-      const bestCurrency = sortedQuots.find(q => q.totalPriceNum === bestPrice)?.currency || DEFAULT_CURRENCY;
+      const bestCurrency = sortedQuots.find(q => q.totalPriceNum === bestPrice)?.currency || companyDefaultCurrency || DEFAULT_CURRENCY;
       const latestSubmitted = sortedQuots.reduce((max, q) => q.submittedAt > max ? q.submittedAt : max, sortedQuots[0].submittedAt);
       const isInactive = sortedQuots.some(q => q.status === 'ACCEPTED' || getDisplayStatus(q) === 'ACCEPTED');
 
@@ -3724,6 +3727,7 @@ export default function QuotationsPage() {
     convertPrice,
     activeDisplayCurrency,
     displayCurrency,
+    companyDefaultCurrency,
     __evalSource: evalSource,
     onViewPlan: (plan) => { setViewPlanQuotation(plan); },
     openRfqDetail: (rfqId: number, rfqNumber: string) => {
@@ -4379,10 +4383,11 @@ export default function QuotationsPage() {
       }
       case 'totalPrice': {
         const priceVal = Number(s.totalPriceNum || s.totalPrice || 0);
-        const { converted, original } = convertPrice(priceVal, s.currency || DEFAULT_CURRENCY);
+        const effectiveCur = s.currency || companyDefaultCurrency || DEFAULT_CURRENCY;
+        const { converted, original } = convertPrice(priceVal, effectiveCur);
         const isBest = original === bestValues.price;
-        const isConverted = activeDisplayCurrency && activeDisplayCurrency !== (s.currency || DEFAULT_CURRENCY);
-        const displayCurrencyCode = activeDisplayCurrency || s.currency || DEFAULT_CURRENCY;
+        const isConverted = activeDisplayCurrency && activeDisplayCurrency !== effectiveCur;
+        const displayCurrencyCode = activeDisplayCurrency || effectiveCur;
         return (
           <td key={key} className="text-right">
             <div className="flex flex-col items-end gap-0.5">
@@ -4392,8 +4397,8 @@ export default function QuotationsPage() {
               </div>
               <div className="flex items-center gap-1">
                 {isConverted && (
-                  <span className="text-[11px] text-muted-foreground" title={`Original: ${formatAmount(original, s.currency || DEFAULT_CURRENCY)}`}>
-                    (~{formatAmount(original, s.currency || DEFAULT_CURRENCY)})
+                  <span className="text-[11px] text-muted-foreground" title={`Original: ${formatAmount(original, effectiveCur)}`}>
+                    (~{formatAmount(original, effectiveCur)})
                   </span>
                 )}
                 {isBest && <span className="quot-compare__best-chip"><Crown size={9}/> BEST</span>}

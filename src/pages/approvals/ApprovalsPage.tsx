@@ -254,7 +254,7 @@ export default function ApprovalsPage() {
 
   const getDisplayAmount = useCallback((req: ApprovalRequest) => {
     if (req.amountNum !== undefined && req.amountNum !== null && !isNaN(req.amountNum) && req.amountNum > 0) {
-      const docCurrency = (req.currency && req.currency !== 'KES') ? req.currency : companyDefaultCurrency;
+      const docCurrency = req.currency || companyDefaultCurrency;
       return formatAmount(req.amountNum, docCurrency);
     }
     return req.amount || '—';

@@ -12,6 +12,7 @@ import { printElementInIframe } from '../../utils/pdfDownload';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import DocumentQRCode from '../common/DocumentQRCode';
+import { formatBranchDisplay } from '../purchase-orders/PurchaseOrderDocument';
 import './PrintPurchaseInvoiceModal.css';
 
 function formatDocDate(d?: string | null): string {
@@ -126,6 +127,13 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
   const activeCurrency = (data as any).currency || companyDefaultCurrency;
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
+
+  const rawBranchName = (data as any).branchName || (data as any).branch?.name || (data as any).purchaseOrder?.branch?.name || (data as any).purchaseOrder?.branchName || null;
+  const rawBranchCode = (data as any).branchCode || (data as any).branch?.code || (data as any).branchId || (data as any).purchaseOrder?.branch?.code || (data as any).purchaseOrder?.branchCode || null;
+  const showBranch = profile?.showBranchOnDocuments !== false;
+  const showApproverBranch = profile?.showApproverBranchOnDocs !== false;
+  const showBranchId = profile?.showBranchIdOnDocuments !== false;
+  const branchDisplay = showBranch ? formatBranchDisplay(rawBranchName, rawBranchCode, showBranchId) : '';
   // ── Instant Zero-Delay Approvers & Signatures State ─────────────────────────
   const [approversList, setApproversList] = useState<any[]>(() => {
     if (Array.isArray(data.approvers) && data.approvers.length > 0) {
@@ -514,6 +522,10 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
               level: `Level ${levelNum}`,
               name,
               role: roleName,
+              approverBranchId: item.approverBranchId || item.branchId || (item.approverBranch as any)?.id || null,
+              approverBranchCode: item.approverBranchCode || item.branchCode || (item.approverBranch as any)?.code || null,
+              approverBranchName: item.approverBranchName || item.branchName || (item.approverBranch as any)?.name || null,
+              approverBranch: item.approverBranch || item.branch || null,
               date: (isLevelApproved || isLevelReturned) && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.invoiceDate),
               status: isLevelApproved ? 'APPROVED' : (isLevelReturned ? 'RETURNED' : 'PENDING'),
               signatureUrl: isLevelApproved ? levelSig : undefined,
@@ -814,6 +826,12 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                       <td className="ppi-sheet__meta-label">Payment Terms:</td>
                       <td className="ppi-sheet__meta-val">{resolvedPaymentTerms || data.paymentTerms || 'Net 30'}</td>
                     </tr>
+                    {showBranch && branchDisplay && (
+                      <tr>
+                        <td className="ppi-sheet__meta-label">Branch:</td>
+                        <td className="ppi-sheet__meta-val" style={{ fontWeight: 600 }}>{branchDisplay}</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -821,7 +839,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                 docType="INVOICE"
                 docNumber={data.invoiceNumber}
                 amount={data.amount || 0}
-                currency={activeCurrency || 'INR'}
+                currency={activeCurrency || companyDefaultCurrency}
                 vendorName={data.vendorName}
                 companyCode={profile?.companyCode || (data as any).companyCode}
                 companyName={displayCompanyName}
@@ -845,6 +863,9 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
               <div className="ppi-sheet__party-name">{displayCompanyName}</div>
               <div className="ppi-sheet__party-detail">Address: {companyAddress}</div>
               <div className="ppi-sheet__party-detail">Contact: Accounts Payable / Treasury</div>
+              {showBranch && branchDisplay && (
+                <div className="ppi-sheet__party-detail">Originating Branch: <strong>{branchDisplay}</strong></div>
+              )}
             </div>
           </div>
 
@@ -937,6 +958,10 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                 const isPending = app.status === 'PENDING';
                 const isReturned = app.status === 'RETURNED';
                 const isApproved = app.status === 'APPROVED' || app.status === 'AUTO_FORWARDED';
+                const apprBranchName = app.approverBranchName || app.branchName || app.approverBranch?.name || app.branch?.name || (app.signedBy as any)?.branchName || (app.signedBy as any)?.branch?.name || null;
+                const apprBranchCode = app.approverBranchCode || app.branchCode || app.approverBranch?.code || app.branch?.code || (app.signedBy as any)?.branchCode || (app.signedBy as any)?.branch?.code || app.approverBranchId || null;
+                const approverBranchDisplay = formatBranchDisplay(apprBranchName, apprBranchCode, showBranchId);
+
                 return (
                   <div key={idx} className="ppi-stamp-card">
                     {/* Level & Status */}
@@ -965,6 +990,16 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                     {/* Role & Date */}
                     <div className="ppi-stamp-card__details">
                       <div className="ppi-stamp-role">{app.role}</div>
+                      {app.name && app.name !== app.role && (
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#1e293b' }}>
+                          {app.name}
+                        </div>
+                      )}
+                      {showApproverBranch && approverBranchDisplay && (
+                        <div className="ppi-stamp-branch" style={{ fontSize: '10.5px', color: '#475569', marginTop: '2px' }}>
+                          Branch: <strong style={{ color: '#0f172a' }}>{approverBranchDisplay}</strong>
+                        </div>
+                      )}
                       <div className="ppi-stamp-date">Date: <strong>{app.date}</strong></div>
                     </div>
 

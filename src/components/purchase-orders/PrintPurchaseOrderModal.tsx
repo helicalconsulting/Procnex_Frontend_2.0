@@ -611,6 +611,10 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
               signedByName: name,
               requiredRole: roleName,
               role: roleName,
+              approverBranchId: item.approverBranchId || item.branchId || (item.approverBranch as any)?.id || null,
+              approverBranchCode: item.approverBranchCode || item.branchCode || (item.approverBranch as any)?.code || null,
+              approverBranchName: item.approverBranchName || item.branchName || (item.approverBranch as any)?.name || null,
+              approverBranch: item.approverBranch || item.branch || null,
               actionDate: (isLevelApproved || item.status === 'RETURNED') && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : (isLevelApproved ? fmtDate(data.submittedAt) : undefined),
               date: (isLevelApproved || item.status === 'RETURNED') && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.submittedAt),
               status: isLevelApproved ? 'APPROVED' : (item.status === 'RETURNED' ? 'RETURNED' : 'PENDING'),
@@ -641,6 +645,10 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
                 signedByName: d.signedByName || `Level ${i + 1} Approver`,
                 role: d.role || d.requiredRole || `Level ${i + 1} Approver`,
                 requiredRole: d.role || d.requiredRole || `Level ${i + 1} Approver`,
+                approverBranchId: d.approverBranchId || d.branchId || d.signedBy?.branchId || null,
+                approverBranchCode: d.approverBranchCode || d.branchCode || d.signedBy?.branchCode || null,
+                approverBranchName: d.approverBranchName || d.branchName || d.signedBy?.branch?.name || null,
+                approverBranch: d.approverBranch || d.branch || d.signedBy?.branch || null,
                 date: fmtDate(d.signedAt || data.submittedAt),
                 actionDate: isApproved ? fmtDate(d.signedAt || data.submittedAt) : undefined,
                 status: isApproved ? 'APPROVED' : 'PENDING',
@@ -791,7 +799,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     }
   ];
 
-  const finalCurrency = (data as any).currency || fullPO?.currency || (typeof data.amount === 'string' && data.amount.includes('KES') ? 'KES' : typeof data.amount === 'string' && (data.amount.includes('Ksh') || data.amount.includes('KSH')) ? 'KES' : companyDefaultCurrency || 'INR');
+  const finalCurrency = (data as any).currency || fullPO?.currency || (typeof data.amount === 'string' && data.amount.includes('KES') ? 'KES' : typeof data.amount === 'string' && (data.amount.includes('Ksh') || data.amount.includes('KSH')) ? 'KES' : companyDefaultCurrency || 'KES');
 
   const preparedPR: PurchaseRequisition = {
     id: String(data.id || fullPO?.id || ''),
@@ -841,6 +849,10 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     quotationNumber: (data as any).quotationNumber || fullPO?.quotationNumber || (data as any).sourceReferences?.supplierQuotationNo,
     requisitionNumber: (data as any).requisitionNumber || fullPO?.requisitionNumber || (data as any).sourceReferences?.prNo,
     paymentPlanSnapshot: (data as any).paymentPlanSnapshot || fullPO?.paymentPlanSnapshot,
+    branchId: (data as any).branchId || fullPO?.branchId || (data as any).branch?.id || fullPO?.branch?.id,
+    branchCode: (data as any).branchCode || fullPO?.branchCode || (data as any).branch?.code || fullPO?.branch?.code,
+    branchName: (data as any).branchName || fullPO?.branchName || (data as any).branch?.name || fullPO?.branch?.name,
+    branch: (data as any).branch || fullPO?.branch,
   };
 
   return (

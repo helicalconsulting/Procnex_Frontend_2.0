@@ -6,7 +6,7 @@ import {
   CheckCircle2, AlertCircle, Clock, Search, X, Pencil, Eye, RotateCcw,
   ArrowLeftRight, Globe, Wallet, Receipt, Check, ChevronDown, Layers, Calculator
 } from 'lucide-react';
-import { purchaseOrderService } from '../../services/purchaseOrderService';
+import { itemMasterService, type ItemMaster } from '../../services/itemMasterService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { contractService } from '../../services/contractService';
 import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
@@ -376,8 +376,15 @@ export default function CreatePurchaseOrderPage() {
 
   // Items Grid
   const [items, setItems] = useState<POItem[]>([
-    { id: '1', itemCode: 'ITEM-001', itemName: '', description: '', quantity: 1, unit: 'pcs', unitPrice: 0, taxPercent: 0 },
+    { id: '1', itemCode: '', itemName: '', description: '', quantity: 1, unit: 'pcs', unitPrice: 0, taxPercent: 0 },
   ]);
+  const [inventoryItems, setInventoryItems] = useState<ItemMaster[]>([]);
+
+  useEffect(() => {
+    itemMasterService.list({ limit: 1000 }).then((res) => {
+      setInventoryItems(res.items || []);
+    }).catch(() => {});
+  }, []);
 
   // ── Prefill from Requisition Consolidation Workbench ──
   useEffect(() => {
@@ -1036,7 +1043,26 @@ export default function CreatePurchaseOrderPage() {
 
   const handleItemChange = (id: string, field: keyof POItem, value: any) => {
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: value } : i))
+      prev.map((i) => {
+        if (i.id !== id) return i;
+        const updated = { ...i, [field]: value };
+        if (field === 'itemCode' && value.trim()) {
+          const matched = inventoryItems.find((itm) => itm.itemCode === value.trim());
+          if (matched) {
+            updated.itemName = matched.itemName;
+            updated.description = matched.description || '';
+            if (matched.standardPrice !== undefined) updated.unitPrice = matched.standardPrice;
+          }
+        } else if (field === 'itemName' && value.trim()) {
+          const matched = inventoryItems.find((itm) => itm.itemName === value.trim());
+          if (matched) {
+            updated.itemCode = matched.itemCode;
+            updated.description = matched.description || '';
+            if (matched.standardPrice !== undefined) updated.unitPrice = matched.standardPrice;
+          }
+        }
+        return updated;
+      })
     );
   };
 
@@ -1441,7 +1467,7 @@ export default function CreatePurchaseOrderPage() {
                   <option value="">-- No Budget Line Assigned (Unallocated) --</option>
                   {budgetLines.map((line) => (
                     <option key={line.id} value={line.id}>
-                      [{line.budgetCode || 'BUDGET'}] {line.lineCode}: {line.lineName} — Available: {Number(line.availableAmount || 0).toLocaleString()} {line.budgetCurrency || 'KES'}
+                      [{line.budgetCode || 'BUDGET'}] {line.lineCode}: {line.lineName} — Available: {Number(line.availableAmount || 0).toLocaleString()} {line.budgetCurrency || companyDefaultCurrency || 'KES'}
                       {line.costCenterName ? ` (${line.costCenterName})` : ''}
                     </option>
                   ))}
@@ -2212,25 +2238,38 @@ export default function CreatePurchaseOrderPage() {
                     <tr key={item.id}>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
                       <td>
-                        <input
-                          type="text"
-                          className="cpo-table__input"
-                          value={item.itemCode}
-                          disabled={isReadOnly}
-                          onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                        />
+                          <input
+                            type="text"
+                            className="cpo-table__input"
+                            list="inventory-codes-list"
+                            placeholder="Item Code"
+                            value={item.itemCode}
+                            disabled={isReadOnly}
+                            onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
+                          />
+                        <datalist id="inventory-codes-list">
+                          {inventoryItems.map((itm) => (
+                            <option key={itm.id} value={itm.itemCode}>{itm.itemName}</option>
+                          ))}
+                        </datalist>
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <input
                             type="text"
                             className="cpo-table__input"
+                            list="inventory-names-list"
                             placeholder="Item Name *"
                             value={item.itemName}
                             disabled={isReadOnly}
                             onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
                             style={{ fontWeight: 600 }}
                           />
+                          <datalist id="inventory-names-list">
+                            {inventoryItems.map((itm) => (
+                              <option key={itm.id} value={itm.itemName}>{itm.itemCode}</option>
+                            ))}
+                          </datalist>
                           <input
                             type="text"
                             className="cpo-table__input cpo-table__input--sub"

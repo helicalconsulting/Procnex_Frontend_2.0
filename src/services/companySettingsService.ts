@@ -354,6 +354,9 @@ export interface CompanyProfile {
   domainDnsRecords?: DnsRecord[] | null;
   domainVerifiedAt?: string | null;
   showValuesOnVerification?: boolean;
+  showBranchOnDocuments?: boolean;
+  showApproverBranchOnDocs?: boolean;
+  showBranchIdOnDocuments?: boolean;
 }
 
 export interface DnsRecord {
@@ -1621,6 +1624,9 @@ async function listItemClasses(includeInactive = false, companyCode?: string): P
     }
     const raw = typeof window !== 'undefined' ? localStorage.getItem(ITEM_CLASSES_STORAGE_KEY) : null;
     let list: ItemClass[] = raw ? JSON.parse(raw) : [];
+    if (!list || list.length === 0) {
+      list = DEFAULT_ITEM_CLASSES;
+    }
     if (!includeInactive) list = list.filter((c) => c.isActive !== false);
     return list;
   }

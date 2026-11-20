@@ -30,7 +30,7 @@ interface SRMSpendAnalyticsProps {
 
 export const SRMSpendAnalyticsCard: React.FC<SRMSpendAnalyticsProps> = ({
   analytics,
-  currency = 'KES',
+  currency = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
 }) => {
   if (!analytics) return null;
 

@@ -453,6 +453,15 @@ export default function VendorRFQsPage() {
   const [bidBondValidityValue, setBidBondValidityValue] = useState('');
   const [bidBondValidityUnit, setBidBondValidityUnit] = useState<'DAYS' | ''>('DAYS');
 
+  const userChangedBidSecCurrRef = useRef(false);
+  const userChangedBidBondCurrRef = useRef(false);
+  useEffect(() => {
+    if (companyDefaultCurrency) {
+      if (!userChangedBidSecCurrRef.current) setBidSecCurrency(companyDefaultCurrency);
+      if (!userChangedBidBondCurrRef.current) setBidBondCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
+
   // ── SSE real-time reload: when vendor notification arrives, refresh data ──
   useEffect(() => {
     const handleNotification = (data: unknown) => {
@@ -860,7 +869,7 @@ export default function VendorRFQsPage() {
         return;
       }
       if (bidSecValueType === 'FIXED_AMOUNT' && quotModal.bidSecurityMinValue != null && secVal < quotModal.bidSecurityMinValue) {
-        setSubmitError(`Bid Security Value must be at least ${quotModal.bidSecurityMinValue} ${quotModal.bidSecurityCurrency || 'KES'}.`);
+        setSubmitError(`Bid Security Value must be at least ${quotModal.bidSecurityMinValue} ${quotModal.bidSecurityCurrency || companyDefaultCurrency || 'KES'}.`);
         return;
       }
       if (!bidSecIssueDate) {
@@ -902,7 +911,7 @@ export default function VendorRFQsPage() {
         return;
       }
       if (quotModal.bidBondMinValue != null && bondAmt < quotModal.bidBondMinValue) {
-        setSubmitError(`Bid Bond Amount must be at least ${quotModal.bidBondMinValue} ${quotModal.bidBondMinCurrency || quotModal.bidBondCurrency || quotModal.bidSecurityCurrency || 'KES'}.`);
+        setSubmitError(`Bid Bond Amount must be at least ${quotModal.bidBondMinValue} ${quotModal.bidBondMinCurrency || quotModal.bidBondCurrency || quotModal.bidSecurityCurrency || companyDefaultCurrency || 'KES'}.`);
         return;
       }
       if (!bidBondIssueDate) {
@@ -1507,7 +1516,7 @@ export default function VendorRFQsPage() {
                             <span style={{ fontWeight: 600, marginRight: 4 }}>ℹ Buyer Requirement:</span>
                             {(quotModal.bidSecurityValue != null || quotModal.bidSecurityMinValue != null) && (
                               <span>
-                                Min. Value: <strong>{quotModal.bidSecurityValue ?? quotModal.bidSecurityMinValue}{quotModal.bidSecurityValueType === 'PERCENTAGE' ? '%' : ` ${quotModal.bidSecurityCurrency || 'KES'}`}</strong>
+                                Min. Value: <strong>{quotModal.bidSecurityValue ?? quotModal.bidSecurityMinValue}{quotModal.bidSecurityValueType === 'PERCENTAGE' ? '%' : ` ${quotModal.bidSecurityCurrency || companyDefaultCurrency || 'KES'}`}</strong>
                               </span>
                             )}
                             {(quotModal.bidSecurityValidityValue != null || quotModal.bidSecurityMinValidity != null) && (
@@ -1793,7 +1802,7 @@ export default function VendorRFQsPage() {
                             <span style={{ fontWeight: 600, marginRight: 4 }}>ℹ Buyer Requirement:</span>
                             {quotModal.bidBondMinValue != null && (
                               <span>
-                                Min. Amount: <strong>{quotModal.bidBondMinValue} {quotModal.bidBondMinCurrency || quotModal.bidBondCurrency || quotModal.bidSecurityCurrency || 'KES'}</strong>
+                                Min. Amount: <strong>{quotModal.bidBondMinValue} {quotModal.bidBondMinCurrency || quotModal.bidBondCurrency || quotModal.bidSecurityCurrency || companyDefaultCurrency || 'KES'}</strong>
                               </span>
                             )}
                             {quotModal.bidBondMinValidity != null && (

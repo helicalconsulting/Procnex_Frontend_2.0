@@ -57,8 +57,8 @@ export function MessageStrip({
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Default duration extended to 12 seconds minimum if autoHideMs is provided
-  const effectiveAutoHideMs = autoHideMs ? Math.max(autoHideMs, 12000) : undefined;
+  // Default duration extended to 5 seconds if autoHideMs is provided
+  const effectiveAutoHideMs = autoHideMs ? Math.max(autoHideMs, 5000) : undefined;
 
   const startTimer = useCallback((durationMs: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);

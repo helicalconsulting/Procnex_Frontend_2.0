@@ -240,7 +240,7 @@
   max-height: 280px;
   overflow-y: auto;
   padding: 6px;
-  overscroll-behavior: contain;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
 }
 

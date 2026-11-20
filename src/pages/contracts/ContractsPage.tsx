@@ -473,7 +473,7 @@ export default function ContractsPage() {
             <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
               <tr><td style="font-weight: 700; width: 180px; padding: 8px; border: 1px solid #ddd;">Contract Number</td><td style="padding: 8px; border: 1px solid #ddd;">${r.contractNumber}</td></tr>
               <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Supplier</td><td style="padding: 8px; border: 1px solid #ddd;">${r.vendorName}</td></tr>
-              <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Contract Value</td><td style="padding: 8px; border: 1px solid #ddd;">${r.currency} ${r.contractValue.toLocaleString('en-IN')}</td></tr>
+              <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Contract Value</td><td style="padding: 8px; border: 1px solid #ddd;">${formatAmount(r.contractValue, r.currency || displayCurrency)}</td></tr>
               <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Type</td><td style="padding: 8px; border: 1px solid #ddd;">${r.contractType}</td></tr>
               <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Status</td><td style="padding: 8px; border: 1px solid #ddd;">${r.status}</td></tr>
               <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Owner</td><td style="padding: 8px; border: 1px solid #ddd;">${r.contractOwner}</td></tr>

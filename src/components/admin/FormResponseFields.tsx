@@ -44,7 +44,7 @@ export function FormResponseFields({ fields, responseData = {} }: { fields: Form
       return <span className="italic text-muted-foreground">Not answered</span>;
     }
     if (field.type === 'currency') {
-      const currency = answers[`${field.id}_currency`] || field.currency || 'KES';
+      const currency = answers[`${field.id}_currency`] || field.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES');
       const amount = typeof value === 'number' || typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
       return <span className="font-semibold">{String(currency)} {Number.isFinite(amount) ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : answerText(value)}</span>;
     }

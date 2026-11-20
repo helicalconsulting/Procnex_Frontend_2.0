@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { contractService } from '../../services/contractService';
+import { useCurrency } from '../shared/CurrencyMaster';
 import { MessageStrip } from '../shared/MessageStrip';
 import {
   ShoppingCart, FileText, X, Clock, DollarSign, Building2,
@@ -94,8 +95,9 @@ export default function PostAwardModal({
     }
   };
 
-  const formatCurrency = (value: number, _curr: string) => {
-    return `$${value.toLocaleString('en-US')}`;
+  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const formatCurrency = (value: number, curr?: string) => {
+    return formatAmount(value, curr || currency || companyDefaultCurrency);
   };
 
   return (

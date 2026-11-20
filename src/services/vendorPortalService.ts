@@ -587,7 +587,7 @@ async function apiRecordPayment(payload: RecordVendorPaymentPayload): Promise<Ve
     invoiceId: payload.invoiceId || null,
     invoiceNumber: payload.invoiceNumber || '—',
     amount: payload.amount,
-    currency: payload.currency || 'KES',
+    currency: payload.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
     method: payload.method || 'NEFT',
     status: payload.status || 'RECEIVED',
     paymentDate: payload.paymentDate || new Date().toISOString(),

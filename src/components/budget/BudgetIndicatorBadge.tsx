@@ -15,7 +15,7 @@ interface BudgetIndicatorBadgeProps {
 export const BudgetIndicatorBadge: React.FC<BudgetIndicatorBadgeProps> = ({
   lineCode,
   availableAmount,
-  currency = 'KES',
+  currency = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
   requestedAmount = 0,
 }) => {
   if (availableAmount === undefined) return null;

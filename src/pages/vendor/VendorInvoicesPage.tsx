@@ -1,5 +1,5 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, FileText, Plus, Receipt, Search, Truck, XCircle, Printer, Eye } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
@@ -29,6 +29,13 @@ export default function VendorInvoicesPage() {
 
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
+  const userChangedCurrencyRef = useRef(false);
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current) {
+      setDisplayCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
   const [selectedDispatchForPrint, setSelectedDispatchForPrint] = useState<DispatchNote | null>(null);
   const [selectedInvoiceForPrint, setSelectedInvoiceForPrint] = useState<any | null>(null);
   const { data: invoices, loading: invLoading, error: invError, forceRefresh: forceRefreshInvoices } = useServiceData(
@@ -226,7 +233,14 @@ export default function VendorInvoicesPage() {
         actions={
           <div className="flex items-center gap-2">
             {activeTab === 'invoices' && (
-              <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
+              <CurrencySelector
+                value={displayCurrency}
+                onChange={(c) => {
+                  userChangedCurrencyRef.current = true;
+                  setDisplayCurrency(c);
+                }}
+                size="sm"
+              />
             )}
             <Button
               variant="outline"

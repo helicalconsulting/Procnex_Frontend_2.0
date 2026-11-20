@@ -37,7 +37,7 @@ interface BudgetLedgerTableProps {
 
 export const BudgetLedgerTable: React.FC<BudgetLedgerTableProps> = ({
   items,
-  currency = 'KES',
+  currency = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
   isLoading = false,
   onRefresh,
 }) => {

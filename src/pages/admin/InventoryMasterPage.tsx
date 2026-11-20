@@ -45,8 +45,10 @@ import { TablePagination, getPaginationPages } from '../../components/shared/Tab
 import { sseClient } from '../../services/sseClient';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
+import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { isAdmin } from '../../utils/rbac';
-import { companySettingsService, type ItemClass } from '../../services/companySettingsService';
+import { companySettingsService, type ItemClass, type Unit, DEFAULT_ITEM_CLASSES } from '../../services/companySettingsService';
+import { vendorService } from '../../services/vendorService';
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import ColumnCustomizer, { type ColDescriptor } from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
@@ -59,7 +61,7 @@ interface InventoryColumnDef extends ColDescriptor {
 const INVENTORY_COLUMNS: InventoryColumnDef[] = [
   { key: 'itemCode', label: 'Item Code', required: true, defaultVisible: true },
   { key: 'itemName', label: 'Item Name', required: true, defaultVisible: true },
-  { key: 'productClass', label: 'Product Class', defaultVisible: true },
+  { key: 'productClass', label: 'Item Class', defaultVisible: true },
   { key: 'uom', label: 'UoM', defaultVisible: false },
   { key: 'tax', label: 'Tax', defaultVisible: false },
   { key: 'availableForPr', label: 'PR', defaultVisible: true },
@@ -96,6 +98,8 @@ const CURRENCIES = ['AED', 'USD', 'EUR', 'INR', 'KES', 'SAR', 'GBP'];
 
 export const InventoryMasterPage: React.FC = () => {
   const { hasPermission, roles } = useAuth();
+  const { companyDefaultCurrency, formatAmount } = useCurrency();
+  const availableCurrencies = useMemo(() => Array.from(new Set([companyDefaultCurrency, ...CURRENCIES])).filter(Boolean), [companyDefaultCurrency]);
   const isUserAdmin = isAdmin(roles);
   const canCreateItem = isUserAdmin || hasPermission('Inventory & Item Master', 'canCreate');
   const canApproveItem = isUserAdmin || hasPermission('Inventory & Item Master', 'canApprove');
@@ -103,6 +107,8 @@ export const InventoryMasterPage: React.FC = () => {
   // State
   const [items, setItems] = useState<ItemMaster[]>([]);
   const [companyItemClasses, setCompanyItemClasses] = useState<ItemClass[]>([]);
+  const [companyUnits, setCompanyUnits] = useState<Unit[]>([]);
+  const [vendorsList, setVendorsList] = useState<{ id: string; name: string }[]>([]);
   const [stats, setStats] = useState<ItemMasterStats>(DEFAULT_STATS);
   const [loading, setLoading] = useState<boolean>(true);
   const [exporting, setExporting] = useState<boolean>(false);
@@ -181,7 +187,7 @@ export const InventoryMasterPage: React.FC = () => {
     } catch {}
   }, [defaultOrder, defaultVisible]);
 
-  // Load Item Classes from Company Settings
+  // Load Item Classes & Units from Company Settings
   useEffect(() => {
     let isMounted = true;
     const loadItemClasses = () => {
@@ -195,16 +201,51 @@ export const InventoryMasterPage: React.FC = () => {
         .catch(() => {});
     };
 
+    const loadUnits = () => {
+      companySettingsService
+        .listUnits()
+        .then((units) => {
+          if (isMounted && Array.isArray(units)) {
+            setCompanyUnits(units.filter((u) => u && u.isActive !== false));
+          }
+        })
+        .catch(() => {});
+    };
+
+    const loadVendors = () => {
+      vendorService
+        .list()
+        .then((res) => {
+          if (isMounted && Array.isArray(res)) {
+            const list = res
+              .map((v: any) => ({
+                id: String(v.id || v._id || ''),
+                name: String(v.name || v.companyName || '').trim(),
+              }))
+              .filter((v) => v.name.length > 0);
+            setVendorsList(list);
+          }
+        })
+        .catch(() => {});
+    };
+
     loadItemClasses();
+    loadUnits();
+    loadVendors();
 
     const handleClassesChange = () => {
       loadItemClasses();
     };
+    const handleUnitsChange = () => {
+      loadUnits();
+    };
 
     window.addEventListener('itemClassesChanged', handleClassesChange);
+    window.addEventListener('unitsChanged', handleUnitsChange);
     return () => {
       isMounted = false;
       window.removeEventListener('itemClassesChanged', handleClassesChange);
+      window.removeEventListener('unitsChanged', handleUnitsChange);
     };
   }, []);
 
@@ -238,6 +279,7 @@ export const InventoryMasterPage: React.FC = () => {
   const [saving, setSaving] = useState<boolean>(false);
 
   // Form State
+  const userChangedCurrencyRef = useRef(false);
   const [formData, setFormData] = useState<CreateItemMasterPayload>({
     itemCode: '',
     itemName: '',
@@ -253,7 +295,7 @@ export const InventoryMasterPage: React.FC = () => {
     availableForRfq: true,
     preferredSupplierName: '',
     standardPrice: 0,
-    currency: 'AED',
+    currency: (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
     status: 'ACTIVE',
     brand: '',
     partNumber: '',
@@ -262,6 +304,12 @@ export const InventoryMasterPage: React.FC = () => {
     minStock: 0,
     warehouseName: '',
   });
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (!formData.currency || formData.currency === 'AED')) {
+      setFormData((prev) => ({ ...prev, currency: companyDefaultCurrency }));
+    }
+  }, [companyDefaultCurrency]);
 
   // Load Data
   const fetchData = useCallback(async (showLoadingSpinner: boolean = true) => {
@@ -359,19 +407,76 @@ export const InventoryMasterPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [feedback]);
 
-  // Distinct Product Classes for filter dropdown & modal selection (from Company Settings + current items)
-  const productClasses = useMemo(() => {
+  // Distinct Item Classes for filter dropdown & modal selection (from Company Settings + current items)
+  const itemClasses = useMemo(() => {
     const set = new Set<string>();
-    // 1. Add active item classes from Company Settings
-    companyItemClasses.forEach((ic) => {
+    // 1. Add active item classes from Company Settings (or defaults)
+    const sourceClasses = companyItemClasses.length > 0 ? companyItemClasses : DEFAULT_ITEM_CLASSES;
+    sourceClasses.forEach((ic) => {
       if (ic.name?.trim()) set.add(ic.name.trim());
     });
-    // 2. Also preserve any existing productClass from loaded catalog items
+    // 2. Also preserve any existing productClass/itemClass from loaded catalog items
     items.forEach((it) => {
       if (it.productClass?.trim()) set.add(it.productClass.trim());
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [companyItemClasses, items]);
+  const productClasses = itemClasses;
+
+  // Distinct Unit Options derived from Company Settings (with fallback)
+  const unitOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { value: string; label: string }[] = [];
+
+    // 1. Units from Company Settings
+    companyUnits.forEach((u) => {
+      const name = u.name?.trim();
+      if (!name) return;
+      const abbr = u.abbreviation?.trim();
+      const val = abbr || name;
+      const label = abbr && abbr.toLowerCase() !== name.toLowerCase()
+        ? `${name} (${abbr})`
+        : name;
+
+      if (!seen.has(val.toLowerCase())) {
+        seen.add(val.toLowerCase());
+        options.push({ value: val, label });
+      }
+    });
+
+    // 2. Fallbacks if no units yet configured
+    if (options.length === 0) {
+      const defaults = [
+        { value: 'EA', label: 'EA (Each)' },
+        { value: 'Pcs', label: 'Pieces (Pcs)' },
+        { value: 'BOX', label: 'BOX' },
+        { value: 'KG', label: 'KG' },
+        { value: 'LTR', label: 'LTR' },
+        { value: 'MTR', label: 'MTR' },
+        { value: 'SET', label: 'SET' },
+        { value: 'MONTH', label: 'MONTH' },
+        { value: 'YEAR', label: 'YEAR' },
+      ];
+      defaults.forEach((d) => options.push(d));
+    }
+
+    return options;
+  }, [companyUnits]);
+
+  // Distinct Vendor / Preferred Supplier Options
+  const vendorOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    vendorsList.forEach((v) => {
+      if (v.name) map.set(v.name, v.id);
+    });
+    // Also include any preferred suppliers that exist in current catalog items
+    items.forEach((it) => {
+      if (it.preferredSupplierName?.trim() && !map.has(it.preferredSupplierName.trim())) {
+        map.set(it.preferredSupplierName.trim(), it.preferredSupplierId || '');
+      }
+    });
+    return Array.from(map.entries()).map(([name, id]) => ({ id, name }));
+  }, [vendorsList, items]);
 
   // Reset Filters
   const handleClearFilters = () => {
@@ -425,7 +530,7 @@ export const InventoryMasterPage: React.FC = () => {
       itemType: 'Non-stock / consumable',
       productClass: '',
       categoryHierarchy: '',
-      uom: 'EA',
+      uom: unitOptions[0]?.value || 'EA',
       taxRate: 5.0,
       taxTreatment: 'Taxable 5%',
       isTaxExempt: false,
@@ -433,7 +538,7 @@ export const InventoryMasterPage: React.FC = () => {
       availableForRfq: true,
       preferredSupplierName: '',
       standardPrice: 0,
-      currency: 'AED',
+      currency: companyDefaultCurrency || 'KES',
       status: canApproveItem ? 'ACTIVE' : 'PENDING_APPROVAL',
       brand: '',
       partNumber: '',
@@ -499,6 +604,24 @@ export const InventoryMasterPage: React.FC = () => {
     } catch {}
   };
 
+  const handleAvailableForPrChange = (checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      availableForPr: checked,
+      // If item is available for PR, it must also be available for RFQ automatically
+      ...(checked ? { availableForRfq: true } : {}),
+    }));
+  };
+
+  const handleAvailableForRfqChange = (checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      availableForRfq: checked,
+      // If item is specifically marked available for RFQ only, it is not available for PR
+      ...(checked ? { availableForPr: prev.availableForPr ? prev.availableForPr : false } : { availableForPr: false }),
+    }));
+  };
+
   // Save Item
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -527,19 +650,29 @@ export const InventoryMasterPage: React.FC = () => {
     }
   };
 
+
   // Delete Single Item
-  const handleDeleteItem = async (item: ItemMaster) => {
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<ItemMaster | null>(null);
+
+  const handleDeleteItem = (item: ItemMaster) => {
     if (!canCreateItem) return;
-    if (!window.confirm(`Are you sure you want to delete item "${item.itemCode} - ${item.itemName}"?`)) {
-      return;
-    }
+    setItemToDelete(item);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
     try {
-      await itemMasterService.delete(item.id);
-      setFeedback({ type: 'success', text: `Item ${item.itemCode} deleted` });
+      await itemMasterService.delete(itemToDelete.id);
+      setFeedback({ type: 'success', text: `Item ${itemToDelete.itemCode} deleted` });
       notifyLocalSync('delete');
       fetchData(false);
     } catch (err: any) {
       setFeedback({ type: 'error', text: err?.message || 'Failed to delete item' });
+    } finally {
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
     }
   };
 
@@ -576,13 +709,8 @@ export const InventoryMasterPage: React.FC = () => {
   };
 
   // Format currency
-  const formatPrice = (price: number, currency: string) => {
-    return (
-      new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(price || 0) + ` ${currency}`
-    );
+  const formatPrice = (price: number, currency?: string) => {
+    return formatAmount(price, currency || companyDefaultCurrency);
   };
 
   const hasActiveFilters = Boolean(
@@ -742,41 +870,10 @@ export const InventoryMasterPage: React.FC = () => {
               setPage(1);
             }}
           >
-            <option value="ALL">Product class (All)</option>
-            {productClasses.map((cls) => (
+            <option value="ALL">Item class (All)</option>
+            {itemClasses.map((cls) => (
               <option key={cls} value={cls}>
                 {cls}
-              </option>
-            ))}
-          </Select>
-
-          <Select
-            className="h-10 min-w-[130px] text-xs sm:text-sm bg-background w-auto"
-            value={selectedStatus}
-            onChange={(e) => {
-              setSelectedStatus(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="ALL">Status (All)</option>
-            <option value="ACTIVE">Active</option>
-            <option value="PENDING_APPROVAL">Pending approval</option>
-            <option value="INACTIVE">Inactive</option>
-            <option value="ARCHIVED">Archived</option>
-          </Select>
-
-          <Select
-            className="h-10 min-w-[140px] text-xs sm:text-sm bg-background w-auto"
-            value={selectedTax}
-            onChange={(e) => {
-              setSelectedTax(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="ALL">Tax treatment (All)</option>
-            {TAX_TREATMENTS.map((tax) => (
-              <option key={tax} value={tax}>
-                {tax}
               </option>
             ))}
           </Select>
@@ -905,7 +1002,7 @@ export const InventoryMasterPage: React.FC = () => {
                         );
                       }
                       if (colKey === 'itemName') return <th key="itemName" className="px-4 py-3">Item name</th>;
-                      if (colKey === 'productClass') return <th key="productClass" className="px-4 py-3">Product class</th>;
+                      if (colKey === 'productClass') return <th key="productClass" className="px-4 py-3">Item class</th>;
                       if (colKey === 'uom') return <th key="uom" className="px-4 py-3">UoM</th>;
                       if (colKey === 'tax') return <th key="tax" className="px-4 py-3">Tax</th>;
                       if (colKey === 'availableForPr') return <th key="availableForPr" className="px-4 py-3 text-center">PR</th>;
@@ -1030,26 +1127,30 @@ export const InventoryMasterPage: React.FC = () => {
                           if (colKey === 'availableForPr') {
                             return (
                               <td key="availableForPr" className="px-4 py-3.5 text-center">
-                                {item.availableForPr ? (
-                                  <span className="inline-flex size-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                                    <Check className="size-3.5" strokeWidth={2.5} />
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground font-bold">—</span>
-                                )}
+                                <span title="Items available for PR are automatically enabled for RFQ.">
+                                  {item.availableForPr ? (
+                                    <span className="inline-flex size-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                                      <Check className="size-3.5" strokeWidth={2.5} />
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground font-bold">—</span>
+                                  )}
+                                </span>
                               </td>
                             );
                           }
                           if (colKey === 'availableForRfq') {
                             return (
                               <td key="availableForRfq" className="px-4 py-3.5 text-center">
-                                {item.availableForRfq ? (
-                                  <span className="inline-flex size-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                                    <Check className="size-3.5" strokeWidth={2.5} />
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground font-bold">—</span>
-                                )}
+                                <span title={item.availableForPr ? "Automatically enabled because it's available for PR." : "Toggle availability for RFQ."}>
+                                  {item.availableForRfq ? (
+                                    <span className={`inline-flex size-5 items-center justify-center rounded-full ${item.availableForPr ? 'bg-blue-500/10 text-blue-500' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'}`}>
+                                      <Check className="size-3.5" strokeWidth={2.5} />
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground font-bold">—</span>
+                                  )}
+                                </span>
                               </td>
                             );
                           }
@@ -1229,7 +1330,8 @@ export const InventoryMasterPage: React.FC = () => {
                     placeholder="Leave blank or click Auto"
                     value={formData.itemCode || ''}
                     onChange={(e) => setFormData({ ...formData, itemCode: e.target.value })}
-                    className="h-10 text-xs sm:text-sm font-mono"
+                    className={`h-10 text-xs sm:text-sm font-mono focus:ring-0 focus-visible:ring-0 ${modalMode === 'edit' ? 'cursor-default bg-transparent border-none p-0' : ''}`}
+                    readOnly={modalMode === 'edit'}
                   />
                   <Button
                     type="button"
@@ -1285,66 +1387,81 @@ export const InventoryMasterPage: React.FC = () => {
                 />
               </div>
 
-              {/* Product Class */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Product Class</label>
+              {/* Item Class */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Item Class</label>
                 <Select
                   value={formData.productClass || ''}
                   onChange={(e) => setFormData({ ...formData, productClass: e.target.value })}
                   className="h-10 text-xs sm:text-sm bg-background"
                 >
-                  <option value="">Select product class</option>
-                  {productClasses.map((cls) => (
+                  <option value="">Select item class</option>
+                  {itemClasses.map((cls) => (
                     <option key={cls} value={cls}>
                       {cls}
                     </option>
                   ))}
-                  {formData.productClass && !productClasses.includes(formData.productClass) && (
+                  {formData.productClass && !itemClasses.includes(formData.productClass) && (
                     <option value={formData.productClass}>{formData.productClass}</option>
                   )}
                 </Select>
-              </div>
-
-              {/* Category Hierarchy */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Category Hierarchy</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Hardware > Laptops"
-                  value={formData.categoryHierarchy || ''}
-                  onChange={(e) => setFormData({ ...formData, categoryHierarchy: e.target.value })}
-                  className="h-10 text-xs sm:text-sm"
-                />
               </div>
 
               {/* UoM */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Unit of Measure (UoM)</label>
                 <Select
-                  value={formData.uom}
+                  value={
+                    unitOptions.find(
+                      (opt) => opt.value.toLowerCase() === (formData.uom || '').toLowerCase()
+                    )?.value || formData.uom
+                  }
                   onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
                   className="h-10 text-xs sm:text-sm"
                 >
-                  <option value="EA">EA (Each)</option>
-                  <option value="BOX">BOX</option>
-                  <option value="KG">KG</option>
-                  <option value="LTR">LTR</option>
-                  <option value="SET">SET</option>
-                  <option value="MONTH">MONTH</option>
-                  <option value="YEAR">YEAR</option>
+                  {unitOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                  {formData.uom &&
+                    !unitOptions.some(
+                      (opt) => opt.value.toLowerCase() === formData.uom.toLowerCase()
+                    ) && (
+                      <option value={formData.uom}>{formData.uom}</option>
+                    )}
                 </Select>
               </div>
 
-              {/* Preferred Supplier Name */}
+              {/* Preferred Supplier */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Preferred Supplier</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Dell Direct MEA"
+                <Select
                   value={formData.preferredSupplierName || ''}
-                  onChange={(e) => setFormData({ ...formData, preferredSupplierName: e.target.value })}
-                  className="h-10 text-xs sm:text-sm"
-                />
+                  onChange={(e) => {
+                    const selName = e.target.value;
+                    const matched = vendorOptions.find((v) => v.name === selName);
+                    setFormData({
+                      ...formData,
+                      preferredSupplierName: selName,
+                      preferredSupplierId: matched?.id || '',
+                    });
+                  }}
+                  className="h-10 text-xs sm:text-sm bg-background"
+                >
+                  <option value="">Select preferred supplier</option>
+                  {vendorOptions.map((v) => (
+                    <option key={v.name} value={v.name}>
+                      {v.name}
+                    </option>
+                  ))}
+                  {formData.preferredSupplierName &&
+                    !vendorOptions.some((v) => v.name === formData.preferredSupplierName) && (
+                      <option value={formData.preferredSupplierName}>
+                        {formData.preferredSupplierName}
+                      </option>
+                    )}
+                </Select>
               </div>
 
               {/* Standard Price */}
@@ -1363,17 +1480,37 @@ export const InventoryMasterPage: React.FC = () => {
               {/* Currency */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Currency</label>
-                <Select
-                  value={formData.currency}
-                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                <CurrencySelector
+                  value={formData.currency || ''}
+                  onChange={(val) => {
+                    userChangedCurrencyRef.current = true;
+                    setFormData({ ...formData, currency: val });
+                  }}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Brand & Part No */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Brand / Manufacturer</label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Dell, Apple, Steelcase"
+                  value={formData.brand || ''}
+                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                   className="h-10 text-xs sm:text-sm"
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Part / Model Number</label>
+                <Input
+                  type="text"
+                  placeholder="e.g. LAT-5540-X1"
+                  value={formData.partNumber || ''}
+                  onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
+                  className="h-10 text-xs sm:text-sm"
+                />
               </div>
 
               {/* Tax Treatment */}
@@ -1414,74 +1551,29 @@ export const InventoryMasterPage: React.FC = () => {
                 />
               </div>
 
-              {/* Brand & Part No */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Brand / Manufacturer</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Dell, Apple, Steelcase"
-                  value={formData.brand || ''}
-                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                  className="h-10 text-xs sm:text-sm"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Part / Model Number</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. LAT-5540-X1"
-                  value={formData.partNumber || ''}
-                  onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
-                  className="h-10 text-xs sm:text-sm"
-                />
-              </div>
-
-              {/* Current Stock */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Current Stock</label>
-                <Input
-                  type="number"
-                  value={formData.currentStock || 0}
-                  onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
-                  className="h-10 text-xs sm:text-sm"
-                />
-              </div>
-
-              {/* Status */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Status</label>
-                <Select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as ItemStatus })}
-                  className="h-10 text-xs sm:text-sm"
-                >
-                  <option value="ACTIVE">Active</option>
-                  <option value="PENDING_APPROVAL">Pending approval</option>
-                  <option value="INACTIVE">Inactive</option>
-                  <option value="ARCHIVED">Archived</option>
-                </Select>
-              </div>
-
               {/* Checkboxes for PR and RFQ */}
               <div className="sm:col-span-2 pt-2">
                 <div className="flex flex-wrap items-center gap-6">
-                  <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer">
+                  <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer" title="Selecting this will automatically enable this item for RFQ as well.">
                     <input
                       type="checkbox"
                       checked={formData.availableForPr}
-                      onChange={(e) => setFormData({ ...formData, availableForPr: e.target.checked })}
+                      onChange={(e) => handleAvailableForPrChange(e.target.checked)}
                       className="size-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
                     />
                     <span>Available for Purchase Requisition (PR)</span>
                   </label>
 
-                  <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer">
+                  <label 
+                    className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer" 
+                    title={formData.availableForPr ? "Automatically enabled because it's available for PR." : "Toggle availability for RFQ."}
+                  >
                     <input
                       type="checkbox"
                       checked={formData.availableForRfq}
-                      onChange={(e) => setFormData({ ...formData, availableForRfq: e.target.checked })}
-                      className="size-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                      disabled={formData.availableForPr}
+                      onChange={(e) => handleAvailableForRfqChange(e.target.checked)}
+                      className="size-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer disabled:opacity-50"
                     />
                     <span>Available for Request for Quotation (RFQ)</span>
                   </label>
@@ -1505,6 +1597,22 @@ export const InventoryMasterPage: React.FC = () => {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="max-w-sm">
+          <div className="flex flex-col gap-4">
+            <h2 className="text-lg font-semibold">Delete Item</h2>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete <span className="font-bold">{itemToDelete?.itemCode} - {itemToDelete?.itemName}</span>? 
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </PageFrame>

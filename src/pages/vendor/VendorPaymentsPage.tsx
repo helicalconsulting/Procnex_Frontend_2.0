@@ -84,6 +84,13 @@ export default function VendorPaymentsPage() {
   const { showSuccess } = useSuccessModal();
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
+  const userChangedCurrencyRef = useRef(false);
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current) {
+      setDisplayCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
 
   // Active view: 'LEDGER' (Recorded Payments) vs 'INVOICES' (Invoice-wise status)
   const [activeTab, setActiveTab] = useState<'LEDGER' | 'INVOICES'>('LEDGER');
@@ -614,7 +621,14 @@ export default function VendorPaymentsPage() {
         description="Track and record payments received against submitted invoices."
         actions={
           <div className="flex flex-wrap items-center gap-2.5">
-            <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
+            <CurrencySelector
+              value={displayCurrency}
+              onChange={(c) => {
+                userChangedCurrencyRef.current = true;
+                setDisplayCurrency(c);
+              }}
+              size="sm"
+            />
             <Button
               onClick={() => handleOpenRecordModal()}
               className="gap-1.5 shadow-xs bg-primary text-primary-foreground hover:bg-primary/90"
@@ -1223,7 +1237,10 @@ export default function VendorPaymentsPage() {
                       <div className="shrink-0 border-r border-input">
                         <CurrencySelector
                           value={displayCurrency}
-                          onChange={setDisplayCurrency}
+                          onChange={(c) => {
+                            userChangedCurrencyRef.current = true;
+                            setDisplayCurrency(c);
+                          }}
                           size="sm"
                         />
                       </div>

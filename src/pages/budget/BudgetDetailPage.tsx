@@ -27,10 +27,12 @@ import { SRMSpendAnalyticsCard } from '../../components/budget/SRMSpendAnalytics
 import { PageFrame, PageLead } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
+import { useCurrency } from '../../components/shared/CurrencyMaster';
 
 export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { formatAmount, companyDefaultCurrency } = useCurrency();
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<BudgetDetailResponse | null>(null);
@@ -99,7 +101,7 @@ export default function BudgetDetailPage() {
   }
 
   const { budget, lines, ledgerItems, srmAnalytics } = data;
-  const currency = budget.currency || 'KES';
+  const currency = budget.currency || companyDefaultCurrency;
 
   return (
     <PageFrame className="space-y-6">
@@ -173,7 +175,7 @@ export default function BudgetDetailPage() {
               Total Allocation
             </span>
             <div className="text-lg sm:text-xl font-bold text-foreground">
-              {budget.totalAllocated.toLocaleString()} {currency}
+              {formatAmount(budget.totalAllocated, currency)}
             </div>
           </div>
 
@@ -182,7 +184,7 @@ export default function BudgetDetailPage() {
               Pre-Committed (PRs)
             </span>
             <div className="text-lg sm:text-xl font-bold text-amber-600 dark:text-amber-400">
-              {budget.totalPreCommitted.toLocaleString()} {currency}
+              {formatAmount(budget.totalPreCommitted, currency)}
             </div>
           </div>
 
@@ -191,7 +193,7 @@ export default function BudgetDetailPage() {
               Committed (POs)
             </span>
             <div className="text-lg sm:text-xl font-bold text-cyan-600 dark:text-cyan-400">
-              {budget.totalCommitted.toLocaleString()} {currency}
+              {formatAmount(budget.totalCommitted, currency)}
             </div>
           </div>
 
@@ -200,7 +202,7 @@ export default function BudgetDetailPage() {
               Available Fund
             </span>
             <div className="text-lg sm:text-xl font-bold text-emerald-600 dark:text-emerald-400">
-              {budget.totalAvailable.toLocaleString()} {currency}
+              {formatAmount(budget.totalAvailable, currency)}
             </div>
           </div>
         </div>
@@ -282,7 +284,7 @@ export default function BudgetDetailPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-right font-semibold text-foreground">
-                      {line.annualAmount.toLocaleString()} {currency}
+                      {formatAmount(line.annualAmount, currency)}
                     </td>
                     <td className="px-4 py-3.5">
                       <BudgetConsumptionBar
@@ -298,7 +300,7 @@ export default function BudgetDetailPage() {
                     </td>
                     <td className="px-4 py-3.5 text-right whitespace-nowrap">
                       <span className={`font-bold ${line.availableAmount < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                        {line.availableAmount.toLocaleString()} {currency}
+                        {formatAmount(line.availableAmount, currency)}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-center">
@@ -365,7 +367,7 @@ export default function BudgetDetailPage() {
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-border/40">
                   <span className="text-muted-foreground">Tolerance Cap:</span>
-                  <span className="font-semibold text-foreground">{budget.toleranceCap.toLocaleString()} {currency}</span>
+                  <span className="font-semibold text-foreground">{formatAmount(budget.toleranceCap, currency)}</span>
                 </div>
               </div>
             </Card>
@@ -448,7 +450,7 @@ export default function BudgetDetailPage() {
                         {t.transferType}
                       </td>
                       <td className="px-4 py-2.5 font-bold text-foreground">
-                        {t.amount.toLocaleString()} {currency}
+                        {formatAmount(t.amount, currency)}
                       </td>
                       <td className="px-4 py-2.5 text-foreground">
                         <div>{t.reason}</div>

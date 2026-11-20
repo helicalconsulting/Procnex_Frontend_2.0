@@ -22,8 +22,10 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
+import { itemMasterService, type ItemMaster } from '../../services/itemMasterService';
+import { vendorService } from '../../services/vendorService';
 import { adminService, type UserWithRoles } from '../../services/adminService';
-import { companySettingsService, type ItemClass } from '../../services/companySettingsService';
+import { companySettingsService, type ItemClass, type Unit } from '../../services/companySettingsService';
 import { useAuth } from '../../context/AuthContext';
 import PriorityBadge from '../../components/shared/PriorityBadge';
 
@@ -44,6 +46,16 @@ interface CreatePurchaseRequisitionModalProps {
 }
 
 const DEFAULT_DEPARTMENTS = ['Information Technology', 'Purchase', 'Finance', 'Human Resource', 'Operations', 'Sales'];
+const DEFAULT_FALLBACK_UNITS = [
+  { value: 'pcs', label: 'Pieces (pcs)' },
+  { value: 'box', label: 'Box (box)' },
+  { value: 'kg', label: 'Kilogram (kg)' },
+  { value: 'ltr', label: 'Liter (ltr)' },
+  { value: 'mtr', label: 'Meter (mtr)' },
+  { value: 'set', label: 'Set (set)' },
+  { value: 'nos', label: 'Numbers (nos)' },
+  { value: 'pair', label: 'Pair (pair)' },
+];
 const SUGGESTED_ITEM_CLASSES = [
   'IT Hardware',
   'Networking',
@@ -84,25 +96,46 @@ export default function CreatePurchaseRequisitionModal({
   const [items, setItems] = useState<RequisitionItemRow[]>([
     {
       itemName: '',
-      itemClass: 'IT Hardware',
-      preferredSupplier: '',
+      itemCode: '',
       description: '',
       quantity: 1,
       unit: 'pcs',
     },
   ]);
+  const [inventoryItems, setInventoryItems] = useState<ItemMaster[]>([]);
+
+  useEffect(() => {
+    itemMasterService.list({ limit: 1000 }).then((res) => {
+      setInventoryItems(res.items || []);
+    }).catch(() => {});
+  }, []);
 
   const [itemClassesList, setItemClassesList] = useState<ItemClass[]>([]);
+  const [unitsList, setUnitsList] = useState<Unit[]>([]);
+  const [loadingUnits, setLoadingUnits] = useState(false);
+  const [vendorSuggestions, setVendorSuggestions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync Item Classes dynamically from Company Settings
+  // Sync Item Classes & Units dynamically from Company Settings
   useEffect(() => {
     const handleUpdate = () => {
       companySettingsService.listItemClasses(false).then(setItemClassesList).catch(() => {});
     };
+    const handleUnitsUpdate = () => {
+      companySettingsService
+        .listUnits()
+        .then((units) => {
+          setUnitsList((units || []).filter((u) => u && u.isActive !== false));
+        })
+        .catch(() => {});
+    };
     window.addEventListener('itemClassesChanged', handleUpdate);
-    return () => window.removeEventListener('itemClassesChanged', handleUpdate);
+    window.addEventListener('unitsChanged', handleUnitsUpdate);
+    return () => {
+      window.removeEventListener('itemClassesChanged', handleUpdate);
+      window.removeEventListener('unitsChanged', handleUnitsUpdate);
+    };
   }, []);
 
   // Fetch departments from Company Settings & all company users when modal is opened
@@ -117,6 +150,42 @@ export default function CreatePurchaseRequisitionModal({
       }
       setLoadingDepts(true);
       setLoadingUsers(true);
+      setLoadingUnits(true);
+
+      // Load Units from Company Settings
+      companySettingsService
+        .listUnits()
+        .then((units) => {
+          if (isMounted) {
+            const activeUnits = (units || []).filter((u) => u && u.isActive !== false);
+            setUnitsList(activeUnits);
+            if (activeUnits.length > 0) {
+              setItems((prev) =>
+                prev.map((it) => {
+                  if (!it.unit || it.unit.toLowerCase() === 'pcs') {
+                    const match = activeUnits.find(
+                      (u) =>
+                        u.abbreviation?.toLowerCase() === 'pcs' ||
+                        u.name.toLowerCase() === 'pcs' ||
+                        u.name.toLowerCase() === 'pieces'
+                    );
+                    if (match) {
+                      return { ...it, unit: match.abbreviation || match.name };
+                    }
+                    return { ...it, unit: activeUnits[0].abbreviation || activeUnits[0].name };
+                  }
+                  return it;
+                })
+              );
+            }
+          }
+        })
+        .catch(() => {
+          if (isMounted) setUnitsList([]);
+        })
+        .finally(() => {
+          if (isMounted) setLoadingUnits(false);
+        });
 
       // Load Item Classes from Company Settings
       companySettingsService
@@ -178,6 +247,17 @@ export default function CreatePurchaseRequisitionModal({
         .finally(() => {
           if (isMounted) setLoadingUsers(false);
         });
+
+      // Load Vendors for suggestions
+      vendorService
+        .list()
+        .then((res) => {
+          if (isMounted && Array.isArray(res)) {
+            const names = res.map((v: any) => v.companyName || v.name).filter(Boolean);
+            setVendorSuggestions(Array.from(new Set(names)));
+          }
+        })
+        .catch(() => {});
     }
     return () => {
       isMounted = false;
@@ -188,6 +268,63 @@ export default function CreatePurchaseRequisitionModal({
     if (departmentsList.length > 0) return departmentsList;
     return DEFAULT_DEPARTMENTS;
   }, [departmentsList]);
+
+  // Dynamic Unit Options derived from Company Settings (with fallback)
+  const unitOptions = useMemo(() => {
+    if (!unitsList || unitsList.length === 0) {
+      return DEFAULT_FALLBACK_UNITS;
+    }
+    const seen = new Set<string>();
+    const options: { value: string; label: string }[] = [];
+
+    unitsList.forEach((u) => {
+      const name = u.name?.trim();
+      if (!name) return;
+      const abbr = u.abbreviation?.trim();
+      const val = abbr || name;
+      const label = abbr && abbr.toLowerCase() !== name.toLowerCase()
+        ? `${name} (${abbr})`
+        : name;
+
+      if (!seen.has(val.toLowerCase())) {
+        seen.add(val.toLowerCase());
+        options.push({ value: val, label });
+      }
+    });
+
+    return options.length > 0 ? options : DEFAULT_FALLBACK_UNITS;
+  }, [unitsList]);
+
+  // Combined Item Classes from Company Settings and defaults
+  const allItemClasses = useMemo(() => {
+    const list: string[] = [];
+    const seen = new Set<string>();
+    (itemClassesList || []).forEach((c) => {
+      if (c.name?.trim() && !seen.has(c.name.trim().toLowerCase())) {
+        seen.add(c.name.trim().toLowerCase());
+        list.push(c.name.trim());
+      }
+    });
+    SUGGESTED_ITEM_CLASSES.forEach((c) => {
+      if (!seen.has(c.toLowerCase())) {
+        seen.add(c.toLowerCase());
+        list.push(c);
+      }
+    });
+    return list;
+  }, [itemClassesList]);
+
+  // Combined Vendor & Supplier Options
+  const allVendorOptions = useMemo(() => {
+    const set = new Set<string>();
+    vendorSuggestions.forEach((v) => {
+      if (v?.trim()) set.add(v.trim());
+    });
+    inventoryItems.forEach((itm) => {
+      if (itm.preferredSupplierName?.trim()) set.add(itm.preferredSupplierName.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [vendorSuggestions, inventoryItems]);
 
   // Exclude current logged in user from dropdown
   const availableUsers = useMemo(() => {
@@ -202,16 +339,21 @@ export default function CreatePurchaseRequisitionModal({
   const effectiveDepartment = department || user?.department || 'Information Technology';
 
   const handleAddItem = () => {
-    const defaultClass = itemClassesList[0]?.name || 'IT Hardware';
+    const defaultUnit =
+      unitOptions.find((uo) => uo.value.toLowerCase() === 'pcs')?.value ||
+      unitOptions[0]?.value ||
+      'pcs';
+    const defaultItemClass = allItemClasses[0] || '';
     setItems((prev) => [
       ...prev,
       {
         itemName: '',
-        itemClass: defaultClass,
+        itemCode: '',
+        itemClass: defaultItemClass,
         preferredSupplier: '',
         description: '',
         quantity: 1,
-        unit: 'pcs',
+        unit: defaultUnit,
       },
     ]);
   };
@@ -225,6 +367,39 @@ export default function CreatePurchaseRequisitionModal({
     setItems((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
+      if (field === 'itemCode' && value.trim()) {
+        const matched = inventoryItems.find((itm) => itm.itemCode === value.trim());
+        if (matched) {
+          next[index].itemName = matched.itemName;
+          next[index].description = matched.description || '';
+          if (matched.productClass) next[index].itemClass = matched.productClass;
+          if (matched.preferredSupplierName) next[index].preferredSupplier = matched.preferredSupplierName;
+          if (matched.uom) {
+            const matchedUnit = unitOptions.find(
+              (uo) =>
+                uo.value.toLowerCase() === matched.uom.toLowerCase() ||
+                uo.label.toLowerCase().includes(matched.uom.toLowerCase())
+            );
+            next[index].unit = matchedUnit ? matchedUnit.value : matched.uom;
+          }
+        }
+      } else if (field === 'itemName' && value.trim()) {
+        const matched = inventoryItems.find((itm) => itm.itemName === value.trim());
+        if (matched) {
+          next[index].itemCode = matched.itemCode;
+          next[index].description = matched.description || '';
+          if (matched.productClass) next[index].itemClass = matched.productClass;
+          if (matched.preferredSupplierName) next[index].preferredSupplier = matched.preferredSupplierName;
+          if (matched.uom) {
+            const matchedUnit = unitOptions.find(
+              (uo) =>
+                uo.value.toLowerCase() === matched.uom.toLowerCase() ||
+                uo.label.toLowerCase().includes(matched.uom.toLowerCase())
+            );
+            next[index].unit = matchedUnit ? matchedUnit.value : matched.uom;
+          }
+        }
+      }
       return next;
     });
   };
@@ -439,42 +614,38 @@ export default function CreatePurchaseRequisitionModal({
               {items.map((item, idx) => (
                 <div
                   key={idx}
-                  className="rounded-xl border border-border/70 bg-card p-3 relative group"
+                  className="rounded-xl border border-border/70 bg-card p-3 relative group space-y-2.5"
                 >
+                  {/* Row 1: Item Code, Item Name, Quantity, Unit & Remove Button */}
                   <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-12 sm:col-span-2">
+                      <Input
+                        list="inventory-codes-list"
+                        placeholder="Item Code"
+                        className="text-xs font-medium"
+                        value={item.itemCode || ''}
+                        onChange={(e) => handleItemChange(idx, 'itemCode', e.target.value)}
+                      />
+                      <datalist id="inventory-codes-list">
+                        {inventoryItems.map((itm) => (
+                          <option key={itm.id} value={itm.itemCode}>{itm.itemName}</option>
+                        ))}
+                      </datalist>
+                    </div>
                     <div className="col-span-12 sm:col-span-5">
                       <Input
-                        placeholder="Item Name (e.g. Cisco Wi-Fi Router, Laptop)"
+                        list="inventory-names-list"
+                        placeholder="Item Name *"
                         className="text-xs font-medium"
-                        value={item.itemName}
+                        value={item.itemName || ''}
                         onChange={(e) => handleItemChange(idx, 'itemName', e.target.value)}
                         required
                       />
-                    </div>
-                    <div className="col-span-12 sm:col-span-3">
-                      <select
-                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
-                        value={item.itemClass || (itemClassesList[0]?.name || 'IT Hardware')}
-                        onChange={(e) => handleItemChange(idx, 'itemClass', e.target.value)}
-                        aria-label="Select Item Class"
-                      >
-                        {itemClassesList.length === 0 ? (
-                          <option value="IT Hardware">IT Hardware</option>
-                        ) : (
-                          itemClassesList
-                            .filter((cls) => cls.isActive !== false)
-                            .map((cls) => (
-                              <option key={cls.id || cls.name} value={cls.name}>
-                                {cls.name} {cls.code ? `(${cls.code})` : ''}
-                              </option>
-                            ))
-                        )}
-                        {/* Preserve custom / existing itemClass if not in the current active list */}
-                        {item.itemClass &&
-                          !itemClassesList.some((c) => c.name === item.itemClass) && (
-                            <option value={item.itemClass}>{item.itemClass}</option>
-                          )}
-                      </select>
+                      <datalist id="inventory-names-list">
+                        {inventoryItems.map((itm) => (
+                          <option key={itm.id} value={itm.itemName}>{itm.itemCode}</option>
+                        ))}
+                      </datalist>
                     </div>
                     <div className="col-span-6 sm:col-span-2">
                       <Input
@@ -493,13 +664,32 @@ export default function CreatePurchaseRequisitionModal({
                         required
                       />
                     </div>
-                    <div className="col-span-6 sm:col-span-2 flex items-center gap-1">
-                      <Input
-                        placeholder="Unit (pcs)"
-                        className="text-xs text-center flex-1"
-                        value={item.unit}
+                    <div className="col-span-6 sm:col-span-3 flex items-center gap-1">
+                      <select
+                        value={
+                          unitOptions.find(
+                            (opt) => opt.value.toLowerCase() === (item.unit || '').toLowerCase()
+                          )?.value || item.unit
+                        }
                         onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                      />
+                        className="w-full h-9 rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                        title="Unit of measurement"
+                      >
+                        {loadingUnits && unitOptions.length === 0 && (
+                          <option value="">Loading units…</option>
+                        )}
+                        {unitOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                        {item.unit &&
+                          !unitOptions.some(
+                            (opt) => opt.value.toLowerCase() === item.unit.toLowerCase()
+                          ) && (
+                            <option value={item.unit}>{item.unit}</option>
+                          )}
+                      </select>
                       {items.length > 1 && (
                         <button
                           type="button"
@@ -512,9 +702,71 @@ export default function CreatePurchaseRequisitionModal({
                       )}
                     </div>
                   </div>
+
+                  {/* Row 2: Item Class & Preferred Supplier */}
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-12 sm:col-span-6">
+                      <select
+                        value={item.itemClass || ''}
+                        onChange={(e) => handleItemChange(idx, 'itemClass', e.target.value)}
+                        className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                        title="Item Class"
+                      >
+                        <option value="">-- Select Item Class --</option>
+                        {allItemClasses.map((cls) => (
+                          <option key={cls} value={cls}>
+                            {cls}
+                          </option>
+                        ))}
+                        {item.itemClass && !allItemClasses.includes(item.itemClass) && (
+                          <option value={item.itemClass}>{item.itemClass}</option>
+                        )}
+                      </select>
+                    </div>
+                    <div className="col-span-12 sm:col-span-6">
+                      <select
+                        value={item.preferredSupplier || ''}
+                        onChange={(e) => handleItemChange(idx, 'preferredSupplier', e.target.value)}
+                        className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                        title="Preferred Supplier"
+                      >
+                        <option value="">-- Select Preferred Supplier (Optional) --</option>
+                        {allVendorOptions.map((v) => (
+                          <option key={v} value={v}>
+                            {v}
+                          </option>
+                        ))}
+                        {item.preferredSupplier && !allVendorOptions.includes(item.preferredSupplier) && (
+                          <option value={item.preferredSupplier}>{item.preferredSupplier}</option>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Item Description */}
+                  <div>
+                    <Input
+                      placeholder="Item Description / specifications (e.g. 14 in, Core i7, 16 GB, 512 GB SSD)..."
+                      className="h-8.5 text-xs text-foreground placeholder:text-muted-foreground"
+                      value={item.description || ''}
+                      onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
+
+            <datalist id="vendor-suggestions-list">
+              {vendorSuggestions.map((v) => (
+                <option key={v} value={v} />
+              ))}
+              {inventoryItems
+                .map((itm) => itm.preferredSupplierName)
+                .filter(Boolean)
+                .map((supplier) => (
+                  <option key={supplier!} value={supplier!} />
+                ))}
+            </datalist>
           </div>
 
           {/* Justification / Notes */}

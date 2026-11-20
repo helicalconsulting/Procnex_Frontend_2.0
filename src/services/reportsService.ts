@@ -33,7 +33,7 @@ function mapApToReport(inv: APInvoice): InvoiceRecord {
     dueDate: inv.dueDate || new Date().toISOString().slice(0, 10),
     amount: Number(inv.amount || 0),
     paidAmount: paymentStatus === 'paid' ? Number(inv.amount || 0) : 0,
-    currency: '₹',
+    currency: inv.currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES'),
     paymentStatus,
     approvalStatus: status.includes('approv') ? 'approved' : status.includes('reject') ? 'rejected' : 'pending',
     approvedBy: 'Finance Approver',

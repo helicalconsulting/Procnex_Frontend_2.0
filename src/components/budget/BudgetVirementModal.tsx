@@ -23,7 +23,7 @@ export const BudgetVirementModal: React.FC<BudgetVirementModalProps> = ({
   onClose,
   budgetId,
   lines,
-  currency = 'KES',
+  currency = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
   defaultSourceLineId,
   onSuccess,
 }) => {

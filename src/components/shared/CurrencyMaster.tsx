@@ -423,9 +423,12 @@ const LOCALE_BY_CURRENCY: Record<string, string> = {
   NZD: 'en-NZ',
 };
 
-function formatAmount(amount: any, currency: any): string {
+function formatAmount(amount: any, currency?: any): string {
   const safeNum = typeof amount === 'number' && !isNaN(amount) ? amount : (Number(amount) || 0);
-  const safeCurr = typeof currency === 'string' && currency ? currency.toUpperCase().trim() : 'KES';
+  const fallbackCurr = typeof window !== 'undefined'
+    ? (localStorage.getItem('company_default_currency') || DEFAULT_CURRENCY)
+    : DEFAULT_CURRENCY;
+  const safeCurr = typeof currency === 'string' && currency ? currency.toUpperCase().trim() : fallbackCurr;
   try {
     const locale = LOCALE_BY_CURRENCY[safeCurr] || 'en-US';
     const formatted = new Intl.NumberFormat(locale, {
@@ -530,6 +533,17 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'company_default_currency' && e.newValue) {
+        setCompanyDefaultCurrencyState(e.newValue);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   // Fetch the company default currency from the backend.
   // Works for BOTH admin and vendor users (backend resolves company via req.user or req.vendor).
   // Re-fetches whenever the user logs in or switches accounts.
@@ -631,7 +645,7 @@ const RATE_SOURCES = [
       loading,
       error,
       convert,
-      formatAmount: (amount, currency) => formatAmount(amount, currency),
+      formatAmount: (amount, currency) => formatAmount(amount, currency || companyDefaultCurrency),
       getSymbol,
       refresh: fetchRates,
       companyDefaultCurrency,

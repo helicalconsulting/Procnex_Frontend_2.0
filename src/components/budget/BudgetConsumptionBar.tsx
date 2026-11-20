@@ -22,7 +22,7 @@ export const BudgetConsumptionBar: React.FC<BudgetConsumptionBarProps> = ({
   committedAmount,
   actualSpentAmount,
   availableAmount,
-  currency = 'KES',
+  currency = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
   showLabels = true,
   compact = false,
 }) => {

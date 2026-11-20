@@ -254,7 +254,6 @@ export default function CreateGRNPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('');
-  const [currency] = useState<string>(companyDefaultCurrency);
   const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
 
@@ -313,6 +312,8 @@ export default function CreateGRNPage() {
       }) || null
     );
   }, [poFromState, fetchedDirectPO, rawPoList, selectedPoId]);
+
+  const currency = selectedPO?.currency || companyDefaultCurrency;
 
   // Selected Dispatch Note & Invoice derived objects
   const selectedDispatchNote = useMemo(() => {
@@ -1820,7 +1821,7 @@ export default function CreateGRNPage() {
         subtitle={`Verifying received items against PO #${selectedPO?.poNumber || selectedPoId || 'PO'}, updating warehouse stock, and syncing 3-way match records.`}
         vendorName={selectedPO?.vendor?.name || selectedInvoice?.vendorName || 'Supplier'}
         amount={calculations.totalAcceptedValue}
-        currency={companyDefaultCurrency}
+        currency={currency}
         mode="approval"
       />
 
@@ -1856,6 +1857,7 @@ export default function CreateGRNPage() {
             purchaseOrder: selectedPO,
           }}
           po={selectedPO}
+          currency={currency}
           onClose={() => setShowPrintModal(false)}
         />
       )}

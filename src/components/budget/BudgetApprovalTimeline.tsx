@@ -15,7 +15,7 @@ interface BudgetApprovalTimelineProps {
 export const BudgetApprovalTimeline: React.FC<BudgetApprovalTimelineProps> = ({
   status,
   totalAllocated,
-  currency = 'KES',
+  currency = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
 }) => {
   const isApproved = status === 'ACTIVE' || status === 'APPROVED';
   const isPending = status === 'PENDING_APPROVAL';

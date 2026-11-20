@@ -1,5 +1,6 @@
 import { CheckCircle2, Clock, ShieldCheck, RotateCcw } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
+import { useCurrency } from '../shared/CurrencyMaster';
 import type { PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import procnexLogo from '../../assets/procnex.png';
@@ -17,12 +18,17 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function formatCurrency(amount: number, currency = 'INR'): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
+function formatCurrency(amount: number, currency?: string): string {
+  const safeCurr = currency || (typeof window !== 'undefined' ? localStorage.getItem('company_default_currency') || 'KES' : 'KES');
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: safeCurr,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${safeCurr} ${Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+  }
 }
 
 function val(value: string | number | null | undefined, fallback = '—'): string {
@@ -40,8 +46,46 @@ function ensurePONumber(poNumber: string | null | undefined): string {
   return `PO-DRAFT-${y}${m}${d}-${seq}`;
 }
 
+export function formatBranchDisplay(
+  branchName?: string | null,
+  branchCode?: string | null,
+  showBranchId = true
+): string {
+  if (!branchName && !branchCode) return '';
+  const name = (branchName || '').trim();
+  const code = (branchCode || '').trim();
+
+  if (!showBranchId) {
+    if (name) {
+      if (code) {
+        const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return name.replace(new RegExp(`\\s*\\(${escaped}\\)`, 'i'), '').trim();
+      }
+      return name.replace(/\s*\([A-Za-z0-9\-_]+\)\s*$/, '').trim();
+    }
+    return '';
+  }
+
+  if (name && code && code.toLowerCase() !== name.toLowerCase()) {
+    if (name.toLowerCase().includes(`(${code.toLowerCase()})`)) {
+      return name;
+    }
+    return `${name} (${code})`;
+  }
+  return name || code;
+}
+
 export default function PurchaseOrderDocument({ pr, approvers }: Props) {
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl, profile } = useBranding();
+  const { companyDefaultCurrency } = useCurrency();
+  const poCurrency = pr.currency || companyDefaultCurrency;
+
+  const rawBranchName = (pr as any).branchName || (pr as any).branch?.name || (pr as any).originatingBranch || null;
+  const rawBranchCode = (pr as any).branchCode || (pr as any).branch?.code || (pr as any).branchId || null;
+  const showBranch = profile?.showBranchOnDocuments !== false;
+  const showApproverBranch = profile?.showApproverBranchOnDocs !== false;
+  const showBranchId = profile?.showBranchIdOnDocuments !== false;
+  const branchDisplay = showBranch ? formatBranchDisplay(rawBranchName, rawBranchCode, showBranchId) : '';
 
   const finalApprovers = (Array.isArray(approvers) && approvers.length > 0)
     ? approvers
@@ -118,13 +162,19 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
                     <span className="po-doc__meta-value">{pr.requisitionNumber}</span>
                   </div>
                 )}
+                {showBranch && branchDisplay && (
+                  <div className="po-doc__meta-row">
+                    <span className="po-doc__meta-label">Branch:</span>
+                    <span className="po-doc__meta-value" style={{ fontWeight: 600 }}>{branchDisplay}</span>
+                  </div>
+                )}
               </div>
             </div>
             <DocumentQRCode
               docType="PO"
               docNumber={ensurePONumber(pr.poNumber)}
               amount={pr.totalAmount || pr.estimatedTotal || 0}
-              currency={pr.currency || 'INR'}
+              currency={poCurrency}
               vendorName={pr.vendorName}
               companyCode={profile?.companyCode || (pr as any).companyCode}
               companyName={finalCompanyName}
@@ -187,6 +237,12 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
           <span className="po-doc__info-label">Shipping Terms</span>
           <span className="po-doc__info-value">{val(pr.shippingTerms)}</span>
         </div>
+        {showBranch && branchDisplay && (
+          <div className="po-doc__info-item">
+            <span className="po-doc__info-label">Originating Branch</span>
+            <span className="po-doc__info-value" style={{ fontWeight: 600 }}>{branchDisplay}</span>
+          </div>
+        )}
       </div>
 
       {/* ── Items Table ── */}
@@ -227,13 +283,13 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
                     </td>
                     <td className="po-doc__td--qty" style={{ textAlign: 'center' }}>{item.quantity}</td>
                     <td className="po-doc__td--unit" style={{ textAlign: 'center' }}>{val(item.unit)}</td>
-                    <td className="po-doc__td--price" style={{ textAlign: 'right' }}>{formatCurrency(item.unitPrice, pr.currency)}</td>
+                    <td className="po-doc__td--price" style={{ textAlign: 'right' }}>{formatCurrency(item.unitPrice, poCurrency)}</td>
                     {hasLineTax && (
                       <td className="po-doc__td--tax" style={{ textAlign: 'center', fontSize: '11px', fontWeight: 600, color: '#059669' }}>
                         {item.taxPercent ? `${item.taxPercent}%` : '0%'}
                       </td>
                     )}
-                    <td className="po-doc__td--total" style={{ textAlign: 'right' }}>{formatCurrency(item.total, pr.currency)}</td>
+                    <td className="po-doc__td--total" style={{ textAlign: 'right' }}>{formatCurrency(item.total, poCurrency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -249,17 +305,17 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
             <>
               <div className="po-doc__total-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '12px' }}>
                 <span className="po-doc__total-label" style={{ color: '#64748b' }}>Subtotal</span>
-                <span className="po-doc__total-value" style={{ fontWeight: 600 }}>{formatCurrency(pr.subtotal, pr.currency)}</span>
+                <span className="po-doc__total-value" style={{ fontWeight: 600 }}>{formatCurrency(pr.subtotal, poCurrency)}</span>
               </div>
               <div className="po-doc__total-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '12px' }}>
                 <span className="po-doc__total-label" style={{ color: '#059669' }}>Tax Total</span>
-                <span className="po-doc__total-value" style={{ fontWeight: 600, color: '#059669' }}>+{formatCurrency(pr.taxTotal, pr.currency)}</span>
+                <span className="po-doc__total-value" style={{ fontWeight: 600, color: '#059669' }}>+{formatCurrency(pr.taxTotal, poCurrency)}</span>
               </div>
             </>
           )}
           <div className="po-doc__total-row po-doc__total-row--grand">
             <span className="po-doc__total-label po-doc__total-label--grand">Grand Total</span>
-            <span className="po-doc__total-value po-doc__total-value--grand">{formatCurrency(pr.grandTotal, pr.currency)}</span>
+            <span className="po-doc__total-value po-doc__total-value--grand">{formatCurrency(pr.grandTotal, poCurrency)}</span>
           </div>
         </div>
       </div>
@@ -323,6 +379,10 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
                 const dateVal = appr.date || appr.actionDate || pr.poDate || (pr as any).submittedAt;
                 const dateDisplay = dateVal ? formatDate(dateVal) : '—';
 
+                const apprBranchName = appr.approverBranchName || appr.branchName || appr.approverBranch?.name || appr.branch?.name || (appr.signedBy as any)?.branchName || (appr.signedBy as any)?.branch?.name || null;
+                const apprBranchCode = appr.approverBranchCode || appr.branchCode || appr.approverBranch?.code || appr.branch?.code || (appr.signedBy as any)?.branchCode || (appr.signedBy as any)?.branch?.code || appr.approverBranchId || null;
+                const approverBranchDisplay = formatBranchDisplay(apprBranchName, apprBranchCode, showBranchId);
+
                 return (
                   <div key={idx} className="po-doc__stamp-card">
                     {/* Level & Status */}
@@ -353,6 +413,16 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
                       <div className="po-doc__stamp-role">
                         {formattedRole}
                       </div>
+                      {cleanDisplayName && cleanDisplayName !== formattedRole && (
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#1e293b' }}>
+                          {cleanDisplayName}
+                        </div>
+                      )}
+                      {showApproverBranch && approverBranchDisplay && (
+                        <div className="po-doc__stamp-branch" style={{ fontSize: '10.5px', color: '#475569', marginTop: '2px' }}>
+                          Branch: <strong style={{ color: '#0f172a' }}>{approverBranchDisplay}</strong>
+                        </div>
+                      )}
                       <div className="po-doc__stamp-date">
                         Date: <strong>{dateDisplay}</strong>
                       </div>

@@ -38,7 +38,7 @@ interface BudgetLogicWorkspaceProps {
 
 export function BudgetLogicWorkspace({
   canManage = true,
-  defaultCurrency = 'AED',
+  defaultCurrency = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
 }: BudgetLogicWorkspaceProps) {
   const [config, setConfig] = useState<BudgetLogicConfig>(DEFAULT_BUDGET_LOGIC);
   const [initialConfig, setInitialConfig] = useState<BudgetLogicConfig>(DEFAULT_BUDGET_LOGIC);

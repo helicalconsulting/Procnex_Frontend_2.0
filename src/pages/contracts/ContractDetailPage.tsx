@@ -622,7 +622,7 @@ export default function ContractDetailPage() {
     // Immediately set balance without waiting for network round-trip
     setContractBalance({
       contractValue,
-      currency: contract.currency || 'KES',
+      currency: contract.currency || companyDefaultCurrency || 'KES',
       consumedValue,
       remainingValue: Math.max(0, contractValue - consumedValue),
       totalPOs: pos.length,

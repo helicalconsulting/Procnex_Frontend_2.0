@@ -6,7 +6,7 @@ import type {
   ApprovalTableRow,
   NotificationRow,
 } from '../types/viewModels';
-import { formatCurrency } from '../components/shared/CurrencyMaster';
+import { formatCurrency, DEFAULT_CURRENCY } from '../components/shared/CurrencyMaster';
 
 const BACKEND_TO_UI_RFQ_STATUS: Record<string, RFQStatus> = {
   DRAFT: 'DRAFT',
@@ -115,7 +115,7 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     priority: String(rfq.priority || 'Medium'),
     department: String(rfq.department || creator?.department || '—'),
     closingDate: rfq.closingDate ? String(rfq.closingDate).slice(0, 10) : String(rfq.createdAt).slice(0, 10),
-    currency: String(rfq.currency || 'KES'),
+    currency: String(rfq.currency || (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || DEFAULT_CURRENCY),
     lineItems: items.map((item) => ({
       id: String(item.id),
       itemCode: String(item.itemCode || (item as any).item_code || ''),
@@ -252,7 +252,7 @@ export function mapVendorToTableRow(v: Vendor & Record<string, unknown>): Vendor
 }
 
 function formatApprovalAmount(amount: number, currency?: string): string {
-  const defaultCurr = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'AED';
+  const defaultCurr = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || DEFAULT_CURRENCY;
   const curr = currency || defaultCurr;
   try {
     return formatCurrency(amount, curr);
@@ -292,7 +292,7 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
   };
   const level = a.level as { levelNumber?: number; requiredRole?: string } | undefined;
   const amount = Number(a.amount || 0);
-  const defaultCurr = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'AED';
+  const defaultCurr = (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || DEFAULT_CURRENCY;
   const currency = (a.currency as string) || defaultCurr;
 
   const rawLevelNum = Number(

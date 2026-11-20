@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { useCurrency } from './CurrencyMaster';
 import {
   Send,
   CheckCircle2,
@@ -629,10 +630,12 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
   subtitle,
   vendorName,
   amount,
-  currency = 'KES',
+  currency: currencyProp,
   mode = 'approval',
   onComplete,
 }) => {
+  const { companyDefaultCurrency } = useCurrency();
+  const currency = currencyProp || companyDefaultCurrency || 'KES';
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [progress, setProgress] = useState(15);
 

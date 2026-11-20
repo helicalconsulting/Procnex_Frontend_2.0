@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { rfqService, type CreateRfqPayload, type EvalCategoryDTO } from '../../services/rfqService';
+import { itemMasterService, type ItemMaster } from '../../services/itemMasterService';
 import { erpService, type ERPStockItem } from '../../services/erpService';
 import { vendorService } from '../../services/vendorService';
 import { companySettingsService, type Unit, type FormFieldConfig, type ItemClass } from '../../services/companySettingsService';
@@ -416,6 +417,15 @@ export default function CreateRFQPage() {
   const [bidBondMinCurrency, setBidBondMinCurrency] = useState(companyDefaultCurrency);
   const [bidBondMinValidity, setBidBondMinValidity] = useState('');
 
+  const userChangedBidSecCurrRef = useRef(false);
+  const userChangedBidBondCurrRef = useRef(false);
+  useEffect(() => {
+    if (companyDefaultCurrency) {
+      if (!userChangedBidSecCurrRef.current) setBidSecurityMinCurrency(companyDefaultCurrency);
+      if (!userChangedBidBondCurrRef.current) setBidBondMinCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
+
   // ── Approval & Workflow Settings State ─────────────────
   const [rfqApprovalStartPoint, setRfqApprovalStartPoint] = useState<'ORIGINATOR' | 'L1_USER'>('L1_USER');
   const [quotationApprovalMode, setQuotationApprovalMode] = useState<'DIRECT_X_ONLY' | 'FULL_CHAIN'>('DIRECT_X_ONLY');
@@ -770,13 +780,11 @@ export default function CreateRFQPage() {
     }
   }, [selectedItemClass, supplierClass, itemClasses, sourceRequisitionIds.length, items]);
 
-  const [erpStockItems, setErpStockItems] = useState<ERPStockItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<ItemMaster[]>([]);
 
   useEffect(() => {
-    erpService.getStockCodes().then((stockList) => {
-      if (Array.isArray(stockList) && stockList.length > 0) {
-        setErpStockItems(stockList);
-      }
+    itemMasterService.list({ limit: 1000 }).then((res) => {
+      setInventoryItems(res.items || []);
     }).catch(() => {});
   }, []);
 
@@ -797,19 +805,19 @@ export default function CreateRFQPage() {
         if (i.id !== id) return i;
         const updated = { ...i, [field]: value };
         if (field === 'itemCode' && value.trim()) {
-          const matched = erpStockItems.find(
-            (s) => s.stockCode.toLowerCase() === value.trim().toLowerCase()
+          const matched = inventoryItems.find(
+            (s) => s.itemCode.toLowerCase() === value.trim().toLowerCase()
           );
           if (matched) {
-            if (!updated.itemName || updated.itemName === '') updated.itemName = matched.description || matched.stockCode;
+            if (!updated.itemName || updated.itemName === '') updated.itemName = matched.itemName;
             if (!updated.description || updated.description === '') updated.description = matched.description || '';
-            if (!updated.unit || updated.unit === '') updated.unit = matched.unitOfMeasure || 'Pcs';
+            if (!updated.unit || updated.unit === '') updated.unit = matched.uom || 'EA';
           }
         }
         return updated;
       })
     );
-  }, [erpStockItems]);
+  }, [inventoryItems]);
 
   // Form state — Vendors
   const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
@@ -2063,6 +2071,7 @@ export default function CreateRFQPage() {
                           type="text"
                           placeholder="Item name"
                           value={item.itemName}
+                          list="inventory-item-names-list"
                           onChange={(e) => updateItem(item.id, 'itemName', e.target.value)}
                         />
                       </td>
@@ -2115,9 +2124,16 @@ export default function CreateRFQPage() {
                 </tbody>
               </table>
               <datalist id="erp-stock-codes-list">
-                {erpStockItems.map((s) => (
-                  <option key={s.stockCode} value={s.stockCode}>
-                    {s.description ? `${s.description} (${s.unitOfMeasure || 'EA'})` : s.stockCode}
+                {inventoryItems.map((s) => (
+                  <option key={s.id} value={s.itemCode}>
+                    {s.itemName} ({s.itemCode})
+                  </option>
+                ))}
+              </datalist>
+              <datalist id="inventory-item-names-list">
+                {inventoryItems.map((s) => (
+                  <option key={s.id} value={s.itemName}>
+                    {s.itemName}
                   </option>
                 ))}
               </datalist>
@@ -2237,7 +2253,10 @@ export default function CreateRFQPage() {
                       <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
                         <CurrencySelector
                           value={bidSecurityMinCurrency}
-                          onChange={setBidSecurityMinCurrency}
+                          onChange={(c) => {
+                            userChangedBidSecCurrRef.current = true;
+                            setBidSecurityMinCurrency(c);
+                          }}
                           size="sm"
                         />
                       </div>
@@ -2287,7 +2306,10 @@ export default function CreateRFQPage() {
                       <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
                         <CurrencySelector
                           value={bidBondMinCurrency}
-                          onChange={setBidBondMinCurrency}
+                          onChange={(c) => {
+                            userChangedBidBondCurrRef.current = true;
+                            setBidBondMinCurrency(c);
+                          }}
                           size="sm"
                         />
                       </div>
