@@ -36,6 +36,7 @@ import {
   Layers,
   Pencil,
   Filter,
+  ChevronDown,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
@@ -400,7 +401,7 @@ export default function ApprovalsPage() {
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [actionModal, setActionModal] = useState<{ request: ApprovalRequest; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
-  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1' | 'VENDOR'>('ORIGINATOR');
+  const [actionReturnTarget, setActionReturnTarget] = useState<string>('ORIGINATOR');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
   const [viewerInvoice, setViewerInvoice] = useState<any | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
@@ -546,9 +547,12 @@ export default function ApprovalsPage() {
         : actionType === 'reject'
         ? 'REJECTED'
         : 'RETURNED';
+    const targetLevelNum = actionReturnTarget.startsWith('LEVEL_')
+      ? parseInt(actionReturnTarget.replace('LEVEL_', ''), 10) || 1
+      : null;
     const targetLevel = actionType === 'approve'
       ? ((req.currentLevel || 1) + 1)
-      : (actionReturnTarget === 'LEVEL_1' ? 1 : req.currentLevel);
+      : (targetLevelNum || req.currentLevel);
 
     setOptimisticMap((prev) => ({
       ...prev,
@@ -648,10 +652,11 @@ export default function ApprovalsPage() {
   const openAction = useCallback((request: ApprovalRequest, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ request, action });
     setActionComment('');
+    const curLvl = request.currentLevel || 1;
     const defaultTarget = (request.module === 'Quotation' || request.module === 'Quotations')
       ? 'VENDOR'
-      : (request.currentLevel && request.currentLevel > 1)
-      ? 'LEVEL_1'
+      : (curLvl > 1)
+      ? `LEVEL_${curLvl - 1}`
       : 'ORIGINATOR';
     setActionReturnTarget(defaultTarget);
   }, []);
@@ -1038,57 +1043,84 @@ export default function ApprovalsPage() {
               </div>
             </div>
 
-            {/* Return Destination (options for Approver 2+; for Approver 1 it shows clear Originator/Admin notice) */}
-            {actionModal.action === 'return' && (
-              (actionModal.request.currentLevel || 1) > 1 ? (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-foreground flex items-center justify-between">
-                    <span>Return Destination</span>
-                    <span className="text-[10px] text-muted-foreground font-normal">Select where this request goes back to</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <button
-                      type="button"
-                      className={cn(
-                        "rounded-xl border p-3 text-left transition-all relative",
-                        actionReturnTarget === 'ORIGINATOR' || actionReturnTarget === 'VENDOR'
-                          ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
-                          : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
-                      )}
-                      onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
-                    >
-                      <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Return to Vendor for Resubmission' : 'Return to Originator/Admin for Modification'}</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Send back for revision</div>
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        "rounded-xl border p-3 text-left transition-all relative",
-                        actionReturnTarget === 'LEVEL_1'
-                          ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
-                          : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
-                      )}
-                      onClick={() => setActionReturnTarget('LEVEL_1')}
-                    >
-                      <div className="text-xs font-bold">Return to Level 1 Approver</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Restart chain at L1</div>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
-                  <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5 text-xs">
-                    <div className="font-bold text-amber-900 dark:text-amber-200">
-                      Return Destination: {(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor / Originator' : 'Originator / Admin'}
+            {/* Return Destination: Approver 1 can ONLY return to Originator/Admin (or Vendor). Approver N (N>1) can return to any prior Approver 1..N-1, or Originator/Admin */}
+            {actionModal.action === 'return' && (() => {
+              const currentLvl = actionModal.request.currentLevel || 1;
+              const isQuotation = actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations';
+              const baseReturnLabel = isQuotation ? 'Vendor / Originator' : 'Originator / Admin';
+
+              if (currentLvl <= 1) {
+                return (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                    <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5 text-xs">
+                      <div className="font-bold text-amber-900 dark:text-amber-200">
+                        Return Destination: {baseReturnLabel}
+                      </div>
+                      <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                        As Approver 1 (Level 1), returning this request will send it back to the <strong>{baseReturnLabel}</strong> for modification and revision.
+                      </p>
                     </div>
-                    <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
-                      As Level 1 Approver, returning this request will send it back to the <strong>{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor / Originator' : 'Originator / Admin'}</strong> for modification and revision.
-                    </p>
                   </div>
+                );
+              }
+
+              // Build dynamic list of prior approvers: Approver 1 .. Approver (currentLvl - 1), plus Originator / Admin
+              const options: { key: string; label: string; description: string }[] = [];
+
+              for (let i = 1; i < currentLvl; i++) {
+                options.push({
+                  key: `LEVEL_${i}`,
+                  label: `Approver ${i} (Level ${i})`,
+                  description: `Restart workflow at Level ${i} (Approver ${i})`,
+                });
+              }
+
+              options.push({
+                key: isQuotation ? 'VENDOR' : 'ORIGINATOR',
+                label: isQuotation ? 'Vendor (for Resubmission)' : 'Originator / Admin (Creator)',
+                description: 'Send back for revision & modification',
+              });
+
+              const selectedOpt = options.find((o) => o.key === actionReturnTarget) || options[0];
+
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <RotateCcw className="size-3.5 text-amber-500" />
+                      <span>Return Destination <span className="text-destructive">*</span></span>
+                    </label>
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      Approver {currentLvl}
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <select
+                      className="h-10 w-full appearance-none rounded-xl border border-input bg-card/60 px-3.5 pr-10 text-xs sm:text-sm font-medium text-foreground outline-none transition-all hover:bg-muted/30 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                      value={actionReturnTarget}
+                      onChange={(e) => setActionReturnTarget(e.target.value)}
+                      aria-label="Select return destination"
+                    >
+                      {options.map((opt) => (
+                        <option key={opt.key} value={opt.key} className="bg-popover text-popover-foreground py-1">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  </div>
+
+                  {selectedOpt && (
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                      <span className="inline-block size-1.5 rounded-full bg-amber-500 shrink-0" />
+                      <span>{selectedOpt.description}</span>
+                    </p>
+                  )}
                 </div>
-              )
-            )}
+              );
+            })()}
 
             {/* Comments Box */}
             <div className="space-y-1.5">

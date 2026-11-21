@@ -27,7 +27,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }
->(({ className, children, hideClose = false, ...props }, ref) => (
+>(({ className, children, hideClose = false, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
@@ -37,6 +37,22 @@ const DialogContent = React.forwardRef<
           'motion-dialog-content pointer-events-auto relative flex max-h-[min(85vh,780px)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-y-auto rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-2xl outline-none sm:w-full',
           className,
         )}
+        onPointerDownOutside={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (target?.closest?.('.iic-dropdown, .iic-container')) {
+            e.preventDefault();
+            return;
+          }
+          onPointerDownOutside?.(e);
+        }}
+        onInteractOutside={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (target?.closest?.('.iic-dropdown, .iic-container')) {
+            e.preventDefault();
+            return;
+          }
+          onInteractOutside?.(e);
+        }}
         {...props}
       >
         {children}

@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -323,10 +324,20 @@ export default function PurchaseOrdersPage() {
 
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string | number, POStatus>>({});
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
+  const [poApprovalLevels, setPoApprovalLevels] = useState<any[]>([]);
 
   const fetchPendingApprovals = useCallback(async () => {
     try {
-      const pendingRows = await approvalService.listTable({ module: 'PurchaseOrders', status: 'PENDING' });
+      const [pendingRows, allLevels] = await Promise.all([
+        approvalService.listTable({ module: 'PurchaseOrders', status: 'PENDING' }),
+        approvalService.getLevels().catch(() => [] as any[]),
+      ]);
+      if (Array.isArray(allLevels)) {
+        const filtered = allLevels.filter((l: any) =>
+          ['PurchaseOrders', 'Purchase Orders', 'PurchaseOrder', 'PO Approval', 'PO'].includes(l.module)
+        );
+        setPoApprovalLevels(filtered);
+      }
       const map = new Map<string, any>();
       const setInMap = (key: string, row: any) => {
         const existing = map.get(key);
@@ -452,14 +463,14 @@ export default function PurchaseOrdersPage() {
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
 
-  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+  const [actionReturnTarget, setActionReturnTarget] = useState<string>('ORIGINATOR');
 
   const openAction = useCallback((order: MockPO, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ order, action });
     setActionComment('');
     const pendingApp = getPendingApprovalForPO(order);
     const currentLvl = pendingApp?.currentLevel || pendingApp?.level?.levelNumber || 1;
-    setActionReturnTarget(currentLvl > 1 ? 'LEVEL_1' : 'ORIGINATOR');
+    setActionReturnTarget(currentLvl > 1 ? `LEVEL_${currentLvl - 1}` : 'ORIGINATOR');
   }, [getPendingApprovalForPO]);
 
   const handleAction = useCallback(async () => {
@@ -467,13 +478,17 @@ export default function PurchaseOrdersPage() {
     const targetOrder = actionModal.order;
     const act = actionModal.action;
     const comment = actionComment.trim() || undefined;
+    const pendingApp = getPendingApprovalForPO(targetOrder);
+    const currentLvl = pendingApp?.currentLevel || pendingApp?.level?.levelNumber || 1;
+    const targetLevelMatch = actionReturnTarget.match(/(?:LEVEL|APPROVER)[_\s]*(\d+)/i);
+    const targetLevelNum = targetLevelMatch ? parseInt(targetLevelMatch[1], 10) : null;
 
     // ⚡ INSTANT 0ms Optimistic Status Update & Success Modal Trigger
     const statusToSet: POStatus = act === 'approve'
       ? 'APPROVED'
       : act === 'reject'
       ? 'CANCELLED'
-      : (actionReturnTarget === 'LEVEL_1' ? 'PENDING_APPROVAL' : 'RETURNED');
+      : (targetLevelNum ? 'RE_REVIEW' : 'RETURNED');
     setOptimisticOverrides((prev) => ({
       ...prev,
       [targetOrder.id]: statusToSet,
@@ -492,7 +507,9 @@ export default function PurchaseOrdersPage() {
         ? `Purchase Order ${targetOrder.poNumber} approved successfully.`
         : act === 'reject'
         ? `Purchase Order ${targetOrder.poNumber} rejected.`
-        : `Purchase Order ${targetOrder.poNumber} returned for revision.`,
+        : targetLevelNum
+        ? `Purchase Order ${targetOrder.poNumber} returned to Approver ${targetLevelNum} (Level ${targetLevelNum}) successfully.`
+        : `Purchase Order ${targetOrder.poNumber} returned to Originator/Admin for revision successfully.`,
       comment: comment,
       details: [
         { label: 'Vendor Name', value: targetOrder.vendorName },
@@ -1182,6 +1199,7 @@ export default function PurchaseOrdersPage() {
                               const pendingApp = getPendingApprovalForPO(order);
                               const canActOnThisPO = Boolean(
                                 pendingApp?.canAct &&
+                                !pendingApp?.approvedByMe &&
                                 ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(order.status)
                               );
                               return canActOnThisPO ? (
@@ -1303,6 +1321,7 @@ export default function PurchaseOrdersPage() {
                     const pendingApp = getPendingApprovalForPO(order);
                     const canActOnThisPO = Boolean(
                       pendingApp?.canAct &&
+                      !pendingApp?.approvedByMe &&
                       ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(order.status)
                     );
                     return canActOnThisPO ? (
@@ -1591,6 +1610,7 @@ export default function PurchaseOrdersPage() {
                   const pendingApp = getPendingApprovalForPO(detailPO);
                   const canActOnThisPO = Boolean(
                     pendingApp?.canAct &&
+                    !pendingApp?.approvedByMe &&
                     ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(detailPO.status)
                   );
                   return canActOnThisPO ? (
@@ -1716,19 +1736,75 @@ export default function PurchaseOrdersPage() {
                 )}
               </div>
 
-              {actionModal.action === 'return' && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-foreground">Return to</label>
-                  <select
-                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
-                    value={actionReturnTarget}
-                    onChange={(e) => setActionReturnTarget(e.target.value as any)}
-                  >
-                    <option value="ORIGINATOR">Originator / Creator for Resubmission</option>
-                    <option value="LEVEL_1">Level 1 Approver</option>
-                  </select>
-                </div>
-              )}
+              {actionModal.action === 'return' && (() => {
+                const pendingApp = getPendingApprovalForPO(actionModal.order);
+                const currentLvl = pendingApp?.currentLevel || pendingApp?.level?.levelNumber || 1;
+                if (currentLvl <= 1) {
+                  return (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                      <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 text-xs">
+                        <div className="font-bold text-amber-900 dark:text-amber-200">
+                          Return Destination: Originator / Admin
+                        </div>
+                        <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                          As Approver 1 (Level 1), returning this purchase order will send it back to the <strong>Originator / Admin</strong> for modification and revision.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Build dynamic list of prior approvers: Approver 1 .. Approver (currentLvl - 1), followed by Originator / Admin
+                const options: { key: string; label: string; description: string }[] = [];
+
+                for (let i = 1; i < currentLvl; i++) {
+                  const matchedLevel = poApprovalLevels.find((l) => l.levelNumber === i);
+                  const roleName = matchedLevel?.requiredRole;
+                  options.push({
+                    key: `LEVEL_${i}`,
+                    label: `Approver ${i} (Level ${i})${roleName ? ` — Role: ${roleName}` : ''}`,
+                    description: `Restart approval workflow at Level ${i} (Approver ${i})`,
+                  });
+                }
+
+                // Add Originator / Admin option
+                options.push({
+                  key: 'ORIGINATOR',
+                  label: 'Originator / Admin (Order Creator)',
+                  description: 'Send back to creator for revision & edits',
+                });
+
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <RotateCcw className="size-3.5 text-amber-500" />
+                        <span>Return Destination <span className="text-destructive">*</span></span>
+                      </label>
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        Approver {currentLvl}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        className="h-10 w-full appearance-none rounded-xl border border-input bg-card/60 px-3.5 pr-10 text-xs sm:text-sm font-medium text-foreground outline-none transition-all hover:bg-muted/30 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                        value={actionReturnTarget}
+                        onChange={(e) => setActionReturnTarget(e.target.value)}
+                        aria-label="Select return destination"
+                      >
+                        {options.map((opt) => (
+                          <option key={opt.key} value={opt.key} className="bg-popover text-popover-foreground py-1">
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-2 py-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

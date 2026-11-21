@@ -14,7 +14,7 @@ import {
   ArrowUpDown, ChevronLeft, ChevronRight, CalendarDays,
   ClipboardList, AlertTriangle, Clock, CheckCircle2,
   X, XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare, PenLine,
-  Filter, Layers,
+  Filter, Layers, ChevronDown,
 } from 'lucide-react';
 import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -334,7 +334,8 @@ export default function RFQPage() {
   const [approvalModalError, setApprovalModalError] = useState<string | null>(null);
   const [approvalActionLoading, setApprovalActionLoading] = useState(false);
   const [approvalActionMessage, setApprovalActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+  const [actionReturnTarget, setActionReturnTarget] = useState<string>('ORIGINATOR');
+  const [rfqApprovalLevels, setRfqApprovalLevels] = useState<any[]>([]);
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [actionSendingState, setActionSendingState] = useState<{
     isOpen: boolean;
@@ -346,14 +347,20 @@ export default function RFQPage() {
 
   const fetchPendingApprovals = useCallback(async () => {
     try {
-      const pendingRows = await approvalService.listTable({ module: 'RFQ', status: 'PENDING' });
+      const [pendingRows, levels] = await Promise.all([
+        approvalService.listTable({ module: 'RFQ', status: 'PENDING' }).catch(() => []),
+        approvalService.getLevels().catch(() => []),
+      ]);
       const map = new Map<string, any>();
-      pendingRows.forEach((r) => {
+      pendingRows.forEach((r: any) => {
         if (r.referenceId) map.set(String(r.referenceId), r);
         if (r.referenceNumber) map.set(String(r.referenceNumber), r);
         if (r.id) map.set(String(r.id), r);
       });
       setPendingApprovalsMap(map);
+      if (Array.isArray(levels)) {
+        setRfqApprovalLevels(levels.filter((l: any) => l.module === 'RFQ'));
+      }
     } catch {
       setPendingApprovalsMap(new Map());
     }
@@ -402,7 +409,8 @@ export default function RFQPage() {
     setApprovalActionModal({ rfq, action, approvalId, levelNumber: levelNumber || 1 });
     setApprovalComment('');
     setApprovalModalError(null);
-    setActionReturnTarget((levelNumber || 1) > 1 ? 'LEVEL_1' : 'ORIGINATOR');
+    const curLvl = levelNumber || 1;
+    setActionReturnTarget(curLvl > 1 ? `LEVEL_${curLvl - 1}` : 'ORIGINATOR');
 
     // In background, resolve latest chain to guarantee active pending approvalId and levelNumber
     approvalService.getChain('RFQ', String(rfq.id) || rfq.rfqNumber)
@@ -420,6 +428,9 @@ export default function RFQPage() {
           resolvedLevel = chain.currentLevel;
         }
         if (pendingApprovalId || (resolvedLevel && resolvedLevel > 1)) {
+          if (resolvedLevel && resolvedLevel > 1) {
+            setActionReturnTarget(`LEVEL_${resolvedLevel - 1}`);
+          }
           setApprovalActionModal((prev) => {
             if (!prev || prev.rfq.id !== rfq.id) return prev;
             return {
@@ -1397,35 +1408,81 @@ export default function RFQPage() {
                 </div>
               )}
 
-              {approvalActionModal.action === 'return' && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-foreground">Return to</label>
-                  {(approvalActionModal.levelNumber || 1) > 1 ? (
-                    <select
-                      className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
-                      value={actionReturnTarget}
-                      onChange={(e) => {
-                        setActionReturnTarget(e.target.value as any);
-                        setApprovalModalError(null);
-                      }}
-                    >
-                      <option value="ORIGINATOR">Originator / Creator / Admin</option>
-                      <option value="LEVEL_1">Level 1 Approver</option>
-                    </select>
-                  ) : (
-                    <div className="flex h-10 items-center rounded-xl border border-border/80 bg-muted/40 px-3 text-sm font-medium text-foreground">
-                      Originator / Creator / Admin
+              {approvalActionModal.action === 'return' && (() => {
+                const currentLvl = approvalActionModal.levelNumber || 1;
+                if (currentLvl <= 1) {
+                  return (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                      <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 text-xs">
+                        <div className="font-bold text-amber-900 dark:text-amber-200">
+                          Return Destination: Originator / Admin
+                        </div>
+                        <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                          As Approver 1 (Level 1), returning this RFQ will send it back to the <strong>Originator / Admin</strong> for modification and revision.
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  <span className="text-[11px] text-muted-foreground">
-                    {(approvalActionModal.levelNumber || 1) > 1
-                      ? actionReturnTarget === 'LEVEL_1'
-                        ? `Level ${approvalActionModal.levelNumber} return will send the RFQ back to Level 1 Approver to restart the chain.`
-                        : `Level ${approvalActionModal.levelNumber} return will send the RFQ back to the originator / creator / admin for revision.`
-                      : 'Level 1 return sends the RFQ back to the originator / creator / admin for revision.'}
-                  </span>
-                </div>
-              )}
+                  );
+                }
+
+                const options: { key: string; label: string; description: string }[] = [];
+                for (let i = 1; i < currentLvl; i++) {
+                  const matchedLevel = rfqApprovalLevels.find((l) => l.levelNumber === i);
+                  const roleName = matchedLevel?.requiredRole;
+                  options.push({
+                    key: `LEVEL_${i}`,
+                    label: `Approver ${i} (Level ${i})${roleName ? ` — Role: ${roleName}` : ''}`,
+                    description: `Restart approval workflow at Level ${i} (Approver ${i})`,
+                  });
+                }
+                options.push({
+                  key: 'ORIGINATOR',
+                  label: 'Originator / Creator / Admin',
+                  description: 'Send back to creator for revision & edits',
+                });
+
+                const selectedOpt = options.find((o) => o.key === actionReturnTarget) || options[0];
+
+                return (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <RotateCcw className="size-3.5 text-amber-500" />
+                        <span>Return Destination <span className="text-destructive">*</span></span>
+                      </label>
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        Approver {currentLvl}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        className="h-10 w-full appearance-none rounded-xl border border-input bg-card/60 px-3.5 pr-10 text-xs sm:text-sm font-medium text-foreground outline-none transition-all hover:bg-muted/30 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                        value={actionReturnTarget}
+                        onChange={(e) => {
+                          setActionReturnTarget(e.target.value);
+                          setApprovalModalError(null);
+                        }}
+                      >
+                        {options.map((opt) => (
+                          <option key={opt.key} value={opt.key} className="bg-popover text-popover-foreground py-1">
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    </div>
+
+                    {selectedOpt && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                        <span className="inline-block size-1.5 rounded-full bg-amber-500 shrink-0" />
+                        <span>{selectedOpt.description}</span>
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-foreground">

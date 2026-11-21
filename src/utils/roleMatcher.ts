@@ -11,16 +11,34 @@ const cleanRole = (str: string) => stripPrefix(str).toLowerCase().trim().replace
 const ROLE_GROUPS: Record<string, { keys: string[]; names: string[] }> = {
   PURCHASE_CLERK: {
     keys: [
-      'purchaseclerk', 'purchase_clerk', 'purchaseofficer', 'purchase_officer',
-      'procurementofficer', 'procurement_officer', 'procurementclerk', 'procurement_clerk',
-      'buyer', 'purchaseclerk1', 'purchaseofficer1', 'procurementofficer1'
+      'purchaseclerk', 'purchase_clerk',
+      'procurementclerk', 'procurement_clerk',
+      'buyer', 'purchaseclerk1'
     ],
     names: [
       'Purchase Clerk', 'purchase clerk', 'Purchase_Clerk', 'purchase_clerk', 'purchaseclerk', 'PurchaseClerk', 'PURCHASE_CLERK', 'PURCHASE CLERK',
-      'Purchase Officer', 'purchase officer', 'Purchase_Officer', 'purchase_officer', 'purchaseofficer', 'PURCHASE_OFFICER',
-      'Procurement Officer', 'procurement officer', 'Procurement_Officer', 'procurement_officer', 'procurementofficer', 'PROCUREMENT_OFFICER',
       'Procurement Clerk', 'procurement clerk', 'Procurement_Clerk', 'procurement_clerk',
       'Buyer', 'buyer', 'BUYER'
+    ]
+  },
+  PURCHASE_OFFICER: {
+    keys: [
+      'purchaseofficer', 'purchase_officer',
+      'procurementofficer', 'procurement_officer',
+      'purchaseofficer1', 'procurementofficer1'
+    ],
+    names: [
+      'Purchase Officer', 'purchase officer', 'Purchase_Officer', 'purchase_officer', 'purchaseofficer', 'PurchaseOfficer', 'PURCHASE_OFFICER', 'PURCHASE OFFICER',
+      'Procurement Officer', 'procurement officer', 'Procurement_Officer', 'procurement_officer', 'procurementofficer', 'PROCUREMENT_OFFICER'
+    ]
+  },
+  PURCHASE_LEAD: {
+    keys: [
+      'purchaselead', 'purchase_lead',
+      'procurementlead', 'procurement_lead'
+    ],
+    names: [
+      'purchase lead', 'Purchase Lead', 'Purchase_Lead', 'purchase_lead', 'purchaselead', 'PURCHASE_LEAD', 'PURCHASE LEAD'
     ]
   },
   PURCHASE_MANAGER: {

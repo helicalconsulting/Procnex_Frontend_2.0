@@ -32,6 +32,7 @@ import { useAuth } from '../../context/AuthContext';
 import { isL2OrHigherUser } from '../../utils/rbac';
 import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import { RfqSendingOverlay } from '../../components/rfq/RfqSendingOverlay';
+import InventoryItemCombobox from '../../components/shared/InventoryItemCombobox';
 import './CreateRFQPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -206,52 +207,33 @@ export default function CreateRFQPage() {
     { cacheKey: 'form-configs:rfq_information' }
   );
 
-  // Derived structured unit options from Company Settings with standard fallbacks
+  // Derived structured unit options strictly from Company Settings
   const UNIT_OPTIONS = useMemo(() => {
     const seen = new Set<string>();
     const options: { value: string; label: string }[] = [];
 
-    (rawUnits || []).forEach((u) => {
-      const name = u.name?.trim();
-      if (!name) return;
-      const abbr = u.abbreviation?.trim();
-      const val = abbr || name;
-      const label = abbr && abbr.toLowerCase() !== name.toLowerCase()
-        ? `${name} (${abbr})`
-        : name;
+    (rawUnits || [])
+      .filter((u) => u && u.isActive !== false)
+      .forEach((u) => {
+        const name = u.name?.trim();
+        if (!name) return;
+        const abbr = u.abbreviation?.trim();
+        const val = abbr || name;
+        const label = abbr && abbr.toLowerCase() !== name.toLowerCase()
+          ? `${name} (${abbr})`
+          : name;
 
-      if (!seen.has(val.toLowerCase())) {
-        seen.add(val.toLowerCase());
-        options.push({ value: val, label });
-      }
-    });
-
-    const standardDefaults = [
-      { value: 'EA', label: 'EA (Each)' },
-      { value: 'Pcs', label: 'Pieces (Pcs)' },
-      { value: 'Box', label: 'Box' },
-      { value: 'Kg', label: 'Kg' },
-      { value: 'Ltr', label: 'Ltr' },
-      { value: 'Mtr', label: 'Mtr' },
-      { value: 'Set', label: 'Set' },
-      { value: 'Nos', label: 'Nos' },
-      { value: 'Pair', label: 'Pair' },
-      { value: 'Month', label: 'Month' },
-      { value: 'Year', label: 'Year' },
-    ];
-
-    standardDefaults.forEach((d) => {
-      if (!seen.has(d.value.toLowerCase())) {
-        seen.add(d.value.toLowerCase());
-        options.push(d);
-      }
-    });
+        if (!seen.has(val.toLowerCase())) {
+          seen.add(val.toLowerCase());
+          options.push({ value: val, label });
+        }
+      });
 
     return options;
   }, [rawUnits]);
 
   const findMatchingUnit = useCallback((uom?: string | null): string => {
-    if (!uom?.trim()) return 'Pcs';
+    if (!uom?.trim()) return UNIT_OPTIONS[0]?.value || '';
     const target = uom.trim().toLowerCase();
     const found = UNIT_OPTIONS.find(
       (opt) =>
@@ -260,7 +242,7 @@ export default function CreateRFQPage() {
         opt.label.toLowerCase().includes(`(${target})`) ||
         opt.label.toLowerCase().startsWith(target)
     );
-    return found ? found.value : uom.trim();
+    return found ? found.value : (UNIT_OPTIONS[0]?.value || uom.trim());
   }, [UNIT_OPTIONS]);
 
   const [isEditLocked, setIsEditLocked] = useState(false);
@@ -891,6 +873,25 @@ export default function CreateRFQPage() {
       })
     );
   }, [inventoryItems, findMatchingUnit]);
+
+  const handleSelectInventoryItem = useCallback(
+    (id: number | string, matched: ItemMaster) => {
+      setItems((prev) =>
+        prev.map((i) => {
+          if (i.id !== id) return i;
+          return {
+            ...i,
+            itemCode: matched.itemCode,
+            itemName: matched.itemName,
+            description: matched.description || i.description || '',
+            unit: matched.uom ? findMatchingUnit(matched.uom) : i.unit || 'Pcs',
+            itemClass: matched.productClass || i.itemClass || '',
+          };
+        })
+      );
+    },
+    [findMatchingUnit]
+  );
 
   // Form state — Vendors
   const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
@@ -2115,10 +2116,10 @@ export default function CreateRFQPage() {
                 <thead>
                   <tr>
                     <th style={{ width: 44 }}>#</th>
-                    <th style={{ width: 120 }}>Item Code</th>
-                    <th style={{ width: 200 }}>Item Name *</th>
+                    <th style={{ width: 170, minWidth: 170 }}>Item Code</th>
+                    <th style={{ width: 230 }}>Item Name *</th>
                     <th style={{ width: 180 }}>Description</th>
-                    <th style={{ width: 130 }}>Qty *</th>
+                    <th style={{ width: 110 }}>Qty *</th>
                     <th style={{ width: 140 }}>Unit</th>
                     <th style={{ width: 150 }}>Expected Date</th>
                     <th style={{ width: 44 }} />
@@ -2131,21 +2132,24 @@ export default function CreateRFQPage() {
                         <span className="create-rfq__row-num">{idx + 1}</span>
                       </td>
                       <td>
-                        <input
-                          type="text"
-                          placeholder="e.g. LED-6060"
+                        <InventoryItemCombobox
+                          mode="code"
                           value={item.itemCode || ''}
-                          list="erp-stock-codes-list"
-                          onChange={(e) => updateItem(item.id, 'itemCode', e.target.value)}
+                          items={inventoryItems}
+                          placeholder="e.g. AST-00001"
+                          onChange={(val) => updateItem(item.id, 'itemCode', val)}
+                          onSelect={(itm) => handleSelectInventoryItem(item.id, itm)}
                         />
                       </td>
                       <td>
-                        <input
-                          type="text"
-                          placeholder="Item name"
-                          value={item.itemName}
-                          list="inventory-item-names-list"
-                          onChange={(e) => updateItem(item.id, 'itemName', e.target.value)}
+                        <InventoryItemCombobox
+                          mode="name"
+                          value={item.itemName || ''}
+                          items={inventoryItems}
+                          placeholder="Search / enter name *"
+                          required
+                          onChange={(val) => updateItem(item.id, 'itemName', val)}
+                          onSelect={(itm) => handleSelectInventoryItem(item.id, itm)}
                         />
                       </td>
                       <td>
@@ -2180,12 +2184,6 @@ export default function CreateRFQPage() {
                               {u.label}
                             </option>
                           ))}
-                          {item.unit &&
-                            !UNIT_OPTIONS.some(
-                              (opt) => opt.value.toLowerCase() === item.unit.toLowerCase()
-                            ) && (
-                              <option value={item.unit}>{item.unit}</option>
-                            )}
                         </select>
                       </td>
                       <td>
@@ -2208,20 +2206,6 @@ export default function CreateRFQPage() {
                   ))}
                 </tbody>
               </table>
-              <datalist id="erp-stock-codes-list">
-                {inventoryItems.map((s) => (
-                  <option key={s.id} value={s.itemCode}>
-                    {s.itemName} ({s.itemCode})
-                  </option>
-                ))}
-              </datalist>
-              <datalist id="inventory-item-names-list">
-                {inventoryItems.map((s) => (
-                  <option key={s.id} value={s.itemName}>
-                    {s.itemName}
-                  </option>
-                ))}
-              </datalist>
             </div>
 
             <button className="create-rfq__add-row" onClick={addItem}>

@@ -28,9 +28,11 @@ import { adminService, type UserWithRoles } from '../../services/adminService';
 import { companySettingsService, type ItemClass, type Unit } from '../../services/companySettingsService';
 import { useAuth } from '../../context/AuthContext';
 import PriorityBadge from '../../components/shared/PriorityBadge';
+import InventoryItemCombobox from '../../components/shared/InventoryItemCombobox';
 
 interface RequisitionItemRow {
   itemName: string;
+  itemCode?: string;
   itemClass?: string;
   preferredSupplier?: string;
   description: string;
@@ -363,12 +365,39 @@ export default function CreatePurchaseRequisitionModal({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleSelectInventoryItem = (index: number, itm: ItemMaster) => {
+    setItems((prev) => {
+      const next = [...prev];
+      let resolvedUnit = next[index].unit;
+      if (itm.uom) {
+        const matchedUnit = unitOptions.find(
+          (uo) =>
+            uo.value.toLowerCase() === itm.uom.toLowerCase() ||
+            uo.label.toLowerCase().includes(itm.uom.toLowerCase())
+        );
+        resolvedUnit = matchedUnit ? matchedUnit.value : itm.uom;
+      }
+
+      next[index] = {
+        ...next[index],
+        itemCode: itm.itemCode,
+        itemName: itm.itemName,
+        description: itm.description || next[index].description || '',
+        itemClass: itm.productClass || next[index].itemClass || '',
+        preferredSupplier: itm.preferredSupplierName || next[index].preferredSupplier || '',
+        unit: resolvedUnit,
+      };
+      return next;
+    });
+  };
+
   const handleItemChange = (index: number, field: keyof RequisitionItemRow, value: any) => {
     setItems((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
-      if (field === 'itemCode' && value.trim()) {
-        const matched = inventoryItems.find((itm) => itm.itemCode === value.trim());
+      if (field === 'itemCode' && typeof value === 'string' && value.trim()) {
+        const query = value.trim().toLowerCase();
+        const matched = inventoryItems.find((itm) => itm.itemCode?.toLowerCase() === query);
         if (matched) {
           next[index].itemName = matched.itemName;
           next[index].description = matched.description || '';
@@ -383,8 +412,9 @@ export default function CreatePurchaseRequisitionModal({
             next[index].unit = matchedUnit ? matchedUnit.value : matched.uom;
           }
         }
-      } else if (field === 'itemName' && value.trim()) {
-        const matched = inventoryItems.find((itm) => itm.itemName === value.trim());
+      } else if (field === 'itemName' && typeof value === 'string' && value.trim()) {
+        const query = value.trim().toLowerCase();
+        const matched = inventoryItems.find((itm) => itm.itemName?.toLowerCase() === query);
         if (matched) {
           next[index].itemCode = matched.itemCode;
           next[index].description = matched.description || '';
@@ -498,7 +528,7 @@ export default function CreatePurchaseRequisitionModal({
                 <Building className="size-3.5 text-muted-foreground" /> Department
               </label>
               <Input
-                className="text-xs bg-muted/50 cursor-not-allowed text-foreground font-medium select-none"
+                className="h-[42px] text-sm bg-muted/50 cursor-not-allowed text-foreground font-medium select-none rounded-lg"
                 value={department || user?.department || 'Information Technology'}
                 readOnly
                 tabIndex={-1}
@@ -511,7 +541,7 @@ export default function CreatePurchaseRequisitionModal({
                 <User className="size-3.5 text-muted-foreground" /> Requester Name
               </label>
               <Input
-                className="text-xs"
+                className="h-[42px] text-sm rounded-lg"
                 placeholder="e.g. Khushi, John Doe"
                 value={requesterName}
                 onChange={(e) => setRequesterName(e.target.value)}
@@ -543,7 +573,7 @@ export default function CreatePurchaseRequisitionModal({
                     setSubmittedToEmail('');
                   }
                 }}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                className="w-full h-[42px] rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
                 required
               >
                 <option value="">
@@ -572,7 +602,7 @@ export default function CreatePurchaseRequisitionModal({
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden font-medium cursor-pointer"
+                className="w-full h-[42px] rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs focus:ring-1 focus:ring-primary outline-hidden font-medium cursor-pointer"
               >
                 <option value="LOW">Low</option>
                 <option value="MODERATE">Moderate</option>
@@ -586,7 +616,7 @@ export default function CreatePurchaseRequisitionModal({
               </label>
               <Input
                 type="date"
-                className="text-xs"
+                className="h-[42px] text-sm rounded-lg"
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
               />
@@ -618,41 +648,33 @@ export default function CreatePurchaseRequisitionModal({
                 >
                   {/* Row 1: Item Code, Item Name, Quantity, Unit & Remove Button */}
                   <div className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-12 sm:col-span-2">
-                      <Input
-                        list="inventory-codes-list"
-                        placeholder="Item Code"
-                        className="text-xs font-medium"
+                    <div className="col-span-12 sm:col-span-3">
+                      <InventoryItemCombobox
+                        mode="code"
                         value={item.itemCode || ''}
-                        onChange={(e) => handleItemChange(idx, 'itemCode', e.target.value)}
+                        items={inventoryItems}
+                        placeholder="Item Code (e.g. AST-00001)"
+                        onChange={(val) => handleItemChange(idx, 'itemCode', val)}
+                        onSelect={(itm) => handleSelectInventoryItem(idx, itm)}
                       />
-                      <datalist id="inventory-codes-list">
-                        {inventoryItems.map((itm) => (
-                          <option key={itm.id} value={itm.itemCode}>{itm.itemName}</option>
-                        ))}
-                      </datalist>
                     </div>
-                    <div className="col-span-12 sm:col-span-5">
-                      <Input
-                        list="inventory-names-list"
-                        placeholder="Item Name *"
-                        className="text-xs font-medium"
+                    <div className="col-span-12 sm:col-span-4">
+                      <InventoryItemCombobox
+                        mode="name"
                         value={item.itemName || ''}
-                        onChange={(e) => handleItemChange(idx, 'itemName', e.target.value)}
+                        items={inventoryItems}
+                        placeholder="Item Name *"
                         required
+                        onChange={(val) => handleItemChange(idx, 'itemName', val)}
+                        onSelect={(itm) => handleSelectInventoryItem(idx, itm)}
                       />
-                      <datalist id="inventory-names-list">
-                        {inventoryItems.map((itm) => (
-                          <option key={itm.id} value={itm.itemName}>{itm.itemCode}</option>
-                        ))}
-                      </datalist>
                     </div>
                     <div className="col-span-6 sm:col-span-2">
                       <Input
                         type="number"
                         min="1"
                         placeholder="Qty"
-                        className="text-xs text-center"
+                        className="h-[42px] text-sm text-center rounded-lg"
                         value={item.quantity}
                         onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
                         onBlur={() => {
@@ -672,7 +694,7 @@ export default function CreatePurchaseRequisitionModal({
                           )?.value || item.unit
                         }
                         onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                        className="w-full h-9 rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                        className="w-full h-[42px] rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
                         title="Unit of measurement"
                       >
                         {loadingUnits && unitOptions.length === 0 && (
@@ -694,7 +716,7 @@ export default function CreatePurchaseRequisitionModal({
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
-                          className="text-muted-foreground hover:text-rose-500 p-1.5 rounded-md transition-colors shrink-0"
+                          className="text-muted-foreground hover:text-rose-500 p-2 rounded-md transition-colors shrink-0 flex items-center justify-center h-[42px]"
                           title="Remove item"
                         >
                           <Trash2 className="size-4" />
@@ -709,7 +731,7 @@ export default function CreatePurchaseRequisitionModal({
                       <select
                         value={item.itemClass || ''}
                         onChange={(e) => handleItemChange(idx, 'itemClass', e.target.value)}
-                        className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                        className="w-full h-[42px] rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
                         title="Item Class"
                       >
                         <option value="">-- Select Item Class --</option>
@@ -727,7 +749,7 @@ export default function CreatePurchaseRequisitionModal({
                       <select
                         value={item.preferredSupplier || ''}
                         onChange={(e) => handleItemChange(idx, 'preferredSupplier', e.target.value)}
-                        className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
+                        className="w-full h-[42px] rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs focus:ring-1 focus:ring-primary outline-hidden cursor-pointer"
                         title="Preferred Supplier"
                       >
                         <option value="">-- Select Preferred Supplier (Optional) --</option>
@@ -747,7 +769,7 @@ export default function CreatePurchaseRequisitionModal({
                   <div>
                     <Input
                       placeholder="Item Description / specifications (e.g. 14 in, Core i7, 16 GB, 512 GB SSD)..."
-                      className="h-8.5 text-xs text-foreground placeholder:text-muted-foreground"
+                      className="h-[42px] text-sm text-foreground placeholder:text-muted-foreground rounded-lg"
                       value={item.description || ''}
                       onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
                     />

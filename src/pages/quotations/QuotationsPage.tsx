@@ -28,6 +28,7 @@ import ViewPaymentPlanModal from '../../components/vendor/ViewPaymentPlanModal';
 import '../../components/shared/ColumnCustomizer.css';
 import type { RFQTableRow } from '../../types/viewModels';
 import { MessageStrip, type MessageStripType } from '../../components/shared/MessageStrip';
+import { isRoleMatching } from '../../utils/roleMatcher';
 import { CurrencyBadge, CurrencySelector, useCurrency, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import VendorComparisonCharts from '../../components/rfq/VendorComparisonCharts';
 import PostAwardModal from '../../components/contracts/PostAwardModal';
@@ -2041,33 +2042,7 @@ function canActionQuotation(s: MockQuotation | null | undefined, user: any, role
   if (!activeRole) return false;
 
   const userRoles: string[] = Array.isArray(roles) ? roles : [];
-  const stripPrefix = (str: string) => str.replace(/^level\s*\d+(\s*of\s*\d+)?\s*:\s*/i, '').trim();
-  const reqClean = stripPrefix(activeRole).toLowerCase().replace(/[\s_-]+/g, '');
-
-  const aliases: Record<string, string[]> = {
-    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchaseclerk', 'buyer', 'analyst'],
-    approver1: ['approver1', 'level1user', 'level1', 'l1user', 'l1_user', 'l1', 'purchaseclerk', 'buyer', 'analyst'],
-    purchaseclerk: ['purchaseclerk', 'purchase_clerk', 'procurementclerk', 'procurement_clerk', 'buyer', 'analyst', 'l1user', 'approver1'],
-    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'procurement'],
-    financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2'],
-    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'financeapprover', 'financemanager'],
-    approver2: ['approver2', 'level2user', 'level2', 'l2user', 'l2_user', 'l2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'financeapprover'],
-    generalmanager: ['generalmanager', 'general_manager', 'managingdirector', 'managing_director', 'director', 'executive', 'l3user', 'l3_user', 'l3', 'approver3', 'level3user', 'level3'],
-    l3user: ['l3user', 'l3_user', 'l3', 'approver3', 'level3user', 'level3', 'generalmanager', 'general_manager', 'managingdirector', 'director', 'executive'],
-    approver3: ['approver3', 'level3user', 'level3', 'l3user', 'l3_user', 'l3', 'generalmanager', 'general_manager', 'managingdirector', 'director'],
-    admin: ['admin', 'superadmin', 'systemadministrator', 'administrator'],
-    superadmin: ['superadmin', 'admin', 'systemadministrator', 'administrator'],
-    systemadministrator: ['systemadministrator', 'admin', 'superadmin', 'administrator'],
-    administrator: ['administrator', 'admin', 'superadmin', 'systemadministrator'],
-  };
-
-  return userRoles.some((uRole) => {
-    const usrClean = stripPrefix(uRole).toLowerCase().replace(/[\s_-]+/g, '');
-    if (reqClean === usrClean) return true;
-    if (aliases[reqClean] && aliases[reqClean].includes(usrClean)) return true;
-    if (aliases[usrClean] && aliases[usrClean].includes(reqClean)) return true;
-    return false;
-  });
+  return isRoleMatching(activeRole, userRoles);
 }
 
 function canPerformPostAward(s: MockQuotation | null | undefined, user: any, roles: string[]): boolean {
@@ -2263,7 +2238,7 @@ function ActionModalInner({
 }: {
   modal: ActiveModal;
   onClose: () => void;
-  onConfirm: (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => void;
+  onConfirm: (type: ModalType, comment: string, returnTarget?: string) => void;
   onViewPlan?: (plan: { name: string; milestones: Array<{ id: string; title: string; percentage: number }> }) => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -2284,19 +2259,11 @@ function ActionModalInner({
   // Determine the effective level of the quotation
   const activeLevelNum = Number(q.currentLevelNumber || (q as any).currentLevel || 0);
 
-  // Approver 1 / Single-level Review (Level 1 / Approver 1):
-  // Direct return to vendor only — do NOT show Return Destination radio options.
-  // Approver 2 or above (Level >= 2):
-  // Show BOTH options:
-  // 1) Return to Vendor for Resubmission
-  // 2) Return to Level 1 Approver
-  const canReturnToLevel1 = activeLevelNum >= 2 || Boolean((q as any).userAction === 'APPROVED_L1');
-
-  const [returnTarget, setReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>('VENDOR');
+  const [returnTarget, setReturnTarget] = useState<string>(activeLevelNum > 1 ? `LEVEL_${activeLevelNum - 1}` : 'VENDOR');
 
   useEffect(() => {
-    setReturnTarget('VENDOR');
-  }, [canReturnToLevel1]);
+    setReturnTarget(activeLevelNum > 1 ? `LEVEL_${activeLevelNum - 1}` : 'VENDOR');
+  }, [activeLevelNum]);
 
   const { formatAmount } = useCurrency();
 
@@ -2479,44 +2446,81 @@ function ActionModalInner({
             </div>
           )}
 
-          {/* Return Target Selection — only show if quotation is at Level 2+ and user can return to Level 1 */}
-          {type === 'return' && canReturnToLevel1 && (
-            <div style={{ margin: '14px 0', padding: 12, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6 }}>
-              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Return Destination
-              </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: 'var(--foreground)' }}>
-                  <input
-                    type="radio"
-                    name="returnTarget"
-                    value="VENDOR"
-                    checked={returnTarget === 'VENDOR'}
-                    onChange={() => setReturnTarget('VENDOR')}
-                    style={{ marginTop: 3, accentColor: 'var(--primary)' }}
-                  />
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--primary)' }}>Return to Vendor for Resubmission</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
+          {/* Return Target Selection */}
+          {type === 'return' && (() => {
+            if (activeLevelNum <= 1) {
+              return (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 my-3.5 flex items-start gap-3">
+                  <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 text-xs text-left">
+                    <div className="font-bold text-amber-900 dark:text-amber-200">
+                      Return Destination: Vendor (for Resubmission)
+                    </div>
+                    <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                      As Approver 1 (Level 1), returning this quotation will send feedback to the <strong>Vendor</strong> so they can revise and resubmit.
+                    </p>
                   </div>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: 'var(--foreground)' }}>
-                  <input
-                    type="radio"
-                    name="returnTarget"
-                    value="LEVEL_1"
-                    checked={returnTarget === 'LEVEL_1'}
-                    onChange={() => setReturnTarget('LEVEL_1')}
-                    style={{ marginTop: 3, accentColor: 'var(--primary)' }}
-                  />
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--primary)' }}>Return to Level 1 Approver</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Restart approval chain starting at Level 1</div>
-                  </div>
-                </label>
+                </div>
+              );
+            }
+
+            const options: { key: string; label: string; description: string }[] = [];
+            for (let i = 1; i < activeLevelNum; i++) {
+              options.push({
+                key: `LEVEL_${i}`,
+                label: `Approver ${i} (Level ${i})`,
+                description: `Restart quotation approval workflow at Level ${i} (Approver ${i})`,
+              });
+            }
+            options.push({
+              key: 'VENDOR',
+              label: 'Vendor (for Resubmission)',
+              description: 'Send feedback to vendor so they can revise and resubmit',
+            });
+            options.push({
+              key: 'ORIGINATOR',
+              label: 'Originator / Creator / Admin',
+              description: 'Send back to creator for review & edits',
+            });
+
+            const selectedOpt = options.find((o) => o.key === returnTarget) || options[0];
+
+            return (
+              <div className="space-y-1.5 my-3.5 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <RotateCcw className="size-3.5 text-amber-500" />
+                    <span>Return Destination <span className="text-destructive">*</span></span>
+                  </label>
+                  <span className="text-[11px] text-muted-foreground font-medium">
+                    Approver {activeLevelNum}
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <select
+                    className="h-10 w-full appearance-none rounded-xl border border-input bg-card px-3.5 pr-10 text-xs sm:text-sm font-medium text-foreground outline-none transition-all hover:bg-muted/30 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                    value={returnTarget}
+                    onChange={(e) => setReturnTarget(e.target.value)}
+                  >
+                    {options.map((opt) => (
+                      <option key={opt.key} value={opt.key} className="bg-popover text-popover-foreground py-1">
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                </div>
+
+                {selectedOpt && (
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                    <span className="inline-block size-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span>{selectedOpt.description}</span>
+                  </p>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Comment box for non-view modals */}
           {type !== 'view' && (
@@ -2562,7 +2566,7 @@ function ActionModalInner({
 function ActionModal(props: {
   modal: ActiveModal;
   onClose: () => void;
-  onConfirm: (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => void;
+  onConfirm: (type: ModalType, comment: string, returnTarget?: string) => void;
   onViewPlan?: (plan: { name: string; milestones: Array<{ id: string; title: string; percentage: number }> }) => void;
 }) {
   return createPortal(
@@ -3782,16 +3786,17 @@ export default function QuotationsPage() {
     setActiveModal(null);
   };
 
-  const handleConfirm = async (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => {
+  const handleConfirm = async (type: ModalType, comment: string, returnTarget?: string) => {
     const modal = activeModalRef.current || activeModal;
     if (!modal) return;
     const id = modal.quotation.id;
     const previousStatus = modal.quotation.status;
 
+    const isLevelReturn = returnTarget && /(?:LEVEL|APPROVER)[_\s]*(\d+)/i.test(returnTarget);
     const displayStatusMap: Partial<Record<NonNullable<ModalType>, QuotStatus>> = {
       accept: 'ACCEPTED',
       reject: 'REJECTED',
-      return: returnTarget === 'LEVEL_1' ? 'UNDER_REVIEW' : 'RETURNED',
+      return: isLevelReturn ? 'UNDER_REVIEW' : 'RETURNED',
     };
     const apiStatusMap: Record<string, string> = {
       accept: 'ACCEPTED',
@@ -3816,7 +3821,7 @@ export default function QuotationsPage() {
     modalQuotation: MockQuotation,
     type: ModalType,
     startLevelNumber?: number,
-    returnTarget?: 'LEVEL_1' | 'VENDOR'
+    returnTarget?: string
   ) => {
     // ── Instant 0ms Local State Update for both listing table & comparison tab ──
     const isDirectXMode = checkIsDirectXMode(modalQuotation);

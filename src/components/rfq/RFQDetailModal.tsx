@@ -13,7 +13,7 @@ import {
   Package, FileText, Minus, Maximize2, Minimize2, ChevronUp,
   Trophy, Eye, ArrowRightLeft, Shield, ShieldCheck, TrendingUp, CheckCircle2,
   XCircle, Undo2, Clock, ArrowLeft, Send, ChevronRight, PenLine, RotateCcw,
-  ShoppingCart,
+  ShoppingCart, ChevronDown,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import ActionSendingOverlay from '../shared/ActionSendingOverlay';
@@ -273,7 +273,7 @@ export default function RFQDetailModal({
   const [showCommentBox, setShowCommentBox] = useState<'reject' | 'return' | null>(null);
   const [approvalActionSuccess, setApprovalActionSuccess] = useState<string | null>(null);
   const [approvalActionError, setApprovalActionError] = useState<string | null>(null);
-  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+  const [actionReturnTarget, setActionReturnTarget] = useState<string>('ORIGINATOR');
 
   const [approvalChain, setApprovalChain] = useState<{ levels?: any[]; history?: any[]; timeline?: any[]; totalLevels?: number } | null>(null);
   const [approvalChainLoading, setApprovalChainLoading] = useState(false);
@@ -1022,7 +1022,15 @@ export default function RFQDetailModal({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 sm:self-center">
-                  <Button variant="outline" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'return' ? null : 'return')}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const cur = pendingApproval?.currentLevel || pendingApproval?.levelNumber || (rfq as any)?.currentLevel || approvalChain?.currentLevel || 1;
+                      setActionReturnTarget(cur > 1 ? `LEVEL_${cur - 1}` : 'ORIGINATOR');
+                      setShowCommentBox(showCommentBox === 'return' ? null : 'return');
+                    }}
+                  >
                     <Undo2 className="size-3.5 mr-1" /> Return
                   </Button>
                   <Button variant="destructive" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'reject' ? null : 'reject')}>
@@ -1037,30 +1045,73 @@ export default function RFQDetailModal({
               <div className="mt-3 border-t border-amber-500/20 pt-3">
                 {showCommentBox === 'return' && (() => {
                   const currentLvl = pendingApproval?.currentLevel || pendingApproval?.levelNumber || (rfq as any)?.currentLevel || approvalChain?.currentLevel || 1;
-                  return (
-                    <div className="mb-2.5 flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-foreground">Return to</label>
-                      {currentLvl > 1 ? (
-                        <select
-                          className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs font-medium focus:ring-1 focus:ring-primary"
-                          value={actionReturnTarget}
-                          onChange={(e) => setActionReturnTarget(e.target.value as any)}
-                        >
-                          <option value="ORIGINATOR">Originator / Creator / Admin</option>
-                          <option value="LEVEL_1">Level 1 Approver</option>
-                        </select>
-                      ) : (
-                        <div className="flex h-8 items-center rounded-md border border-border/70 bg-muted/40 px-2 text-xs font-medium text-foreground">
-                          Originator / Creator / Admin
+                  if (currentLvl <= 1) {
+                    return (
+                      <div className="mb-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3 flex items-start gap-2.5">
+                        <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5 text-xs">
+                          <div className="font-bold text-amber-900 dark:text-amber-200">
+                            Return Destination: Originator / Admin
+                          </div>
+                          <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                            As Approver 1 (Level 1), returning this RFQ will send it back to the <strong>Originator / Admin</strong> for modification and revision.
+                          </p>
                         </div>
+                      </div>
+                    );
+                  }
+
+                  const options: { key: string; label: string; description: string }[] = [];
+                  for (let i = 1; i < currentLvl; i++) {
+                    const matchedLevel = (approvalChain?.levels || []).find((l: any) => l.levelNumber === i);
+                    const roleName = matchedLevel?.requiredRole;
+                    options.push({
+                      key: `LEVEL_${i}`,
+                      label: `Approver ${i} (Level ${i})${roleName ? ` — Role: ${roleName}` : ''}`,
+                      description: `Restart approval workflow at Level ${i} (Approver ${i})`,
+                    });
+                  }
+                  options.push({
+                    key: 'ORIGINATOR',
+                    label: 'Originator / Creator / Admin',
+                    description: 'Send back to creator for revision & edits',
+                  });
+
+                  const selectedOpt = options.find((o) => o.key === actionReturnTarget) || options[0];
+
+                  return (
+                    <div className="mb-2.5 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <RotateCcw className="size-3.5 text-amber-500" />
+                          <span>Return Destination <span className="text-destructive">*</span></span>
+                        </label>
+                        <span className="text-[11px] text-muted-foreground font-medium">
+                          Approver {currentLvl}
+                        </span>
+                      </div>
+
+                      <div className="relative">
+                        <select
+                          className="h-9 w-full appearance-none rounded-xl border border-input bg-card/60 px-3 pr-9 text-xs font-medium text-foreground outline-none transition-all hover:bg-muted/30 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                          value={actionReturnTarget}
+                          onChange={(e) => setActionReturnTarget(e.target.value)}
+                        >
+                          {options.map((opt) => (
+                            <option key={opt.key} value={opt.key} className="bg-popover text-popover-foreground py-1">
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                      </div>
+
+                      {selectedOpt && (
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                          <span className="inline-block size-1.5 rounded-full bg-amber-500 shrink-0" />
+                          <span>{selectedOpt.description}</span>
+                        </p>
                       )}
-                      <span className="text-[11px] text-muted-foreground">
-                        {currentLvl > 1
-                          ? actionReturnTarget === 'LEVEL_1'
-                            ? `Level ${currentLvl} return will send the RFQ back to Level 1 Approver to restart the chain.`
-                            : `Level ${currentLvl} return will send the RFQ back to the originator / creator / admin for revision.`
-                          : 'Level 1 return sends the RFQ back to the originator / creator / admin for revision.'}
-                      </span>
                     </div>
                   );
                 })()}

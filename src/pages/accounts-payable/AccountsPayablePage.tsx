@@ -58,6 +58,7 @@ import {
   Filter,
   Send,
   Trash2,
+  ChevronDown,
 } from 'lucide-react';
 import '../../components/shared/ColumnCustomizer.css';
 
@@ -261,7 +262,8 @@ export default function AccountsPayablePage() {
   const [viewerInvoice, setViewerInvoice] = useState<APInvoice | null>(null);
   const [actionModal, setActionModal] = useState<{ invoice: APInvoice; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
-  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+  const [actionReturnTarget, setActionReturnTarget] = useState<string>('ORIGINATOR');
+  const [approvalLevels, setApprovalLevels] = useState<any[]>([]);
   const [actionSaving, setActionSaving] = useState(false);
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
@@ -347,11 +349,15 @@ export default function AccountsPayablePage() {
       }
       setError(null);
 
-      const [approvalRows, rawInvoices, rawPayments] = await Promise.all([
+      const [approvalRows, rawInvoices, rawPayments, configuredLevels] = await Promise.all([
         approvalService.listTable({ module: 'AccountsPayable' }).catch(() => [] as ApprovalTableRow[]),
         invoiceService.list().catch(() => [] as ServiceAPInvoice[]),
         localDataService.getPayments().catch(() => [] as any[]),
+        approvalService.getLevels().catch(() => [] as any[]),
       ]);
+      if (Array.isArray(configuredLevels)) {
+        setApprovalLevels(configuredLevels);
+      }
 
       const findPaymentForInvoice = (invNum?: string, invId?: string) => {
         if (!invNum && !invId) return undefined;
@@ -411,8 +417,13 @@ export default function AccountsPayablePage() {
           processedRefKeys.add(matchingRaw.invoiceNumber);
         }
 
-        // Find active pending row if any
-        const pendingRow = rows.find((r) => r.status === 'PENDING');
+        // Find active pending / actionable row if any
+        const pendingRow = rows.find(
+          (r) =>
+            r.status === 'PENDING' ||
+            (r as any).workflowStatus === 'PENDING' ||
+            ((r.status === 'RETURNED' || (r as any).isReturned) && r.canAct)
+        );
         const rejectedRow = rows.find((r) => r.status === 'REJECTED');
         const returnedRow = !pendingRow ? rows.find((r) => r.status === 'RETURNED') : undefined;
         const allApproved = rows.length > 0 && rows.every((r) => r.status === 'APPROVED');
@@ -420,7 +431,8 @@ export default function AccountsPayablePage() {
         const hadReturn = Boolean(
           (!pendingRow && matchingRaw?.status === 'RETURNED') ||
           (!pendingRow && (activeApp as any)?.isReturned) ||
-          (!pendingRow && returnedRow)
+          (!pendingRow && returnedRow) ||
+          rows.some((r) => r.status === 'RETURNED' || (r as any).isReturned)
         );
 
         const invNo = matchingRaw?.invoiceNumber || activeApp.referenceNumber || `INV-${activeApp.id.slice(-6)}`;
@@ -438,25 +450,32 @@ export default function AccountsPayablePage() {
           amt = amt / 1000;
         }
 
-        const l1Row = rows.find((r) => (r.currentLevel || (r.level as any)?.levelNumber || (r as any)?.levelNumber) === 1);
-        const l1Role = l1Row?.requiredRole || (l1Row?.level as any)?.requiredRole || 'Analyst';
-        const totalLevels = activeApp.totalLevels || rows.length || 1;
+        const activeConfiguredLevels = (Array.isArray(configuredLevels) && configuredLevels.length > 0) ? configuredLevels : approvalLevels;
+        const apLevels = activeConfiguredLevels.filter((l) =>
+          ['AccountsPayable', 'Accounts Payable', 'PurchaseInvoice', 'Purchase Invoice', 'PO Invoice'].includes(l.module)
+        );
+        const totalLevels = activeApp.totalLevels || rows.length || (apLevels.length > 0 ? apLevels.length : 1);
         const currentLevel = (pendingRow ? (pendingRow.currentLevel || (pendingRow.level as any)?.levelNumber) : (allApproved ? totalLevels : activeApp.currentLevel)) || 1;
-        const reqRole = pendingRow?.requiredRole || (pendingRow?.level as any)?.requiredRole || (hadReturn ? l1Role : (activeApp.requiredRole || 'Purchase Clerk'));
 
-        const isUserMatchingPendingStep = pendingRow
-          ? isRoleMatching(reqRole, authRoles) ||
-            (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
-            ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
-            (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
-            (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase())
-          : false;
+        const l1Configured = apLevels.find((l) => l.levelNumber === 1);
+        const l1Row = rows.find((r) => (r.currentLevel || (r.level as any)?.levelNumber || (r as any)?.levelNumber) === 1);
+        const l1Role = l1Row?.requiredRole || (l1Row?.level as any)?.requiredRole || l1Configured?.requiredRole || 'Purchase Manager';
 
+        const configuredLevelRole = apLevels.find((l) => l.levelNumber === currentLevel)?.requiredRole;
+        const reqRole =
+          pendingRow?.requiredRole ||
+          (pendingRow?.level as any)?.requiredRole ||
+          configuredLevelRole ||
+          activeApp.requiredRole ||
+          (currentLevel === 1 ? l1Role : currentLevel === 2 ? 'Purchase Clerk' : currentLevel === 3 ? 'Purchase Officer' : 'purchase lead');
+
+        // Check if current user has already approved an earlier level than currentLevel
         const hasApprovedPriorLevel =
           allApproved ||
           rows.some(
             (r) =>
               r.status === 'APPROVED' &&
+              ((r.currentLevel || (r.level as any)?.levelNumber || 0) < currentLevel) &&
               (
                 isRoleMatching(r.requiredRole, authRoles) ||
                 (user?.id && r.approverId && String(r.approverId) === String(user.id)) ||
@@ -466,11 +485,23 @@ export default function AccountsPayablePage() {
               )
           );
 
+        const isUserMatchingPendingStep = pendingRow
+          ? Boolean(
+              !hasApprovedPriorLevel &&
+              (
+                isRoleMatching(reqRole, authRoles) ||
+                (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
+                ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
+                (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
+                (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase())
+              )
+            )
+          : false;
+
         const userReturnedRecord = rows.find(
           (r) =>
             r.status === 'RETURNED' &&
             (
-              isRoleMatching(r.requiredRole, authRoles) ||
               (user?.id && r.approverId && String(r.approverId) === String(user.id)) ||
               (user?.name && r.approverName && r.approverName.toLowerCase() === user.name.toLowerCase())
             )
@@ -485,31 +516,30 @@ export default function AccountsPayablePage() {
           status = 'APPROVED';
         } else if (rejectedRow || matchingRaw?.status === 'REJECTED') {
           status = 'REJECTED';
+        } else if (hasApprovedPriorLevel) {
+          // If this user already approved a prior level, document shows Approved for them
+          status = 'APPROVED';
+        } else if (returnedByMe) {
+          status = 'RETURNED';
         } else if (pendingRow) {
-          if (isUserMatchingPendingStep) {
-            status = hadReturn ? 'RETURNED' : 'PENDING';
-          } else if (returnedByMe) {
-            status = 'RETURNED';
-          } else if (hasApprovedPriorLevel) {
-            status = 'APPROVED';
-          } else {
-            status = 'PENDING';
-          }
-        } else if (returnedRow || matchingRaw?.status === 'RETURNED' || hadReturn || returnedByMe) {
+          status = isUserMatchingPendingStep ? (hadReturn ? 'RETURNED' : 'PENDING') : 'PENDING';
+        } else if (returnedRow || matchingRaw?.status === 'RETURNED' || hadReturn) {
           status = 'RETURNED';
         } else {
           status = (matchingRaw?.status as APStatus) || 'APPROVED';
         }
 
         let effectiveCanAct = false;
-        if (status === 'PENDING') {
-          effectiveCanAct = isUserMatchingPendingStep;
-        } else if (status === 'RETURNED') {
-          const isL1Role = isRoleMatching(l1Role, authRoles);
-          effectiveCanAct = isL1Role || isRoleMatching(reqRole, authRoles);
+        if (pendingRow) {
+          // ONLY the user matching the active pending step can act; prior approvers cannot act
+          effectiveCanAct = isUserMatchingPendingStep && !hasApprovedPriorLevel;
+        } else if (status === 'RETURNED' || hadReturn) {
+          // If returned to Originator with no pending approval step, only creator or admin can act
+          const isCreator = (matchingRaw as any)?.registeredById === user?.id || (matchingRaw as any)?.createdById === user?.id;
+          effectiveCanAct = Boolean(isCreator || isAdmin);
         }
 
-        if (status === 'APPROVED' || (hasApprovedPriorLevel && !isUserMatchingPendingStep) || returnedByMe) {
+        if (status === 'APPROVED' || hasApprovedPriorLevel || returnedByMe) {
           effectiveCanAct = false;
         }
 
@@ -787,6 +817,9 @@ export default function AccountsPayablePage() {
     const act = actionModal.action;
     const comment = actionComment.trim() || (act === 'return' ? 'Returned for revision' : act === 'reject' ? 'Rejected by approver' : undefined);
     const returnTarget = (targetInvoice.currentLevel || 1) > 1 ? actionReturnTarget : 'ORIGINATOR';
+    const targetLevelNum = returnTarget.startsWith('LEVEL_')
+      ? parseInt(returnTarget.replace('LEVEL_', ''), 10) || 1
+      : null;
 
     // ⚡ INSTANT (0ms) Optimistic local state update & Instant Success Modal Trigger
     const newStatus: APStatus =
@@ -802,7 +835,7 @@ export default function AccountsPayablePage() {
       canAct: false,
       isReturned: isReturning,
       hasApprovedPriorLevel: act === 'approve',
-      currentLevel: act === 'return' && returnTarget === 'LEVEL_1' ? 1 : targetInvoice.currentLevel,
+      currentLevel: act === 'return' && targetLevelNum ? targetLevelNum : targetInvoice.currentLevel,
     };
 
     const optKeys = [String(targetInvoice.id), targetInvoice.invoiceNumber, approvalId].filter(Boolean) as string[];
@@ -828,7 +861,7 @@ export default function AccountsPayablePage() {
               canAct: false,
               isReturned: isReturning,
               hasApprovedPriorLevel: act === 'approve',
-              currentLevel: act === 'return' && returnTarget === 'LEVEL_1' ? 1 : inv.currentLevel,
+              currentLevel: act === 'return' && targetLevelNum ? targetLevelNum : inv.currentLevel,
             }
           : inv
       )
@@ -846,8 +879,8 @@ export default function AccountsPayablePage() {
           ? 'Purchase Invoice approved successfully.'
           : act === 'reject'
           ? 'Purchase Invoice rejected successfully.'
-          : returnTarget === 'LEVEL_1'
-          ? 'Purchase Invoice returned to Level 1 Approver successfully.'
+          : targetLevelNum
+          ? `Purchase Invoice returned to Approver ${targetLevelNum} (Level ${targetLevelNum}) successfully.`
           : 'Purchase Invoice returned to Originator/Admin for revision successfully.',
       comment: comment,
       details: [
@@ -863,7 +896,7 @@ export default function AccountsPayablePage() {
           const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
           const pendingRow = list.find(
             (r: any) =>
-              r.status === 'PENDING' &&
+              (r.status === 'PENDING' || r.workflowStatus === 'PENDING' || r.canAct) &&
               (r.referenceId === String(targetInvoice.id) ||
                 r.referenceNumber === targetInvoice.invoiceNumber ||
                 r.referenceId === targetInvoice.invoiceNumber ||
@@ -910,17 +943,10 @@ export default function AccountsPayablePage() {
             }
           } else if (act === 'reject') {
             await approvalService.reject(approvalId, comment);
-            await invoiceService.updateStatus(targetInvoice.id, 'REJECTED', comment).catch(() => {});
-            if (targetInvoice.invoiceNumber) {
-              await invoiceService.updateStatus(targetInvoice.invoiceNumber, 'REJECTED', comment).catch(() => {});
-            }
           } else {
+            // Return invoice approval: approvalService automatically handles signature reset,
+            // document status update, and initiating the new pending approval step.
             await approvalService.return(approvalId, comment, returnTarget);
-            const statusToSet = 'RETURNED';
-            await invoiceService.updateStatus(targetInvoice.id, statusToSet, comment, returnTarget).catch(() => {});
-            if (targetInvoice.invoiceNumber) {
-              await invoiceService.updateStatus(targetInvoice.invoiceNumber, statusToSet, comment, returnTarget).catch(() => {});
-            }
           }
         } else {
           const statusToSet =
@@ -1005,7 +1031,7 @@ export default function AccountsPayablePage() {
             const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
             const pendingRow = list.find(
               (r: any) =>
-                r.status === 'PENDING' &&
+                (r.status === 'PENDING' || r.workflowStatus === 'PENDING' || r.canAct) &&
                 (r.referenceId === String(targetInvoice.id) ||
                   r.referenceNumber === targetInvoice.invoiceNumber ||
                   r.referenceId === targetInvoice.invoiceNumber ||
@@ -1096,7 +1122,9 @@ export default function AccountsPayablePage() {
   const openAction = useCallback((invoice: APInvoice, action: ActionType) => {
     setActionModal({ invoice, action });
     setActionComment('');
-    setActionReturnTarget('LEVEL_1');
+    const curLvl = invoice.currentLevel || 1;
+    // Approver 1 only returns to Originator/Admin. Approver N (N > 1) defaults to previous approver N-1
+    setActionReturnTarget(curLvl > 1 ? `LEVEL_${curLvl - 1}` : 'ORIGINATOR');
   }, []);
 
   const handleDraftSubmit = useCallback(
@@ -1678,86 +1706,86 @@ export default function AccountsPayablePage() {
                   </div>
                 </div>
 
-                {/* Return Destination (Options for Approver 2+; for Approver 1 shows clear Originator/Admin notice) */}
-                {actionModal.action === 'return' && (
-                  (actionModal.invoice.currentLevel || 1) > 1 ? (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                        <span>Return Destination</span>
-                        <span className="text-[11px] text-muted-foreground">Select recipient</span>
-                      </label>
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <button
-                          type="button"
-                          className={cn(
-                            "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
-                            actionReturnTarget === 'ORIGINATOR'
-                              ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
-                              : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
-                          )}
-                          onClick={() => setActionReturnTarget('ORIGINATOR')}
-                        >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span className="text-xs font-bold">Originator / Admin</span>
-                            <div className={cn(
-                              "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
-                              actionReturnTarget === 'ORIGINATOR'
-                                ? "border-amber-500 bg-amber-500"
-                                : "border-muted-foreground/30 bg-transparent"
-                            )}>
-                              {actionReturnTarget === 'ORIGINATOR' && (
-                                <div className="size-1.5 rounded-full bg-white" />
-                              )}
-                            </div>
+                {/* Return Destination: Approver 1 can ONLY return to Originator/Admin. Approver N (N>1) can return to any prior Approver 1..N-1, or Originator/Admin via clean Dropdown */}
+                {actionModal.action === 'return' && (() => {
+                  const currentLvl = actionModal.invoice.currentLevel || 1;
+                  if (currentLvl <= 1) {
+                    return (
+                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                        <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5 text-xs">
+                          <div className="font-bold text-amber-900 dark:text-amber-200">
+                            Return Destination: Originator / Admin
                           </div>
-                          <p className="text-[11px] text-muted-foreground leading-tight">
-                            Send back to creator for revision & edits
+                          <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                            As Approver 1 (Level 1), returning this invoice will send it back to the <strong>Originator / Admin</strong> for modification and revision.
                           </p>
-                        </button>
-
-                        <button
-                          type="button"
-                          className={cn(
-                            "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
-                            actionReturnTarget === 'LEVEL_1'
-                              ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
-                              : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
-                          )}
-                          onClick={() => setActionReturnTarget('LEVEL_1')}
-                        >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span className="text-xs font-bold">Approver 1 (Level 1)</span>
-                            <div className={cn(
-                              "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
-                              actionReturnTarget === 'LEVEL_1'
-                                ? "border-amber-500 bg-amber-500"
-                                : "border-muted-foreground/30 bg-transparent"
-                            )}>
-                              {actionReturnTarget === 'LEVEL_1' && (
-                                <div className="size-1.5 rounded-full bg-white" />
-                              )}
-                            </div>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground leading-tight">
-                            Restart workflow at Level 1 Approver
-                          </p>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
-                      <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                      <div className="space-y-0.5 text-xs">
-                        <div className="font-bold text-amber-900 dark:text-amber-200">
-                          Return Destination: Originator / Admin
                         </div>
-                        <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
-                          As Level 1 Approver, returning this invoice will send it back to the <strong>Originator / Admin</strong> for modification and revision.
-                        </p>
                       </div>
+                    );
+                  }
+
+                  // Build dynamic list of prior approvers: Approver 1 .. Approver (currentLvl - 1), followed by Originator / Admin
+                  const options: { key: string; label: string; description: string }[] = [];
+
+                  for (let i = 1; i < currentLvl; i++) {
+                    const matchedLevel = approvalLevels.find(
+                      (l) => ['AccountsPayable', 'Accounts Payable', 'PurchaseInvoice', 'Purchase Invoice', 'PO Invoice'].includes(l.module) && l.levelNumber === i
+                    );
+                    const roleName = matchedLevel?.requiredRole;
+                    options.push({
+                      key: `LEVEL_${i}`,
+                      label: `Approver ${i} (Level ${i})${roleName ? ` — Role: ${roleName}` : ''}`,
+                      description: `Restart approval workflow at Level ${i} (Approver ${i})`,
+                    });
+                  }
+
+                  // Add Originator / Admin option
+                  options.push({
+                    key: 'ORIGINATOR',
+                    label: 'Originator / Admin (Invoice Creator)',
+                    description: 'Send back to creator for revision & edits',
+                  });
+
+                  const selectedOpt = options.find((o) => o.key === actionReturnTarget) || options[0];
+
+                  return (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <RotateCcw className="size-3.5 text-amber-500" />
+                          <span>Return Destination <span className="text-destructive">*</span></span>
+                        </label>
+                        <span className="text-[11px] text-muted-foreground font-medium">
+                          Approver {currentLvl}
+                        </span>
+                      </div>
+
+                      <div className="relative">
+                        <select
+                          className="h-10 w-full appearance-none rounded-xl border border-input bg-card/60 px-3.5 pr-10 text-xs sm:text-sm font-medium text-foreground outline-none transition-all hover:bg-muted/30 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                          value={actionReturnTarget}
+                          onChange={(e) => setActionReturnTarget(e.target.value)}
+                          aria-label="Select return destination"
+                        >
+                          {options.map((opt) => (
+                            <option key={opt.key} value={opt.key} className="bg-popover text-popover-foreground py-1">
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      </div>
+
+                      {selectedOpt && (
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                          <span className="inline-block size-1.5 rounded-full bg-amber-500 shrink-0" />
+                          <span>{selectedOpt.description}</span>
+                        </p>
+                      )}
                     </div>
-                  )
-                )}
+                  );
+                })()}
 
                 {/* Comments Box */}
                 <div className="space-y-1.5">
@@ -1771,8 +1799,8 @@ export default function AccountsPayablePage() {
                     onChange={(event) => setActionComment(event.target.value)}
                     placeholder={
                       actionModal.action === 'return'
-                        ? actionReturnTarget === 'LEVEL_1'
-                          ? 'Explain why this invoice is being sent back to Level 1...'
+                        ? actionReturnTarget.startsWith('LEVEL_')
+                          ? `Explain why this invoice is being sent back to Approver ${actionReturnTarget.replace('LEVEL_', '')}...`
                           : 'Explain what changes the originator needs to make...'
                         : 'Provide a reason for rejection...'
                     }

@@ -38,7 +38,7 @@ async function updateStatus(
   status: string,
   comment?: string,
   startLevelNumber?: number,
-  returnTarget?: 'LEVEL_1' | 'VENDOR'
+  returnTarget?: string
 ): Promise<{ nextLevel?: boolean; message?: string }> {
   return apiRequest<{ nextLevel?: boolean; message?: string }>(`/quotations/${id}/status`, {
     method: 'PUT',

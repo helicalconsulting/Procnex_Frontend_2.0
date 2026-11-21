@@ -5,6 +5,7 @@ import {
   Ban,
   Banknote,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Eye,
   FileText,
@@ -409,37 +410,30 @@ export default function PaymentsPage() {
           }
         }
 
-        const pendingRow = rows.find((r) => r.status === 'PENDING');
+        const pendingRow = rows.find(
+          (r) =>
+            r.status === 'PENDING' ||
+            (r as any).workflowStatus === 'PENDING' ||
+            ((r.status === 'RETURNED' || (r as any).isReturned) && r.canAct)
+        );
         const rejectedRow = rows.find((r) => r.status === 'REJECTED');
         const returnedRow = rows.find((r) => r.status === 'RETURNED');
         const activeApp = pendingRow || rejectedRow || returnedRow || rows[rows.length - 1];
 
         const currentLevel = (pendingRow ? (pendingRow.currentLevel || pendingRow.level?.levelNumber) : activeApp?.currentLevel || activeApp?.level?.levelNumber) || 1;
         const calculatedMax = rows.length > 0 ? Math.max(...rows.map((r: any) => Number(r.currentLevel || r.levelNumber || r.level?.levelNumber || 1))) : 1;
-        const totalLevels = activeApp?.totalLevels || (calculatedMax > 1 ? calculatedMax : 2);
+        const totalLevels = activeApp?.totalLevels || (calculatedMax > 1 ? calculatedMax : (configuredPaymentLevels.length > 0 ? configuredPaymentLevels.length : 2));
+        const configuredLevelRole = configuredPaymentLevels.find((l) => l.levelNumber === currentLevel)?.requiredRole;
         const rawRole = pendingRow ? pendingRow.requiredRole : activeApp?.requiredRole;
-        const reqRole = rawRole && rawRole !== 'Approver'
-          ? rawRole
-          : (activeApp?.level as any)?.requiredRole || (currentLevel === 1 ? 'Purchase Manager' : 'Purchase Clerk');
+        const reqRole =
+          rawRole && rawRole !== 'Approver'
+            ? rawRole
+            : (activeApp?.level as any)?.requiredRole || configuredLevelRole || (currentLevel === 1 ? 'Purchase Manager' : 'Purchase Clerk');
         const allApproved = rows.length > 0 && rows.every((r) => r.status === 'APPROVED');
 
-        const isUserMatchingPendingStep = pendingRow
-          ? isRoleMatching(reqRole, authRoles) ||
-            (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
-            ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
-            (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
-            (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase()) ||
-            (!reqRole && isAdmin)
-          : false;
-
-        const canAct =
-          !allApproved &&
-          (activeApp?.status === 'PENDING' || activeApp?.status === 'RETURNED' || Boolean(pendingRow)) &&
-          isUserMatchingPendingStep;
-
-        // Has current user (or their role) approved a strictly prior level (< currentLevel)?
+        // Check if current user has already approved an earlier level than currentLevel
         const hasApprovedPriorLevel =
-          !canAct &&
+          allApproved ||
           rows.some((r) => {
             if (r.status !== 'APPROVED') return false;
             const rLevel = Number(r.currentLevel || r.levelNumber || r.level?.levelNumber) || 1;
@@ -449,9 +443,30 @@ export default function PaymentsPage() {
               ((user as any)?._id && r.approverId && String(r.approverId) === String((user as any)._id)) ||
               (user?.name && r.approverName && r.approverName.toLowerCase() === user.name.toLowerCase()) ||
               (user?.email && (r as any).approverEmail && (r as any).approverEmail.toLowerCase() === user.email.toLowerCase()) ||
-              (isRoleMatching(r.requiredRole, authRoles) && !isUserMatchingPendingStep)
+              isRoleMatching(r.requiredRole, authRoles)
             );
           });
+
+        const isUserMatchingPendingStep = pendingRow
+          ? Boolean(
+              !hasApprovedPriorLevel &&
+              (
+                isRoleMatching(reqRole, authRoles) ||
+                (user?.id && pendingRow.approverId && String(pendingRow.approverId) === String(user.id)) ||
+                ((user as any)?._id && pendingRow.approverId && String(pendingRow.approverId) === String((user as any)._id)) ||
+                (user?.name && pendingRow.approverName && pendingRow.approverName.toLowerCase() === user.name.toLowerCase()) ||
+                (user?.email && (pendingRow as any).approverEmail && (pendingRow as any).approverEmail.toLowerCase() === user.email.toLowerCase()) ||
+                (!reqRole && isAdmin)
+              )
+            )
+          : false;
+
+        const canAct =
+          !allApproved &&
+          !hasApprovedPriorLevel &&
+          !returnedByMe &&
+          Boolean(pendingRow) &&
+          isUserMatchingPendingStep;
 
         const userReturnedRecord = rows.find(
           (r) =>
@@ -621,7 +636,7 @@ export default function PaymentsPage() {
   }, [searchParams]);
   const [actionModal, setActionModal] = useState<{ payment: Payment; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
-  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+  const [actionReturnTarget, setActionReturnTarget] = useState<string>('ORIGINATOR');
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
   const [selectedPrintVoucher, setSelectedPrintVoucher] = useState<Payment | null>(null);
   const [voucherApprovers, setVoucherApprovers] = useState<any[] | null>(null);
@@ -907,8 +922,9 @@ export default function PaymentsPage() {
   const openAction = useCallback((payment: Payment, action: ActionType) => {
     setActionModal({ payment, action });
     setActionComment('');
+    const curLvl = payment.currentLevel || 1;
     if (action === 'return') {
-      setActionReturnTarget((payment.currentLevel || 1) > 1 ? 'LEVEL_1' : 'ORIGINATOR');
+      setActionReturnTarget(curLvl > 1 ? `LEVEL_${curLvl - 1}` : 'ORIGINATOR');
     }
   }, []);
 
@@ -921,6 +937,9 @@ export default function PaymentsPage() {
     const totalLevels = target.totalLevels || 1;
     const isLastLevel = levelNum >= totalLevels;
     const returnTarget = (target.currentLevel || 1) > 1 ? actionReturnTarget : 'ORIGINATOR';
+    const targetLevelMatch = returnTarget.match(/(?:LEVEL|APPROVER)[_\s]*(\d+)/i);
+    const targetLevelNum = targetLevelMatch ? parseInt(targetLevelMatch[1], 10) : null;
+
     const optimisticStatus: PaymentStatus = act === 'confirm'
       ? (!isLastLevel ? 'PENDING' : 'CONFIRMED')
       : act === 'cancel' ? 'CANCELLED' : act === 'return' ? 'RETURNED' : 'RETRIED';
@@ -929,7 +948,7 @@ export default function PaymentsPage() {
       ...target,
       status: optimisticStatus,
       currentLevel: act === 'return'
-        ? 1
+        ? (targetLevelNum || 1)
         : (!isLastLevel ? levelNum + 1 : target.currentLevel),
       canAct: false,
       hasApprovedPriorLevel: act === 'confirm',
@@ -956,8 +975,8 @@ export default function PaymentsPage() {
         ? 'Payment Voucher approved successfully.'
         : act === 'cancel'
         ? 'Payment Voucher rejected successfully.'
-        : returnTarget === 'LEVEL_1'
-        ? 'Payment Voucher returned to Level 1 Approver successfully.'
+        : targetLevelNum
+        ? `Payment Voucher returned to Approver ${targetLevelNum} (Level ${targetLevelNum}) successfully.`
         : 'Payment Voucher returned to Originator/Admin for revision successfully.',
       comment: comment,
       details: [
@@ -1698,85 +1717,74 @@ export default function PaymentsPage() {
                 </div>
               </div>
 
-              {actionModal.action === 'return' && (
-                (actionModal.payment.currentLevel || 1) > 1 ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                      <span>Return Destination</span>
-                      <span className="text-[11px] font-normal text-muted-foreground">Select recipient</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        className={cn(
-                          "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
-                          actionReturnTarget === 'ORIGINATOR'
-                            ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
-                            : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
-                        )}
-                        onClick={() => setActionReturnTarget('ORIGINATOR')}
-                      >
-                        <div className="flex items-center justify-between w-full mb-1">
-                          <span className="text-xs font-bold">Originator / Admin</span>
-                          <div className={cn(
-                            "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
-                            actionReturnTarget === 'ORIGINATOR'
-                              ? "border-amber-500 bg-amber-500"
-                              : "border-muted-foreground/30 bg-transparent"
-                          )}>
-                            {actionReturnTarget === 'ORIGINATOR' && (
-                              <div className="size-1.5 rounded-full bg-white" />
-                            )}
-                          </div>
+              {actionModal.action === 'return' && (() => {
+                const currentLvl = actionModal.payment.currentLevel || 1;
+                if (currentLvl <= 1) {
+                  return (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
+                      <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 text-xs">
+                        <div className="font-bold text-amber-900 dark:text-amber-200">
+                          Return Destination: Originator / Admin
                         </div>
-                        <p className="text-[11px] text-muted-foreground leading-tight">
-                          Send back to creator for revision & edits
+                        <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
+                          As Approver 1 (Level 1), returning this payment voucher will send it back to the <strong>Originator / Admin</strong> for modification and revision.
                         </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={cn(
-                          "relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all cursor-pointer outline-none",
-                          actionReturnTarget === 'LEVEL_1'
-                            ? "border-amber-500 bg-amber-500/10 text-foreground ring-1 ring-amber-500/30"
-                            : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border text-foreground"
-                        )}
-                        onClick={() => setActionReturnTarget('LEVEL_1')}
-                      >
-                        <div className="flex items-center justify-between w-full mb-1">
-                          <span className="text-xs font-bold">Approver 1 (Level 1)</span>
-                          <div className={cn(
-                            "size-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
-                            actionReturnTarget === 'LEVEL_1'
-                              ? "border-amber-500 bg-amber-500"
-                              : "border-muted-foreground/30 bg-transparent"
-                          )}>
-                            {actionReturnTarget === 'LEVEL_1' && (
-                              <div className="size-1.5 rounded-full bg-white" />
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground leading-tight">
-                          Restart workflow at Level 1 Approver
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 flex items-start gap-3">
-                    <RotateCcw className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                    <div className="space-y-0.5 text-xs">
-                      <div className="font-bold text-amber-900 dark:text-amber-200">
-                        Return Destination: Originator / Admin
                       </div>
-                      <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed text-[11px]">
-                        As Level 1 Approver, returning this payment voucher will send it back to the <strong>Originator / Admin</strong> for modification and revision.
-                      </p>
+                    </div>
+                  );
+                }
+
+                // Build dynamic list of prior approvers: Approver 1 .. Approver (currentLvl - 1), followed by Originator / Admin
+                const options: { key: string; label: string; description: string }[] = [];
+
+                for (let i = 1; i < currentLvl; i++) {
+                  const matchedLevel = configuredPaymentLevels.find((l) => l.levelNumber === i);
+                  const roleName = matchedLevel?.requiredRole;
+                  options.push({
+                    key: `LEVEL_${i}`,
+                    label: `Approver ${i} (Level ${i})${roleName ? ` — Role: ${roleName}` : ''}`,
+                    description: `Restart approval workflow at Level ${i} (Approver ${i})`,
+                  });
+                }
+
+                // Add Originator / Admin option
+                options.push({
+                  key: 'ORIGINATOR',
+                  label: 'Originator / Admin (Voucher Creator)',
+                  description: 'Send back to creator for revision & edits',
+                });
+
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <RotateCcw className="size-3.5 text-amber-500" />
+                        <span>Return Destination <span className="text-destructive">*</span></span>
+                      </label>
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        Approver {currentLvl}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        className="h-10 w-full appearance-none rounded-xl border border-input bg-card/60 px-3.5 pr-10 text-xs sm:text-sm font-medium text-foreground outline-none transition-all hover:bg-muted/30 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                        value={actionReturnTarget}
+                        onChange={(e) => setActionReturnTarget(e.target.value)}
+                        aria-label="Select return destination"
+                      >
+                        {options.map((opt) => (
+                          <option key={opt.key} value={opt.key} className="bg-popover text-popover-foreground py-1">
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                     </div>
                   </div>
-                )
-              )}
+                );
+              })()}
 
               {/* Comments Field */}
               <div className="space-y-1.5">
@@ -1824,8 +1832,8 @@ export default function PaymentsPage() {
                       <RotateCcw className="size-3.5" />
                       <span>
                         {(actionModal.payment.currentLevel || 1) > 1
-                          ? actionReturnTarget === 'LEVEL_1'
-                            ? 'Return to Level 1'
+                          ? actionReturnTarget.startsWith('LEVEL_')
+                            ? `Return to Approver ${actionReturnTarget.replace('LEVEL_', '')}`
                             : 'Return to Originator'
                           : 'Return to Originator'}
                       </span>

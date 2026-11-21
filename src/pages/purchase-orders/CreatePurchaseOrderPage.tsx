@@ -25,6 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
+import InventoryItemCombobox from '../../components/shared/InventoryItemCombobox';
 import './CreatePurchaseOrderPage.css';
 
 function detectCountryCode(fullPhone: string = '', fallback: string = '+91'): string {
@@ -1039,6 +1040,32 @@ export default function CreatePurchaseOrderPage() {
   const handleRemoveItem = (id: string) => {
     if (items.length <= 1) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const handleSelectInventoryItem = (id: string, itm: ItemMaster) => {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== id) return i;
+        const updated = {
+          ...i,
+          itemCode: itm.itemCode,
+          itemName: itm.itemName,
+          description: itm.description || i.description || '',
+        };
+        if (itm.standardPrice !== undefined) {
+          const itemCurrency = itm.currency || companyDefaultCurrency || 'AED';
+          const poCurrency = currency || companyDefaultCurrency || 'USD';
+          if (itemCurrency && poCurrency && itemCurrency.toUpperCase() !== poCurrency.toUpperCase()) {
+            const converted = convert(Number(itm.standardPrice), itemCurrency, poCurrency);
+            updated.unitPrice = Math.round(converted * 100) / 100;
+          } else {
+            updated.unitPrice = itm.standardPrice;
+          }
+        }
+        if (itm.uom) updated.unit = itm.uom;
+        return updated;
+      })
+    );
   };
 
   const handleItemChange = (id: string, field: keyof POItem, value: any) => {
@@ -2239,7 +2266,7 @@ export default function CreatePurchaseOrderPage() {
               <thead>
                 <tr>
                   <th style={{ width: '40px' }}>#</th>
-                  <th style={{ width: '120px' }}>Item Code</th>
+                  <th style={{ width: '190px', minWidth: '180px' }}>Item Code</th>
                   <th>Item Name / Description *</th>
                   <th style={{ width: '90px' }}>Qty</th>
                   <th style={{ width: '100px' }}>Unit</th>
@@ -2257,39 +2284,29 @@ export default function CreatePurchaseOrderPage() {
                   return (
                     <tr key={item.id}>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
-                      <td>
-                          <input
-                            type="text"
-                            className="cpo-table__input"
-                            list="inventory-codes-list"
-                            placeholder="Item Code"
-                            value={item.itemCode}
-                            disabled={isReadOnly}
-                            onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                          />
-                        <datalist id="inventory-codes-list">
-                          {inventoryItems.map((itm) => (
-                            <option key={itm.id} value={itm.itemCode}>{itm.itemName}</option>
-                          ))}
-                        </datalist>
+                      <td style={{ minWidth: '180px' }}>
+                        <InventoryItemCombobox
+                          mode="code"
+                          value={item.itemCode || ''}
+                          items={inventoryItems}
+                          disabled={isReadOnly}
+                          placeholder="e.g. AST-00001"
+                          onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
+                          onSelect={(itm) => handleSelectInventoryItem(item.id, itm)}
+                        />
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <input
-                            type="text"
-                            className="cpo-table__input"
-                            list="inventory-names-list"
-                            placeholder="Item Name *"
-                            value={item.itemName}
+                          <InventoryItemCombobox
+                            mode="name"
+                            value={item.itemName || ''}
+                            items={inventoryItems}
                             disabled={isReadOnly}
-                            onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                            style={{ fontWeight: 600 }}
+                            placeholder="Item Name *"
+                            required
+                            onChange={(val) => handleItemChange(item.id, 'itemName', val)}
+                            onSelect={(itm) => handleSelectInventoryItem(item.id, itm)}
                           />
-                          <datalist id="inventory-names-list">
-                            {inventoryItems.map((itm) => (
-                              <option key={itm.id} value={itm.itemName}>{itm.itemCode}</option>
-                            ))}
-                          </datalist>
                           <input
                             type="text"
                             className="cpo-table__input cpo-table__input--sub"
