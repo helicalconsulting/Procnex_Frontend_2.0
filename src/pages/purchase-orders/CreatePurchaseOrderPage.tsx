@@ -26,6 +26,7 @@ import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
 import InventoryItemCombobox from '../../components/shared/InventoryItemCombobox';
+import { consolidateLineItems } from '../../utils/consolidation';
 import './CreatePurchaseOrderPage.css';
 
 function detectCountryCode(fullPhone: string = '', fallback: string = '+91'): string {
@@ -73,6 +74,8 @@ interface POItem {
   taxPercent: number | string;
   itemClass?: string;
   category?: string;
+  preferredSupplierId?: string;
+  preferredSupplierName?: string;
 }
 
 function normalizeMatch(str: string = ''): string {
@@ -294,6 +297,7 @@ export default function CreatePurchaseOrderPage() {
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [supplierCode, setSupplierCode] = useState('');
   const [supplierName, setSupplierName] = useState('');
+  const isVendorManuallySetRef = useRef(false);
   const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [supplierType, setSupplierType] = useState('');
   const [supplierAddress, setSupplierAddress] = useState('');
@@ -375,6 +379,16 @@ export default function CreatePurchaseOrderPage() {
   const [blanketOrderNo, setBlanketOrderNo] = useState('');
   const [frameworkAgreement, setFrameworkAgreement] = useState('');
 
+  // Commercial Terms - Currency
+  const [currency, setCurrency] = useState(companyDefaultCurrency || 'KES');
+  const userChangedCurrencyRef = useRef(false);
+
+  useEffect(() => {
+    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (!currency || currency === 'KES')) {
+      setCurrency(companyDefaultCurrency);
+    }
+  }, [companyDefaultCurrency]);
+
   // Items Grid
   const [items, setItems] = useState<POItem[]>([
     { id: '1', itemCode: '', itemName: '', description: '', quantity: 1, unit: 'pcs', unitPrice: 0, taxPercent: 0 },
@@ -383,9 +397,39 @@ export default function CreatePurchaseOrderPage() {
 
   useEffect(() => {
     itemMasterService.list({ limit: 1000 }).then((res) => {
-      setInventoryItems(res.items || []);
+      const list = res.items || [];
+      setInventoryItems(list);
+      // Backfill unitPrice and unit from Inventory Master if any items have 0 or missing price
+      const poCurr = (currency || companyDefaultCurrency || 'USD').trim().toUpperCase();
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.unitPrice && Number(item.unitPrice) > 0) return item;
+          const code = item.itemCode?.trim().toLowerCase();
+          const name = item.itemName?.trim().toLowerCase();
+          const matched = list.find(
+            (inv) =>
+              (code && inv.itemCode && inv.itemCode.toLowerCase() === code) ||
+              (name && inv.itemName && inv.itemName.toLowerCase() === name)
+          );
+          if (matched && matched.standardPrice !== undefined) {
+            const itemCurr = (matched.currency || companyDefaultCurrency || 'AED').trim().toUpperCase();
+            const basePrice = Number(matched.standardPrice);
+            let finalPrice = basePrice;
+            if (itemCurr && poCurr && itemCurr !== poCurr) {
+              const convertedVal = convert(basePrice, itemCurr, poCurr);
+              finalPrice = Math.round(convertedVal * 100) / 100;
+            }
+            return {
+              ...item,
+              unitPrice: finalPrice,
+              unit: item.unit || matched.uom || 'pcs',
+            };
+          }
+          return item;
+        })
+      );
     }).catch(() => {});
-  }, []);
+  }, [currency, companyDefaultCurrency, convert]);
 
   // ── Prefill from Requisition Consolidation Workbench ──
   useEffect(() => {
@@ -400,6 +444,10 @@ export default function CreatePurchaseOrderPage() {
     }
 
     if (prefill?.fromConsolidation) {
+      if (prefill.currency) {
+        setCurrency(prefill.currency);
+        userChangedCurrencyRef.current = true;
+      }
       if (prefill.prNumbers) setPrNo(prefill.prNumbers);
       const incomingClass = prefill.itemClass || prefill.supplierType || (prefill.items?.[0] as any)?.itemClass || (prefill.items?.[0] as any)?.category || '';
       if (incomingClass) {
@@ -407,24 +455,60 @@ export default function CreatePurchaseOrderPage() {
         setIsItemClassFilterActive(true);
         setSupplierType(incomingClass);
       }
+      const incomingSupplier = prefill.supplierName || prefill.preferredSupplier || (prefill.items?.[0] as any)?.preferredSupplier || (prefill.items?.[0] as any)?.preferredSupplierName || '';
+      if (incomingSupplier) {
+        setSupplierName(incomingSupplier);
+        setVendorSearchQuery(incomingSupplier);
+        isVendorManuallySetRef.current = true;
+      }
+      if (prefill.vendorId) {
+        setSelectedVendorId(prefill.vendorId);
+        isVendorManuallySetRef.current = true;
+      }
       if (Array.isArray(prefill.requisitionIds)) {
         setSourceRequisitionIds(prefill.requisitionIds);
       }
       if (Array.isArray(prefill.items) && prefill.items.length > 0) {
-        setItems(
-          prefill.items.map((it: any, idx: number) => ({
+        const poCurr = (prefill.currency || currency || companyDefaultCurrency || 'USD').trim().toUpperCase();
+        const mappedItems = prefill.items.map((it: any, idx: number) => {
+          let price = Number(it.unitPrice) || 0;
+          let unit = it.unit || 'pcs';
+          if (!price && inventoryItems.length > 0) {
+            const code = (it.itemCode || '').trim().toLowerCase();
+            const name = (it.itemName || '').trim().toLowerCase();
+            const matched = inventoryItems.find(
+              (inv) =>
+                (code && inv.itemCode && inv.itemCode.toLowerCase() === code) ||
+                (name && inv.itemName && inv.itemName.toLowerCase() === name)
+            );
+            if (matched && matched.standardPrice !== undefined) {
+              const itemCurr = (matched.currency || companyDefaultCurrency || 'AED').trim().toUpperCase();
+              const basePrice = Number(matched.standardPrice);
+              if (itemCurr && poCurr && itemCurr !== poCurr) {
+                const convertedVal = convert(basePrice, itemCurr, poCurr);
+                price = Math.round(convertedVal * 100) / 100;
+              } else {
+                price = basePrice;
+              }
+              if (matched.uom && !it.unit) unit = matched.uom;
+            }
+          }
+          return {
             id: String(idx + 1),
             itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
             itemName: it.itemName || '',
             description: it.description || '',
             showDescription: Boolean(it.description && it.description.trim()),
             quantity: Number(it.quantity) || 1,
-            unit: it.unit || 'pcs',
-            unitPrice: Number(it.unitPrice) || 0,
+            unit,
+            unitPrice: price,
             taxPercent: Number(it.taxPercent) || 0,
             itemClass: it.itemClass || it.category || incomingClass || '',
-          }))
-        );
+            preferredSupplierId: it.preferredSupplierId || undefined,
+            preferredSupplierName: it.preferredSupplierName || it.preferredSupplier || incomingSupplier || undefined,
+          };
+        });
+        setItems(consolidateLineItems(mappedItems));
       }
       try {
         sessionStorage.removeItem('heliflow_consolidation_po');
@@ -451,14 +535,6 @@ export default function CreatePurchaseOrderPage() {
   }, [taxMenuOpen]);
 
   // Commercial Terms
-  const [currency, setCurrency] = useState(companyDefaultCurrency || 'KES');
-  const userChangedCurrencyRef = useRef(false);
-
-  useEffect(() => {
-    if (companyDefaultCurrency && !userChangedCurrencyRef.current && (!currency || currency === 'KES')) {
-      setCurrency(companyDefaultCurrency);
-    }
-  }, [companyDefaultCurrency]);
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
   const [paymentTermsList, setPaymentTermsList] = useState<PaymentTerm[]>([]);
   const [customPlans, setCustomPlans] = useState<PaymentPlan[]>([]);
@@ -607,7 +683,10 @@ export default function CreatePurchaseOrderPage() {
     });
   }, [filteredVendors, vendorSearchQuery]);
 
-  const handleSelectVendorOption = (v: VendorOption) => {
+  const handleSelectVendorOption = (v: VendorOption, isManual = true) => {
+    if (isManual) {
+      isVendorManuallySetRef.current = true;
+    }
     const code = (v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
     const resolvedAddress = v.address || (v as any).location || (v as any).registeredAddress || '';
     setSelectedVendorId(v.id);
@@ -627,6 +706,33 @@ export default function CreatePurchaseOrderPage() {
     setVendorSearchQuery(`${code} — ${v.name}`);
     setIsVendorDropdownOpen(false);
   };
+
+  const autoSelectVendorFromItem = useCallback((itm: ItemMaster) => {
+    // If supplier was already manually chosen or filled by user, do NOT override
+    if (isVendorManuallySetRef.current) return;
+
+    const pId = itm.preferredSupplierId?.trim();
+    const pName = itm.preferredSupplierName?.trim();
+    if (!pId && !pName) return;
+
+    const matchedVendor = vendors.find(
+      (v) =>
+        (pId && String(v.id) === String(pId)) ||
+        (pName && v.name.trim().toLowerCase() === pName.toLowerCase())
+    );
+
+    if (matchedVendor) {
+      handleSelectVendorOption(matchedVendor, false);
+    } else if (pName) {
+      setSelectedVendorId(pId || '');
+      setSupplierCode(pId ? `SUP-${pId.slice(-5).toUpperCase()}` : 'SUP-00000');
+      setSupplierName(pName);
+      setVendorSearchQuery(pName);
+      if (itm.productClass) {
+        setSupplierType(itm.productClass);
+      }
+    }
+  }, [vendors]);
 
   // ── Sync Vendor Search Input when Vendor is selected or in Edit mode ──
   useEffect(() => {
@@ -1046,11 +1152,14 @@ export default function CreatePurchaseOrderPage() {
     setItems((prev) =>
       prev.map((i) => {
         if (i.id !== id) return i;
-        const updated = {
+        const updated: POItem = {
           ...i,
           itemCode: itm.itemCode,
           itemName: itm.itemName,
           description: itm.description || i.description || '',
+          preferredSupplierId: itm.preferredSupplierId || undefined,
+          preferredSupplierName: itm.preferredSupplierName || undefined,
+          itemClass: itm.productClass || i.itemClass || '',
         };
         if (itm.standardPrice !== undefined) {
           const itemCurrency = itm.currency || companyDefaultCurrency || 'AED';
@@ -1066,6 +1175,9 @@ export default function CreatePurchaseOrderPage() {
         return updated;
       })
     );
+
+    // Auto-select preferred supplier above if user hasn't manually chosen/filled one
+    autoSelectVendorFromItem(itm);
   };
 
   const handleItemChange = (id: string, field: keyof POItem, value: any) => {
@@ -1078,6 +1190,9 @@ export default function CreatePurchaseOrderPage() {
           if (matched) {
             updated.itemName = matched.itemName;
             updated.description = matched.description || '';
+            updated.preferredSupplierId = matched.preferredSupplierId || undefined;
+            updated.preferredSupplierName = matched.preferredSupplierName || undefined;
+            updated.itemClass = matched.productClass || updated.itemClass || '';
             if (matched.standardPrice !== undefined) {
               const itemCurrency = matched.currency || companyDefaultCurrency || 'AED';
               const poCurrency = currency || companyDefaultCurrency || 'USD';
@@ -1089,12 +1204,16 @@ export default function CreatePurchaseOrderPage() {
               }
             }
             if (matched.uom) updated.unit = matched.uom;
+            autoSelectVendorFromItem(matched);
           }
         } else if (field === 'itemName' && value.trim()) {
           const matched = inventoryItems.find((itm) => itm.itemName?.toLowerCase() === value.trim().toLowerCase());
           if (matched) {
             updated.itemCode = matched.itemCode;
             updated.description = matched.description || '';
+            updated.preferredSupplierId = matched.preferredSupplierId || undefined;
+            updated.preferredSupplierName = matched.preferredSupplierName || undefined;
+            updated.itemClass = matched.productClass || updated.itemClass || '';
             if (matched.standardPrice !== undefined) {
               const itemCurrency = matched.currency || companyDefaultCurrency || 'AED';
               const poCurrency = currency || companyDefaultCurrency || 'USD';
@@ -1106,12 +1225,44 @@ export default function CreatePurchaseOrderPage() {
               }
             }
             if (matched.uom) updated.unit = matched.uom;
+            autoSelectVendorFromItem(matched);
           }
         }
         return updated;
       })
     );
   };
+
+  // ── Auto-select vendor from items' preferred supplier if not manually set ──
+  useEffect(() => {
+    if (isVendorManuallySetRef.current || supplierName.trim()) return;
+    if (vendors.length === 0) return;
+
+    const itemWithPref = items.find((i) => i.preferredSupplierName?.trim() || i.preferredSupplierId?.trim());
+    if (!itemWithPref) return;
+
+    const pName = itemWithPref.preferredSupplierName?.trim();
+    const pId = itemWithPref.preferredSupplierId?.trim();
+    if (!pName && !pId) return;
+
+    const matchedVendor = vendors.find(
+      (v) =>
+        (pId && String(v.id) === String(pId)) ||
+        (pName && v.name.trim().toLowerCase() === pName.toLowerCase())
+    );
+
+    if (matchedVendor) {
+      handleSelectVendorOption(matchedVendor, false);
+    } else if (pName) {
+      setSelectedVendorId(pId || '');
+      setSupplierCode(pId ? `SUP-${pId.slice(-5).toUpperCase()}` : 'SUP-00000');
+      setSupplierName(pName);
+      setVendorSearchQuery(pName);
+      if (itemWithPref.itemClass) {
+        setSupplierType(itemWithPref.itemClass);
+      }
+    }
+  }, [items, vendors, supplierName]);
 
   const handleCurrencyChange = (newCurrency: string) => {
     if (!newCurrency || newCurrency === currency) return;
@@ -1770,6 +1921,7 @@ export default function CreatePurchaseOrderPage() {
                   type="text"
                   value={vendorSearchQuery}
                   onChange={(e) => {
+                    if (e.target.value.trim()) isVendorManuallySetRef.current = true;
                     setVendorSearchQuery(e.target.value);
                     setIsVendorDropdownOpen(true);
                   }}
@@ -1792,6 +1944,7 @@ export default function CreatePurchaseOrderPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      isVendorManuallySetRef.current = false;
                       setVendorSearchQuery('');
                       setSelectedVendorId('');
                       setSupplierCode('');
@@ -1936,11 +2089,34 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-grid cpo-grid--4">
             <div className="cpo-field">
               <label>SUPPLIER CODE</label>
-              <input type="text" value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="SUP-00000" disabled={isReadOnly} />
+              <input
+                type="text"
+                value={supplierCode}
+                onChange={(e) => {
+                  if (e.target.value.trim()) isVendorManuallySetRef.current = true;
+                  setSupplierCode(e.target.value);
+                }}
+                placeholder="SUP-00000"
+                disabled={isReadOnly}
+              />
             </div>
             <div className="cpo-field cpo-field--span-2">
               <label>SUPPLIER NAME *</label>
-              <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Acme Industrial Supplies Ltd." disabled={isReadOnly} />
+              <input
+                type="text"
+                value={supplierName}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.trim()) {
+                    isVendorManuallySetRef.current = true;
+                  } else if (!selectedVendorId) {
+                    isVendorManuallySetRef.current = false;
+                  }
+                  setSupplierName(val);
+                }}
+                placeholder="e.g. Acme Industrial Supplies Ltd."
+                disabled={isReadOnly}
+              />
             </div>
             <div className="cpo-field">
               <label>SUPPLIER RATING</label>
@@ -1955,18 +2131,45 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-grid cpo-grid--4" style={{ marginTop: 12 }}>
             <div className="cpo-field cpo-field--span-2">
               <label>SUPPLIER ADDRESS</label>
-              <input type="text" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} placeholder="Street, City, Country" disabled={isReadOnly} />
+              <input
+                type="text"
+                value={supplierAddress}
+                onChange={(e) => {
+                  if (e.target.value.trim()) isVendorManuallySetRef.current = true;
+                  setSupplierAddress(e.target.value);
+                }}
+                placeholder="Street, City, Country"
+                disabled={isReadOnly}
+              />
             </div>
             <div className="cpo-field cpo-field--span-2">
               <label>SUPPLIER TAX ID / VAT NO.</label>
-              <input type="text" value={supplierTaxId} onChange={(e) => setSupplierTaxId(e.target.value)} placeholder="e.g. GB123456789 / GSTIN" disabled={isReadOnly} />
+              <input
+                type="text"
+                value={supplierTaxId}
+                onChange={(e) => {
+                  if (e.target.value.trim()) isVendorManuallySetRef.current = true;
+                  setSupplierTaxId(e.target.value);
+                }}
+                placeholder="e.g. GB123456789 / GSTIN"
+                disabled={isReadOnly}
+              />
             </div>
           </div>
 
           <div className="cpo-grid cpo-grid--3" style={{ marginTop: 12 }}>
             <div className="cpo-field">
               <label>CONTACT PERSON</label>
-              <input type="text" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Full name" disabled={isReadOnly} />
+              <input
+                type="text"
+                value={contactPerson}
+                onChange={(e) => {
+                  if (e.target.value.trim()) isVendorManuallySetRef.current = true;
+                  setContactPerson(e.target.value);
+                }}
+                placeholder="Full name"
+                disabled={isReadOnly}
+              />
             </div>
             <div className={`cpo-field ${contactEmailError ? 'cpo-field--error' : ''}`}>
               <label>CONTACT EMAIL</label>
@@ -1976,6 +2179,7 @@ export default function CreatePurchaseOrderPage() {
                 disabled={isReadOnly}
                 onChange={(e) => {
                   const val = e.target.value;
+                  if (val.trim()) isVendorManuallySetRef.current = true;
                   setContactEmail(val);
                   const trimmed = val.trim();
                   if (!trimmed) {
@@ -2017,6 +2221,7 @@ export default function CreatePurchaseOrderPage() {
                 value={getPhoneNumberOnly(contactPhone, contactCountryCode)}
                 onChange={(val) => {
                   const sanitized = val.replace(/[^0-9\s-()]/g, '');
+                  if (sanitized.trim()) isVendorManuallySetRef.current = true;
                   const combined = sanitized.trim() ? `${contactCountryCode} ${sanitized.trim()}` : '';
                   setContactPhone(combined);
                   const trimmed = sanitized.trim();

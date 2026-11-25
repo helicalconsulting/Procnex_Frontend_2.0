@@ -33,6 +33,7 @@ import { isL2OrHigherUser } from '../../utils/rbac';
 import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import { RfqSendingOverlay } from '../../components/rfq/RfqSendingOverlay';
 import InventoryItemCombobox from '../../components/shared/InventoryItemCombobox';
+import { consolidateLineItems } from '../../utils/consolidation';
 import './CreateRFQPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -46,6 +47,8 @@ interface LineItem {
   quantity: string;
   unit: string;
   expectedDate: string;
+  preferredSupplierId?: string;
+  preferredSupplierName?: string;
 }
 
 interface VendorOption {
@@ -90,6 +93,7 @@ function vendorMatchesSupplierClass(vendor: VendorOption, targetClass: string | 
   if (!targetClass) return false;
   const vendorCat = normalizeMatchValue(vendor.category || '');
   const target = normalizeMatchValue(targetClass);
+  if (!vendorCat || !target) return false;
   return vendorCat === target || vendorCat.includes(target) || target.includes(vendorCat);
 }
 
@@ -681,13 +685,20 @@ export default function CreateRFQPage() {
 
   const handleItemClassChange = useCallback((newClass: string) => {
     setSelectedItemClass(newClass);
-    if (!newClass) return;
+    if (!newClass) {
+      setSupplierClass('');
+      setDepartment('');
+      return;
+    }
     const matched = itemClasses.find(
       (ic) => ic.name.toLowerCase() === newClass.trim().toLowerCase()
     );
     if (matched?.supplierClassName) {
       setSupplierClass(matched.supplierClassName);
       setDepartment(matched.supplierClassName);
+    } else {
+      setSupplierClass('');
+      setDepartment('');
     }
   }, [itemClasses]);
 
@@ -719,7 +730,16 @@ export default function CreateRFQPage() {
         '';
 
       if (resolvedItemClass) {
-        setSelectedItemClass(resolvedItemClass);
+        const matched = itemClasses.find(
+          (ic) => ic.name.toLowerCase() === resolvedItemClass.trim().toLowerCase()
+        );
+        if (matched) {
+          setSelectedItemClass(matched.name);
+          if (matched.supplierClassName) {
+            setSupplierClass(matched.supplierClassName);
+            setDepartment(matched.supplierClassName);
+          }
+        }
       }
       setDescription(prefill.description ? String(prefill.description).trim() : '');
       if (prefill.closingDate || prefill.deliveryDate || prefill.date) {
@@ -739,20 +759,26 @@ export default function CreateRFQPage() {
           resolvedItemClass;
 
         if (firstItemClass && !resolvedItemClass) {
-          setSelectedItemClass(firstItemClass);
+          const matchedFirst = itemClasses.find(
+            (ic) => ic.name.toLowerCase() === firstItemClass.trim().toLowerCase()
+          );
+          if (matchedFirst) {
+            setSelectedItemClass(matchedFirst.name);
+          }
         }
-        setItems(
-          prefill.items.map((it: any, idx: number) => ({
-            id: `item-${Date.now()}-${idx + 1}`,
-            itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
-            itemName: it.itemName || '',
-            itemClass: it.itemClass || it.category || firstItemClass || '',
-            description: it.description || '',
-            quantity: String(it.quantity || 1),
-            unit: it.unit || 'pcs',
-            expectedDate: it.expectedDate || '',
-          }))
-        );
+        const mappedItems = prefill.items.map((it: any, idx: number) => ({
+          id: `item-${Date.now()}-${idx + 1}`,
+          itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
+          itemName: it.itemName || '',
+          itemClass: it.itemClass || it.category || firstItemClass || '',
+          description: it.description || '',
+          quantity: String(it.quantity || 1),
+          unit: it.unit || 'pcs',
+          expectedDate: it.expectedDate || '',
+          preferredSupplierId: it.preferredSupplierId || undefined,
+          preferredSupplierName: it.preferredSupplierName || it.preferredSupplier || undefined,
+        }));
+        setItems(consolidateLineItems(mappedItems));
       }
       try {
         sessionStorage.removeItem('heliflow_consolidation_rfq');
@@ -764,7 +790,7 @@ export default function CreateRFQPage() {
   useEffect(() => {
     if (!itemClasses || itemClasses.length === 0) return;
 
-    // 1. If an Item Class is selected, auto-match and populate Supplier Class
+    // 1. If an Item Class is selected by user, auto-match and populate Supplier Class
     if (selectedItemClass) {
       const matched = itemClasses.find(
         (ic) => ic.name.toLowerCase() === selectedItemClass.trim().toLowerCase()
@@ -776,35 +802,12 @@ export default function CreateRFQPage() {
       return;
     }
 
-    // 2. If no item class is selected yet and RFQ was created from Requisition (or has items):
-    if (sourceRequisitionIds.length > 0 || items.some((it) => it.itemName?.trim())) {
-      // Check if any item already carries an itemClass or category
+    // 2. Only if RFQ was created from Requisition (sourceRequisitionIds):
+    if (sourceRequisitionIds.length > 0) {
       const existingCls = items.find((it) => it.itemClass)?.itemClass;
-      let matched = existingCls
+      const matched = existingCls
         ? itemClasses.find((ic) => ic.name.toLowerCase() === existingCls.trim().toLowerCase())
         : null;
-
-      // Or check if any item name fuzzy-matches an item class name
-      if (!matched) {
-        for (const it of items) {
-          const name = (it.itemName || '').toLowerCase().trim();
-          if (!name) continue;
-          const found = itemClasses.find(
-            (ic) =>
-              name.includes(ic.name.toLowerCase().trim()) ||
-              ic.name.toLowerCase().trim().includes(name)
-          );
-          if (found) {
-            matched = found;
-            break;
-          }
-        }
-      }
-
-      // If still not matched, fallback to first active item class
-      if (!matched) {
-        matched = itemClasses.find((ic) => ic.isActive) || itemClasses[0];
-      }
 
       if (matched) {
         setSelectedItemClass(matched.name);
@@ -820,7 +823,29 @@ export default function CreateRFQPage() {
 
   useEffect(() => {
     itemMasterService.list({ limit: 1000 }).then((res) => {
-      setInventoryItems(res.items || []);
+      const fetched = res.items || [];
+      setInventoryItems(fetched);
+      if (fetched.length > 0) {
+        setItems((currentItems) =>
+          currentItems.map((it) => {
+            if (it.preferredSupplierName || it.preferredSupplierId) return it;
+            const inv = fetched.find(
+              (invItem) =>
+                (it.itemCode && invItem.itemCode?.toLowerCase() === it.itemCode.trim().toLowerCase()) ||
+                (it.itemName && invItem.itemName?.toLowerCase() === it.itemName.trim().toLowerCase())
+            );
+            if (inv && (inv.preferredSupplierName || inv.preferredSupplierId)) {
+              return {
+                ...it,
+                preferredSupplierName: inv.preferredSupplierName || undefined,
+                preferredSupplierId: inv.preferredSupplierId || undefined,
+                itemClass: it.itemClass || inv.productClass || '',
+              };
+            }
+            return it;
+          })
+        );
+      }
     }).catch(() => {});
   }, []);
 
@@ -868,6 +893,12 @@ export default function CreateRFQPage() {
           if (matched.uom) {
             updated.unit = findMatchingUnit(matched.uom);
           }
+          if (matched.preferredSupplierId) {
+            updated.preferredSupplierId = matched.preferredSupplierId;
+          }
+          if (matched.preferredSupplierName) {
+            updated.preferredSupplierName = matched.preferredSupplierName;
+          }
         }
         return updated;
       })
@@ -886,6 +917,8 @@ export default function CreateRFQPage() {
             description: matched.description || i.description || '',
             unit: matched.uom ? findMatchingUnit(matched.uom) : i.unit || 'Pcs',
             itemClass: matched.productClass || i.itemClass || '',
+            preferredSupplierId: matched.preferredSupplierId || undefined,
+            preferredSupplierName: matched.preferredSupplierName || undefined,
           };
         })
       );
@@ -900,15 +933,138 @@ export default function CreateRFQPage() {
     [departments, department, supplierClass]
   );
 
-  const departmentVendors = useMemo(() => {
-    const target = supplierClass || department;
-    if (!target) return [];
-    return availableVendors.filter((vendor) => {
-      if (vendorMatchesSupplierClass(vendor, target)) return true;
-      if (selectedDepartment && vendorMatchesDepartment(vendor, selectedDepartment)) return true;
-      return false;
+  // Collect all preferred suppliers from selected line items
+  const preferredSuppliers = useMemo(() => {
+    const list: { id?: string; name: string }[] = [];
+    const seen = new Set<string>();
+
+    items.forEach((it) => {
+      let pName = it.preferredSupplierName?.trim();
+      let pId = it.preferredSupplierId?.trim();
+
+      // If not populated on line item directly, look up from inventoryItems
+      if (!pName && !pId) {
+        const inv = inventoryItems.find(
+          (invItem) =>
+            (it.itemCode && invItem.itemCode?.toLowerCase() === it.itemCode.trim().toLowerCase()) ||
+            (it.itemName && invItem.itemName?.toLowerCase() === it.itemName.trim().toLowerCase())
+        );
+        if (inv?.preferredSupplierName?.trim() || inv?.preferredSupplierId?.trim()) {
+          pName = inv.preferredSupplierName?.trim();
+          pId = inv.preferredSupplierId?.trim();
+        }
+      }
+
+      if (pName && !seen.has(pName.toLowerCase())) {
+        seen.add(pName.toLowerCase());
+        list.push({ id: pId, name: pName });
+      } else if (pId && !seen.has(pId.toLowerCase())) {
+        seen.add(pId.toLowerCase());
+        list.push({ id: pId, name: '' });
+      }
     });
-  }, [availableVendors, supplierClass, department, selectedDepartment]);
+
+    return list;
+  }, [items, inventoryItems]);
+
+  // Map preferred suppliers to VendorOption objects (using real vendor from availableVendors if present)
+  const preferredVendorOptions = useMemo(() => {
+    const result: VendorOption[] = [];
+    const seenIds = new Set<string>();
+
+    preferredSuppliers.forEach((ps) => {
+      const pNameLower = ps.name ? ps.name.trim().toLowerCase() : '';
+      const matched = availableVendors.find(
+        (v) =>
+          (ps.id && String(v.id).trim() === String(ps.id).trim()) ||
+          (pNameLower && v.name.trim().toLowerCase() === pNameLower) ||
+          (pNameLower && (v.name.toLowerCase().includes(pNameLower) || pNameLower.includes(v.name.toLowerCase())))
+      );
+
+      if (matched) {
+        if (!seenIds.has(matched.id)) {
+          seenIds.add(matched.id);
+          result.push(matched);
+        }
+      } else if (ps.name) {
+        const synthId = ps.id || `pref-${ps.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
+        if (!seenIds.has(synthId)) {
+          seenIds.add(synthId);
+          result.push({
+            id: synthId,
+            name: ps.name,
+            email: '',
+            category: items.find((i) => i.preferredSupplierName === ps.name)?.itemClass || 'Preferred Supplier',
+            initials: ps.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'PS',
+            avatarMod: String(synthId.split('').reduce((s, c) => s + c.charCodeAt(0), 0) % 6 + 1),
+            overallScore: undefined,
+          });
+        }
+      }
+    });
+
+    return result;
+  }, [preferredSuppliers, availableVendors, items]);
+
+  // Auto-select newly added preferred supplier vendors
+  const prevPreferredVendorIdsRef = useRef<string[]>([]);
+  useEffect(() => {
+    const currentPrefIds = preferredVendorOptions.map((v) => v.id);
+    const prevPrefIds = prevPreferredVendorIdsRef.current;
+
+    const newlyAdded = currentPrefIds.filter((id) => !prevPrefIds.includes(id));
+    if (newlyAdded.length > 0) {
+      setSelectedVendors((prev) => {
+        const next = [...prev];
+        newlyAdded.forEach((id) => {
+          if (!next.includes(id)) {
+            next.push(id);
+          }
+        });
+        return next;
+      });
+    }
+
+    prevPreferredVendorIdsRef.current = currentPrefIds;
+  }, [preferredVendorOptions]);
+
+  const departmentVendors = useMemo(() => {
+    // ── ALWAYS include preferred vendors from line items ──
+    const resultVendors: VendorOption[] = [...preferredVendorOptions];
+    const seenIds = new Set<string>(resultVendors.map((v) => v.id));
+
+    // ── "jb tak supplier class select naa kree tb tak sirf preffered supplier ka aana chaiye na vendor" ──
+    // Only search and include vendors if supplierClass is chosen (or if user selected an item class in RFQ details)
+    const targetSupplierClass = supplierClass?.trim();
+    const targetItemClass = selectedItemClass?.trim();
+
+    if (!targetSupplierClass && !targetItemClass) {
+      return resultVendors;
+    }
+
+    availableVendors.forEach((vendor) => {
+      if (!seenIds.has(vendor.id)) {
+        const matchesSupplier = targetSupplierClass
+          ? vendorMatchesSupplierClass(vendor, targetSupplierClass)
+          : false;
+        const matchesItem = targetItemClass
+          ? vendorMatchesSupplierClass(vendor, targetItemClass)
+          : false;
+
+        if (matchesSupplier || matchesItem) {
+          seenIds.add(vendor.id);
+          resultVendors.push(vendor);
+        }
+      }
+    });
+
+    return resultVendors;
+  }, [
+    supplierClass,
+    selectedItemClass,
+    availableVendors,
+    preferredVendorOptions,
+  ]);
 
   useEffect(() => {
     const visibleVendorIds = new Set(departmentVendors.map((vendor) => vendor.id));
@@ -2444,24 +2600,27 @@ export default function CreateRFQPage() {
               Select the vendors you want to invite for this RFQ. They will receive a notification to submit their quotation.
             </p>
             {vendorsLoading && <CardSkeleton count={2} />}
-            {!vendorsLoading && !supplierClass && !department && (
+            {!vendorsLoading && !selectedItemClass && !supplierClass && !department && departmentVendors.length === 0 && (
               <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
-                Select a supplier class in RFQ Details to see matching vendors.
+                Select an item class in RFQ Details or choose line items with preferred suppliers to see matching vendors.
               </p>
             )}
-            {!vendorsLoading && (supplierClass || department) && availableVendors.length === 0 && (
+            {!vendorsLoading && (selectedItemClass || supplierClass || department) && availableVendors.length === 0 && (
               <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
                 No vendors in the system. Add vendors first, then create an RFQ.
               </p>
             )}
-            {!vendorsLoading && (supplierClass || department) && availableVendors.length > 0 && departmentVendors.length === 0 && (
+            {!vendorsLoading && (selectedItemClass || supplierClass || department) && availableVendors.length > 0 && departmentVendors.length === 0 && (
               <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
-                No vendors found for {supplierClass || department}. Update supplier class on the Vendors page or choose another supplier class.
+                No vendors found for {selectedItemClass ? `item class "${selectedItemClass}"` : supplierClass || department}. Update supplier class on the Vendors page or choose another supplier class.
               </p>
             )}
             <div className="create-rfq__vendors-grid">
               {departmentVendors.map((v) => {
                 const selected = selectedVendors.includes(v.id);
+                const isPreferred = preferredVendorOptions.some(
+                  (pv) => pv.id === v.id || pv.name.toLowerCase() === v.name.toLowerCase()
+                );
                 const hasScore = v.overallScore != null && v.overallScore > 0;
                 const scoreValue = v.overallScore ?? 0;
                 const scoreTone = !hasScore
@@ -2498,13 +2657,34 @@ export default function CreateRFQPage() {
                         </span>
                       </div>
 
-                      <span
-                        className={`create-rfq__vendor-score-pill create-rfq__vendor-score-pill--${scoreTone}`}
-                        title={`Performance score: ${hasScore ? `${scoreValue}%` : 'Not yet rated'}`}
-                      >
-                        <span className="create-rfq__vendor-score-dot" />
-                        {hasScore ? `${scoreValue}%` : 'New'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {isPreferred && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 9999,
+                              background: 'var(--primary-50, #eff6ff)',
+                              color: 'var(--primary-700, #1d4ed8)',
+                              border: '1px solid var(--primary-200, #bfdbfe)',
+                            }}
+                            title="Preferred supplier for selected line items"
+                          >
+                            ★ Preferred
+                          </span>
+                        )}
+                        <span
+                          className={`create-rfq__vendor-score-pill create-rfq__vendor-score-pill--${scoreTone}`}
+                          title={`Performance score: ${hasScore ? `${scoreValue}%` : 'Not yet rated'}`}
+                        >
+                          <span className="create-rfq__vendor-score-dot" />
+                          {hasScore ? `${scoreValue}%` : 'New'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Middle: Vendor Name */}

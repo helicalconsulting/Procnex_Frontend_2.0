@@ -779,15 +779,14 @@ export default function CreatePurchaseRequisitionModal({
             </div>
 
             <datalist id="vendor-suggestions-list">
-              {vendorSuggestions.map((v) => (
-                <option key={v} value={v} />
+              {Array.from(
+                new Set([
+                  ...vendorSuggestions,
+                  ...inventoryItems.map((itm) => itm.preferredSupplierName).filter(Boolean),
+                ])
+              ).map((v) => (
+                <option key={v} value={v!} />
               ))}
-              {inventoryItems
-                .map((itm) => itm.preferredSupplierName)
-                .filter(Boolean)
-                .map((supplier) => (
-                  <option key={supplier!} value={supplier!} />
-                ))}
             </datalist>
           </div>
 

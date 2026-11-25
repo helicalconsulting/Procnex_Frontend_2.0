@@ -30,6 +30,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
+import { itemMasterService, type ItemMaster } from '../../services/itemMasterService';
 import { rfqService } from '../../services/rfqService';
 import RFQDetailModal from '../../components/rfq/RFQDetailModal';
 import type { RFQTableRow } from '../../types/viewModels';
@@ -42,6 +43,7 @@ import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import type { ColumnDef } from '../../hooks/columnPreferences';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { consolidateLineItems } from '../../utils/consolidation';
 import { Card } from '../../components/ui/card';
 import {
   Dialog,
@@ -61,6 +63,27 @@ import '../../components/shared/ColumnCustomizer.css';
 
 type ListPurchaseRequisition = PurchaseRequisition & { isStandalone?: boolean };
 type StatusFilter = string | null;
+
+interface PoSplitGroup {
+  supplierKey: string;
+  supplierName: string;
+  supplierId?: string;
+  itemClass?: string;
+  items: any[];
+  totalEstimatedAmount: number;
+  sourcePrNumbers: string[];
+  sourceRequisitionIds: string[];
+  currency?: string;
+}
+
+interface RfqSplitGroup {
+  categoryKey: string;
+  categoryName: string;
+  items: any[];
+  preferredSuppliers: string[];
+  sourcePrNumbers: string[];
+  sourceRequisitionIds: string[];
+}
 
 const releasedStatuses = ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'];
 
@@ -206,6 +229,26 @@ export default function PurchaseRequisitionsListPage() {
 
   const [showPoModal, setShowPoModal] = useState(false);
   const [convertingPo, setConvertingPo] = useState(false);
+
+  // Inventory Master (for resolving preferred suppliers and categories)
+  const [inventoryItems, setInventoryItems] = useState<ItemMaster[]>([]);
+  useEffect(() => {
+    itemMasterService
+      .list({ limit: 1000 })
+      .then((res) => {
+        setInventoryItems(res.items || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Split PO & Split RFQ State
+  const [showSplitPoModal, setShowSplitPoModal] = useState(false);
+  const [poSplitGroups, setPoSplitGroups] = useState<PoSplitGroup[]>([]);
+  const [splitPoTargetPrs, setSplitPoTargetPrs] = useState<ListPurchaseRequisition[]>([]);
+
+  const [showSplitRfqModal, setShowSplitRfqModal] = useState(false);
+  const [rfqSplitGroups, setRfqSplitGroups] = useState<RfqSplitGroup[]>([]);
+  const [splitRfqTargetPrs, setSplitRfqTargetPrs] = useState<ListPurchaseRequisition[]>([]);
 
   // Filters
   const [searchParams] = useSearchParams();
@@ -556,8 +599,8 @@ export default function PurchaseRequisitionsListPage() {
         );
     if (itemsToCheck.length === 0) return false;
 
-    // Separation of Duties: Requester cannot convert their own PR unless Super Admin
-    if (!isAdmin && itemsToCheck.some((r) => isOwnPr(r))) {
+    // Separation of Duties: Requester can NEVER convert their own PR
+    if (itemsToCheck.some((r) => isOwnPr(r))) {
       return false;
     }
 
@@ -591,12 +634,12 @@ export default function PurchaseRequisitionsListPage() {
       const isPo = pr.conversionStatus === 'CONVERTED_TO_PO' || Boolean(pr.convertedToPoId) || pr.status === 'PO_CREATED';
       if (isRfq || isPo) return false;
 
-      // Separation of Duties: Requester cannot convert their own PR unless Super Admin
-      if (!isAdmin && isOwnPr(pr)) return false;
+      // Separation of Duties: Requester can NEVER convert their own PR to RFQ/PO
+      if (isOwnPr(pr)) return false;
 
       return canApproveForRfq;
     },
-    [isAdmin, isOwnPr, canApproveForRfq]
+    [isOwnPr, canApproveForRfq]
   );
 
   const canConvertPr = useCallback(
@@ -605,8 +648,8 @@ export default function PurchaseRequisitionsListPage() {
       const isPo = pr.conversionStatus === 'CONVERTED_TO_PO' || Boolean(pr.convertedToPoId) || pr.status === 'PO_CREATED';
       if (isRfq || isPo) return false;
 
-      // Separation of Duties: Requester cannot convert their own PR unless Super Admin
-      if (!isAdmin && isOwnPr(pr)) return false;
+      // Separation of Duties: Requester can NEVER convert their own PR to RFQ/PO
+      if (isOwnPr(pr)) return false;
 
       if (
         isAdmin ||
@@ -657,79 +700,471 @@ export default function PurchaseRequisitionsListPage() {
     );
   };
 
+  // Helper to resolve Item Master info (preferred supplier, category/productClass, converted price)
+  const resolveItemInfo = useCallback(
+    (it: any, prCurrency?: string) => {
+      const code = (it.itemCode || '').trim().toLowerCase();
+      const name = (it.itemName || it.description || '').trim().toLowerCase();
+
+      const matched = inventoryItems.find(
+        (inv) =>
+          (code && inv.itemCode && inv.itemCode.toLowerCase() === code) ||
+          (name && inv.itemName && inv.itemName.toLowerCase() === name)
+      );
+
+      const preferredSupplierId =
+        it.preferredSupplierId ||
+        it.preferredSupplier?.id ||
+        (matched?.preferredSupplierId ? String(matched.preferredSupplierId) : undefined) ||
+        undefined;
+
+      const preferredSupplierName =
+        it.preferredSupplierName ||
+        it.preferredSupplier?.name ||
+        (typeof it.preferredSupplier === 'string' ? it.preferredSupplier : undefined) ||
+        (matched?.preferredSupplierName ? String(matched.preferredSupplierName) : undefined) ||
+        undefined;
+
+      const itemClass =
+        it.itemClass ||
+        it.category ||
+        matched?.productClass ||
+        '';
+
+      const targetCurrency = (prCurrency || companyDefaultCurrency || 'USD').trim().toUpperCase();
+
+      let unitPrice = 0;
+      if (it.unitPrice && Number(it.unitPrice) > 0) {
+        unitPrice = Number(it.unitPrice);
+      } else if (it.estimatedPrice && Number(it.estimatedPrice) > 0) {
+        unitPrice = Number(it.estimatedPrice);
+      } else if (matched?.standardPrice !== undefined) {
+        const itemCurrency = (matched.currency || companyDefaultCurrency || 'AED').trim().toUpperCase();
+        const basePrice = Number(matched.standardPrice);
+        if (itemCurrency && targetCurrency && itemCurrency !== targetCurrency) {
+          const convertedVal = convert(basePrice, itemCurrency, targetCurrency);
+          unitPrice = Math.round(convertedVal * 100) / 100;
+        } else {
+          unitPrice = basePrice;
+        }
+      }
+
+      const unit = it.unit || matched?.uom || 'pcs';
+
+      return {
+        matched,
+        preferredSupplierId,
+        preferredSupplierName,
+        itemClass,
+        unitPrice,
+        unit,
+        targetCurrency,
+      };
+    },
+    [inventoryItems, companyDefaultCurrency, convert]
+  );
+
+  // ─── PO Creation Workflow (with Split PO by Preferred Supplier) ─────────────
+  const proceedToCreatePoForGroup = useCallback(
+    (group?: PoSplitGroup, targetPrs?: ListPurchaseRequisition[]) => {
+      const prs = targetPrs || splitPoTargetPrs;
+      const targetRequisitions = prs.length > 0 ? prs : selectedRequisitionItems;
+
+      let itemsToUse = group?.items;
+      const sName =
+        group?.supplierName && group.supplierName !== 'Unassigned Supplier'
+          ? group.supplierName
+          : undefined;
+      const sId = group?.supplierId;
+      const iClass = group?.itemClass || 'General';
+      const prNumbers =
+        group?.sourcePrNumbers.join(', ') ||
+        targetRequisitions
+          .map((r) => r.prNumber || r.id)
+          .filter(Boolean)
+          .join(', ');
+      const reqIds =
+        group?.sourceRequisitionIds ||
+        targetRequisitions.map((r) => String(r.id || r.rfqId));
+
+      const activeCurrency =
+        group?.currency ||
+        (targetRequisitions[0] as any)?.currency ||
+        companyDefaultCurrency ||
+        'USD';
+
+      if (!itemsToUse || itemsToUse.length === 0) {
+        const rawItems: any[] = [];
+        targetRequisitions.forEach((pr) => {
+          const pItems = Array.isArray(pr.items)
+            ? pr.items
+            : typeof pr.items === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(pr.items);
+                } catch {
+                  return [];
+                }
+              })()
+            : [];
+          const prCurrency = (pr as any)?.currency || activeCurrency;
+          pItems.forEach((it: any) => {
+            const { preferredSupplierId, preferredSupplierName, itemClass, unitPrice, unit } =
+              resolveItemInfo(it, prCurrency);
+            rawItems.push({
+              id: String(rawItems.length + 1),
+              itemCode:
+                it.itemCode ||
+                `ITEM-${String(rawItems.length + 1).padStart(3, '0')}`,
+              itemName: it.itemName || it.description || 'Item',
+              description: it.description?.trim() || '',
+              quantity: Number(it.quantity) || 1,
+              unit: unit || 'pcs',
+              unitPrice: unitPrice,
+              taxPercent: 0,
+              itemClass: itemClass || (pr as any)?.itemClass || 'General',
+              preferredSupplierId,
+              preferredSupplierName,
+            });
+          });
+        });
+        itemsToUse = rawItems;
+      }
+
+      itemsToUse = consolidateLineItems(itemsToUse);
+
+      const prefillData = {
+        fromConsolidation: true,
+        requisitionIds: reqIds,
+        prNumbers,
+        currency: activeCurrency,
+        supplierName: sName,
+        preferredSupplier: sName,
+        vendorId: sId,
+        itemClass: iClass,
+        supplierType: iClass,
+        items: itemsToUse,
+      };
+
+      try {
+        sessionStorage.setItem(
+          'heliflow_consolidation_po',
+          JSON.stringify(prefillData)
+        );
+      } catch {}
+
+      const rfqId = targetRequisitions.find((r) => r.convertedToRfqId)?.convertedToRfqId;
+      const rfqParam = rfqId ? `?rfqId=${encodeURIComponent(rfqId)}` : '';
+      setShowSplitPoModal(false);
+      navigate(`/procurement/create-purchase-order${rfqParam}`, { state: prefillData });
+    },
+    [splitPoTargetPrs, selectedRequisitionItems, resolveItemInfo, navigate, companyDefaultCurrency]
+  );
+
+  const analyzeAndTriggerPo = useCallback(
+    (targetPrs: ListPurchaseRequisition[]) => {
+      if (targetPrs.length === 0) return;
+
+      const groupMap = new Map<string, PoSplitGroup>();
+
+      targetPrs.forEach((pr) => {
+        const pItems = Array.isArray(pr.items)
+          ? pr.items
+          : typeof pr.items === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(pr.items);
+              } catch {
+                return [];
+              }
+            })()
+          : [];
+
+        const prNumber = pr.prNumber || pr.id || '';
+        const prId = String(pr.id || pr.rfqId);
+        const prCurrency = (pr as any)?.currency || companyDefaultCurrency || 'USD';
+
+        pItems.forEach((it: any, idx: number) => {
+          const { preferredSupplierId, preferredSupplierName, itemClass, unitPrice, unit, targetCurrency } =
+            resolveItemInfo(it, prCurrency);
+          const sName = (
+            preferredSupplierName ||
+            it.vendorName ||
+            (pr as any).vendorName ||
+            ''
+          ).trim();
+          const sId = preferredSupplierId?.trim() || undefined;
+
+          const groupKey = sName
+            ? sName.toLowerCase()
+            : sId
+            ? sId
+            : '__UNASSIGNED__';
+          const displaySupplierName =
+            sName || (sId ? `Supplier (${sId})` : 'Unassigned Supplier');
+
+          const rawItem = {
+            id: String(Date.now() + idx),
+            itemCode:
+              it.itemCode ||
+              `ITEM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: it.itemName || it.description || 'Item',
+            description: it.description?.trim() || '',
+            quantity: Number(it.quantity) || 1,
+            unit: unit || 'pcs',
+            unitPrice: unitPrice,
+            taxPercent: Number(it.taxPercent) || 0,
+            itemClass: itemClass || (pr as any)?.itemClass || 'General',
+            preferredSupplierId: sId,
+            preferredSupplierName: sName || undefined,
+            sourcePrNumber: prNumber,
+            sourcePrId: prId,
+          };
+
+          const lineTotal = rawItem.quantity * rawItem.unitPrice;
+
+          if (!groupMap.has(groupKey)) {
+            groupMap.set(groupKey, {
+              supplierKey: groupKey,
+              supplierName: displaySupplierName,
+              supplierId: sId,
+              itemClass: rawItem.itemClass,
+              items: [rawItem],
+              totalEstimatedAmount: lineTotal,
+              sourcePrNumbers: prNumber ? [prNumber] : [],
+              sourceRequisitionIds: prId ? [prId] : [],
+              currency: targetCurrency,
+            });
+          } else {
+            const grp = groupMap.get(groupKey)!;
+            grp.items = consolidateLineItems([...grp.items, rawItem]);
+            grp.totalEstimatedAmount = grp.items.reduce(
+              (sum, itm) => sum + (Number(itm.quantity) || 0) * (Number(itm.unitPrice) || 0),
+              0
+            );
+            if (prNumber && !grp.sourcePrNumbers.includes(prNumber)) {
+              grp.sourcePrNumbers.push(prNumber);
+            }
+            if (prId && !grp.sourceRequisitionIds.includes(prId)) {
+              grp.sourceRequisitionIds.push(prId);
+            }
+          }
+        });
+      });
+
+      const groups = Array.from(groupMap.values());
+
+      if (groups.length <= 1) {
+        proceedToCreatePoForGroup(groups[0], targetPrs);
+      } else {
+        setPoSplitGroups(groups);
+        setSplitPoTargetPrs(targetPrs);
+        setShowSplitPoModal(true);
+      }
+    },
+    [resolveItemInfo, proceedToCreatePoForGroup]
+  );
+
+  // ─── RFQ Creation Workflow (with Category-wise Split) ────────────────────────
+  const proceedToCreateRfqForGroup = useCallback(
+    (
+      group?: RfqSplitGroup,
+      targetPrs?: ListPurchaseRequisition[],
+      isCombined = false
+    ) => {
+      const prs = targetPrs || splitRfqTargetPrs;
+      const targetItems = prs.length > 0 ? prs : selectedRequisitionItems;
+
+      const defaultTitle = isCombined
+        ? `Consolidated RFQ for Requisitions: ${targetItems
+            .map((r) => r.prNumber || r.id?.slice(-6))
+            .filter(Boolean)
+            .join(', ')}`
+        : `RFQ for ${group?.categoryName || 'Items'}: ${
+            group?.sourcePrNumbers.join(', ') ||
+            targetItems
+              .map((r) => r.prNumber || r.id?.slice(-6))
+              .filter(Boolean)
+              .join(', ')
+          }`;
+
+      const rfqDepartment = targetItems[0]?.department || '';
+
+      const prDate =
+        targetItems.find((r) => r.deliveryDate)?.deliveryDate ||
+        targetItems[0]?.deliveryDate ||
+        targetItems[0]?.poDate ||
+        targetItems[0]?.createdAt;
+      const resolvedDate = prDate
+        ? new Date(prDate).toISOString().slice(0, 10)
+        : '';
+
+      const firstPriority = targetItems[0]?.priority
+        ? targetItems[0].priority === 'LOW'
+          ? 'Low'
+          : targetItems[0].priority === 'URGENT' ||
+            targetItems[0].priority === 'HIGH'
+          ? 'High'
+          : 'Medium'
+        : undefined;
+
+      let itemsToUse: any[] = [];
+      let resolvedItemClass = '';
+
+      if (isCombined || !group) {
+        rfqSplitGroups.forEach((grp) => {
+          itemsToUse.push(...grp.items);
+        });
+        resolvedItemClass =
+          rfqSplitGroups[0]?.categoryName ||
+          targetItems[0]?.department ||
+          '';
+      } else {
+        itemsToUse = group.items;
+        resolvedItemClass = group.categoryName;
+      }
+
+      itemsToUse = consolidateLineItems(itemsToUse);
+
+      const prefillData = {
+        fromConsolidation: true,
+        requisitionIds: isCombined
+          ? targetItems.map((r) => String(r.id || r.rfqId))
+          : group?.sourceRequisitionIds ||
+            targetItems.map((r) => String(r.id || r.rfqId)),
+        prNumbers: isCombined
+          ? targetItems.map((r) => r.prNumber || r.id).filter(Boolean)
+          : group?.sourcePrNumbers ||
+            targetItems.map((r) => r.prNumber || r.id).filter(Boolean),
+        title: defaultTitle,
+        department: rfqDepartment,
+        itemClass: resolvedItemClass || undefined,
+        description: '',
+        closingDate: resolvedDate,
+        date: resolvedDate,
+        deliveryDate: resolvedDate,
+        priority: firstPriority,
+        items: itemsToUse,
+      };
+
+      try {
+        sessionStorage.setItem(
+          'heliflow_consolidation_rfq',
+          JSON.stringify(prefillData)
+        );
+      } catch {}
+
+      setShowSplitRfqModal(false);
+      navigate('/rfq/create', { state: prefillData });
+    },
+    [splitRfqTargetPrs, selectedRequisitionItems, rfqSplitGroups, navigate]
+  );
+
+  const analyzeAndTriggerRfq = useCallback(
+    (targetPrs: ListPurchaseRequisition[]) => {
+      if (targetPrs.length === 0) return;
+
+      const groupMap = new Map<string, RfqSplitGroup>();
+
+      targetPrs.forEach((pr) => {
+        const pItems = Array.isArray(pr.items)
+          ? pr.items
+          : typeof pr.items === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(pr.items);
+              } catch {
+                return [];
+              }
+            })()
+          : [];
+
+        const prDate = pr.deliveryDate || pr.poDate || pr.createdAt;
+        const resolvedDate = prDate
+          ? new Date(prDate).toISOString().slice(0, 10)
+          : '';
+        const prNumber = pr.prNumber || pr.id || '';
+        const prId = String(pr.id || pr.rfqId);
+
+        pItems.forEach((it: any, idx: number) => {
+          const { preferredSupplierId, preferredSupplierName, itemClass } =
+            resolveItemInfo(it);
+          const category = (
+            itemClass ||
+            (pr as any)?.itemClass ||
+            pr.department ||
+            'General'
+          ).trim();
+          const catKey = category.toLowerCase();
+
+          const rawItem = {
+            id: `item-${Date.now()}-${idx + 1}`,
+            itemCode:
+              it.itemCode ||
+              `ITEM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: it.itemName || it.description || 'Item',
+            itemClass: category,
+            description: it.description?.trim() || '',
+            quantity: String(it.quantity || 1),
+            unit: it.unit || 'pcs',
+            expectedDate: it.expectedDate || resolvedDate || '',
+            preferredSupplierId,
+            preferredSupplierName,
+            sourcePrNumber: prNumber,
+            sourcePrId: prId,
+          };
+
+          if (!groupMap.has(catKey)) {
+            groupMap.set(catKey, {
+              categoryKey: catKey,
+              categoryName: category,
+              items: [rawItem],
+              preferredSuppliers: preferredSupplierName
+                ? [preferredSupplierName]
+                : [],
+              sourcePrNumbers: prNumber ? [prNumber] : [],
+              sourceRequisitionIds: prId ? [prId] : [],
+            });
+          } else {
+            const grp = groupMap.get(catKey)!;
+            grp.items = consolidateLineItems([...grp.items, rawItem]);
+            if (
+              preferredSupplierName &&
+              !grp.preferredSuppliers.includes(preferredSupplierName)
+            ) {
+              grp.preferredSuppliers.push(preferredSupplierName);
+            }
+            if (prNumber && !grp.sourcePrNumbers.includes(prNumber)) {
+              grp.sourcePrNumbers.push(prNumber);
+            }
+            if (prId && !grp.sourceRequisitionIds.includes(prId)) {
+              grp.sourceRequisitionIds.push(prId);
+            }
+          }
+        });
+      });
+
+      const groups = Array.from(groupMap.values());
+
+      if (groups.length <= 1) {
+        proceedToCreateRfqForGroup(groups[0], targetPrs);
+      } else {
+        setRfqSplitGroups(groups);
+        setSplitRfqTargetPrs(targetPrs);
+        setShowSplitRfqModal(true);
+      }
+    },
+    [resolveItemInfo, proceedToCreateRfqForGroup]
+  );
+
   // Conversion Handlers — Navigate directly to RFQ / PO creation pages with pre-filled data
   const handleNavigateToCreateRfq = () => {
     const targetItems = pendingConversionItems.length > 0 ? pendingConversionItems : selectedRequisitionItems;
-    if (targetItems.length === 0) return;
-    const defaultTitle = `Consolidated RFQ for Requisitions: ${targetItems
-      .map((r) => r.prNumber || r.id?.slice(-6))
-      .filter(Boolean)
-      .join(', ')}`;
-    const rfqDepartment = targetItems[0]?.department || '';
+    analyzeAndTriggerRfq(targetItems);
+  };
 
-    // Automatically fetch Description from selected PRs (leave blank if none)
-    const prDescriptions = targetItems
-      .map((r) => (r.description || r.internalNotes || r.specialInstructions || (r as any).justification || '').trim())
-      .filter(Boolean);
-    const resolvedDescription = prDescriptions.length > 0 ? Array.from(new Set(prDescriptions)).join('\n\n') : '';
-
-    // Automatically fetch Date from selected PRs (deliveryDate, poDate, or createdAt)
-    const prDate = targetItems.find((r) => r.deliveryDate)?.deliveryDate || targetItems[0]?.deliveryDate || targetItems[0]?.poDate || targetItems[0]?.createdAt;
-    const resolvedDate = prDate ? new Date(prDate).toISOString().slice(0, 10) : '';
-
-    const firstPriority = targetItems[0]?.priority ? (
-      targetItems[0].priority === 'LOW' ? 'Low' :
-      targetItems[0].priority === 'URGENT' || targetItems[0].priority === 'HIGH' ? 'High' : 'Medium'
-    ) : undefined;
-
-    const rawItems: any[] = [];
-    targetItems.forEach((pr) => {
-      let pItems: any[] = [];
-      if (Array.isArray(pr.items)) {
-        pItems = pr.items;
-      } else if (typeof pr.items === 'string') {
-        try { pItems = JSON.parse(pr.items); } catch {}
-      }
-      const itemDate = pr.deliveryDate ? new Date(pr.deliveryDate).toISOString().slice(0, 10) : resolvedDate;
-      pItems.forEach((it) => {
-        rawItems.push({
-          id: `item-${Date.now()}-${rawItems.length + 1}`,
-          itemCode: it.itemCode || `ITEM-${String(rawItems.length + 1).padStart(3, '0')}`,
-          itemName: it.itemName || it.description || 'Item',
-          itemClass: (it as any).itemClass || (it as any).category || (pr as any).itemClass || '',
-          description: '',
-          quantity: String(it.quantity || 1),
-          unit: it.unit || 'pcs',
-          expectedDate: it.expectedDate || itemDate || '',
-        });
-      });
-    });
-
-    const resolvedItemClass = rawItems.find((it) => it.itemClass)?.itemClass ||
-      (targetItems[0] as any)?.itemClass ||
-      (targetItems[0] as any)?.supplierType ||
-      '';
-
-    const prefillData = {
-      fromConsolidation: true,
-      requisitionIds: targetItems.map((r) => String(r.id || r.rfqId)),
-      prNumbers: targetItems.map((r) => r.prNumber || r.id).filter(Boolean),
-      title: defaultTitle,
-      department: rfqDepartment,
-      itemClass: resolvedItemClass || undefined,
-      description: '',
-      closingDate: resolvedDate,
-      date: resolvedDate,
-      deliveryDate: resolvedDate,
-      priority: firstPriority,
-      items: rawItems,
-    };
-
-    try {
-      sessionStorage.setItem('heliflow_consolidation_rfq', JSON.stringify(prefillData));
-    } catch {}
-
-    navigate('/rfq/create', { state: prefillData });
+  const handleCreateRfqForRequisition = (pr: ListPurchaseRequisition) => {
+    analyzeAndTriggerRfq([pr]);
   };
 
   const handleNavigateToCreatePo = () => {
@@ -741,178 +1176,11 @@ export default function PurchaseRequisitionsListPage() {
             !r.convertedToPoId &&
             r.status !== 'PO_CREATED'
         );
-    if (targetItems.length === 0) return;
-    const prNumbersString = targetItems
-      .map((r) => r.prNumber || r.id)
-      .filter(Boolean)
-      .join(', ');
-    const firstPr = targetItems[0];
-    let resolvedItemClass = '';
-    const firstItems = Array.isArray(firstPr?.items)
-      ? firstPr.items
-      : typeof firstPr?.items === 'string'
-      ? (() => { try { return JSON.parse(firstPr.items); } catch { return []; } })()
-      : [];
-    const itemWithClass = firstItems.find((it: any) => it?.itemClass || it?.category);
-    if (itemWithClass?.itemClass) {
-      resolvedItemClass = itemWithClass.itemClass;
-    } else if (itemWithClass?.category) {
-      resolvedItemClass = itemWithClass.category;
-    } else if ((firstPr as any)?.itemClass) {
-      resolvedItemClass = (firstPr as any).itemClass;
-    } else if ((firstPr as any)?.category) {
-      resolvedItemClass = (firstPr as any).category;
-    } else if ((firstPr as any)?.supplierType) {
-      resolvedItemClass = (firstPr as any).supplierType;
-    }
-
-    const firstClass = resolvedItemClass || 'General';
-
-    const rawItems: any[] = [];
-    targetItems.forEach((pr) => {
-      const pItems = Array.isArray(pr.items)
-        ? pr.items
-        : typeof pr.items === 'string'
-        ? (() => { try { return JSON.parse(pr.items); } catch { return []; } })()
-        : [];
-      pItems.forEach((it) => {
-        rawItems.push({
-          id: String(rawItems.length + 1),
-          itemCode: it.itemCode || `ITEM-${String(rawItems.length + 1).padStart(3, '0')}`,
-          itemName: it.itemName || it.description || 'Item',
-          description: it.description?.trim() || '',
-          quantity: Number(it.quantity) || 1,
-          unit: it.unit || 'pcs',
-          unitPrice: Number(it.unitPrice || it.estimatedPrice) || 0,
-          taxPercent: 0,
-          itemClass: it.itemClass || it.category || resolvedItemClass || '',
-        });
-      });
-    });
-
-    const prefillData = {
-      fromConsolidation: true,
-      requisitionIds: targetItems.map((r) => String(r.id || r.rfqId)),
-      prNumbers: prNumbersString,
-      itemClass: firstClass,
-      supplierType: firstClass,
-      items: rawItems,
-    };
-
-    try {
-      sessionStorage.setItem('heliflow_consolidation_po', JSON.stringify(prefillData));
-    } catch {}
-
-    const rfqId = targetItems.find((r) => r.convertedToRfqId)?.convertedToRfqId;
-    const rfqParam = rfqId ? `?rfqId=${encodeURIComponent(rfqId)}` : '';
-    navigate(`/procurement/create-purchase-order${rfqParam}`, { state: prefillData });
-  };
-
-  const handleCreateRfqForRequisition = (pr: ListPurchaseRequisition) => {
-    const defaultTitle = `Consolidated RFQ for Requisitions: ${pr.prNumber || pr.id?.slice(-6) || ''}`;
-    const rfqDepartment = pr.department || '';
-
-    const prDate = pr.deliveryDate || pr.poDate || pr.createdAt;
-    const resolvedDate = prDate ? new Date(prDate).toISOString().slice(0, 10) : '';
-
-    const firstPriority = pr.priority ? (
-      pr.priority === 'LOW' ? 'Low' :
-      pr.priority === 'URGENT' || pr.priority === 'HIGH' ? 'High' : 'Medium'
-    ) : undefined;
-
-    const rawItems: any[] = [];
-    let pItems: any[] = [];
-    if (Array.isArray(pr.items)) {
-      pItems = pr.items;
-    } else if (typeof pr.items === 'string') {
-      try { pItems = JSON.parse(pr.items); } catch {}
-    }
-    const itemDate = pr.deliveryDate ? new Date(pr.deliveryDate).toISOString().slice(0, 10) : resolvedDate;
-    pItems.forEach((it, idx) => {
-      rawItems.push({
-        id: `item-${Date.now()}-${idx + 1}`,
-        itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
-        itemName: it.itemName || it.description || 'Item',
-        itemClass: (it as any).itemClass || (it as any).category || (pr as any).itemClass || '',
-        description: '',
-        quantity: String(it.quantity || 1),
-        unit: it.unit || 'pcs',
-        expectedDate: it.expectedDate || itemDate || '',
-      });
-    });
-
-    const detectedItemClass = rawItems.find((it) => it.itemClass)?.itemClass ||
-      (pItems[0] as any)?.itemClass ||
-      (pItems[0] as any)?.category ||
-      (pr as any)?.itemClass ||
-      (pr as any)?.supplierType ||
-      '';
-
-    const prefillData = {
-      fromConsolidation: true,
-      requisitionIds: [String(pr.id || pr.rfqId)],
-      prNumbers: [pr.prNumber || pr.id].filter(Boolean),
-      title: defaultTitle,
-      department: rfqDepartment,
-      itemClass: detectedItemClass || undefined,
-      description: '',
-      closingDate: resolvedDate,
-      date: resolvedDate,
-      deliveryDate: resolvedDate,
-      priority: firstPriority,
-      items: rawItems,
-    };
-
-    try {
-      sessionStorage.setItem('heliflow_consolidation_rfq', JSON.stringify(prefillData));
-    } catch {}
-
-    navigate('/rfq/create', { state: prefillData });
+    analyzeAndTriggerPo(targetItems);
   };
 
   const handleCreatePoForRequisition = (pr: ListPurchaseRequisition) => {
-    const pItems = Array.isArray(pr.items)
-      ? pr.items
-      : typeof pr.items === 'string'
-      ? (() => { try { return JSON.parse(pr.items); } catch { return []; } })()
-      : [];
-
-    const itemWithClass = pItems.find((it: any) => it?.itemClass || it?.category);
-    const resolvedItemClass =
-      itemWithClass?.itemClass ||
-      itemWithClass?.category ||
-      (pr as any)?.itemClass ||
-      (pr as any)?.category ||
-      (pr as any)?.supplierType ||
-      '';
-
-    const rawItems: any[] = pItems.map((it: any, idx: number) => ({
-      id: String(idx + 1),
-      itemCode: it.itemCode || `ITEM-${String(idx + 1).padStart(3, '0')}`,
-      itemName: it.itemName || it.description || 'Item',
-      description: it.description?.trim() || '',
-      quantity: Number(it.quantity) || 1,
-      unit: it.unit || 'pcs',
-      unitPrice: Number(it.unitPrice || it.estimatedPrice) || 0,
-      taxPercent: 0,
-      itemClass: it.itemClass || it.category || resolvedItemClass || '',
-    }));
-
-    const prefillData = {
-      fromConsolidation: true,
-      requisitionIds: [String(pr.id || pr.rfqId)],
-      prNumbers: pr.prNumber || pr.id || '',
-      itemClass: resolvedItemClass || (pItems[0] as any)?.itemClass || 'General',
-      supplierType: resolvedItemClass || (pItems[0] as any)?.itemClass || 'General',
-      items: rawItems,
-    };
-
-    try {
-      sessionStorage.setItem('heliflow_consolidation_po', JSON.stringify(prefillData));
-    } catch {}
-
-    const rfqParam = pr.convertedToRfqId ? `?rfqId=${encodeURIComponent(pr.convertedToRfqId)}` : '';
-    navigate(`/procurement/create-purchase-order${rfqParam}`, { state: prefillData });
+    analyzeAndTriggerPo([pr]);
   };
 
   // Auto-fetch Date and Description from selected PRs when RFQ modal opens
@@ -1598,15 +1866,6 @@ export default function PurchaseRequisitionsListPage() {
                 <table className="w-full min-w-[900px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border/70 bg-muted/35 text-left text-[12px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-                      <th className="w-11 px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isAllSelected}
-                          disabled={!canCreateRequisition}
-                          onChange={canCreateRequisition ? handleToggleSelectAll : undefined}
-                          className="size-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
-                        />
-                      </th>
                       {visibleColumns.map((col) => (
                         <th
                           key={col.key}
@@ -1675,23 +1934,6 @@ export default function PurchaseRequisitionsListPage() {
                           )}
                           onClick={() => handleRowClick(requisition)}
                         >
-                          <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              disabled={!canCreateRequisition}
-                              onChange={() => canCreateRequisition && handleToggleSelect(idStr)}
-                              title={
-                                requisition.conversionStatus === 'CONVERTED_TO_PO' || requisition.status === 'PO_CREATED'
-                                  ? `PO already created (${requisition.poNumber || ''})`
-                                  : requisition.conversionStatus === 'CONVERTED_TO_RFQ' || requisition.status === 'IN_RFQ'
-                                  ? 'Already converted to RFQ'
-                                  : undefined
-                              }
-                              className="size-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
-                            />
-                          </td>
-
                           {visibleColumns.map((col) => {
 
                             if (col.key === 'priority') {
@@ -2211,55 +2453,11 @@ export default function PurchaseRequisitionsListPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-amber-800 dark:text-amber-300">
+                    <div className="flex items-center bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-amber-800 dark:text-amber-300">
                       <div className="flex items-center gap-2">
                         <Clock3 className="size-4 text-amber-600" />
                         <span className="text-sm font-medium">Pending Purchase Team Action: Ready to float RFQ or create Direct PO.</span>
                       </div>
-                      {(() => {
-                        const canConvertViewingPr =
-                          isAdmin ||
-                          hasPermission('Purchase Requisitions', 'canApprove') ||
-                          hasPermission('PO Creation', 'canApprove') ||
-                          hasPermission('Purchase Orders', 'canApprove') ||
-                          (viewingPr.submittedToUserId && String(viewingPr.submittedToUserId) === String(user?.id));
-
-                        if (canConvertViewingPr) {
-                          return (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-xs font-semibold border-emerald-600/50 text-emerald-700 dark:text-emerald-300"
-                                onClick={() => {
-                                  setSelectedPrIds([viewingPr.id!]);
-                                  setViewingPr(null);
-                                  handleOpenRfqModal();
-                                }}
-                              >
-                                <Send className="size-3.5 mr-1" /> Float RFQ
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="h-8 text-xs font-semibold"
-                                onClick={() => {
-                                  setSelectedPrIds([viewingPr.id!]);
-                                  setViewingPr(null);
-                                  setShowPoModal(true);
-                                }}
-                              >
-                                <ShoppingCart className="size-3.5 mr-1" /> Direct PO
-                              </Button>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <span className="text-xs text-muted-foreground italic">
-                            Assigned to {viewingPr.submittedToName || 'Purchase User'}. Conversion restricted to assignee.
-                          </span>
-                        );
-                      })()}
                     </div>
                   )}
                 </div>
@@ -2455,6 +2653,210 @@ export default function PurchaseRequisitionsListPage() {
               className="gap-1.5 bg-primary text-primary-foreground"
             >
               {convertingPo ? 'Creating PO…' : 'Confirm & Create Direct PO'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Split PO by Preferred Supplier Modal */}
+      <Dialog open={showSplitPoModal} onOpenChange={(open) => !open && setShowSplitPoModal(false)}>
+        <DialogContent className="sm:max-w-[760px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <ShoppingCart className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold">Split Purchase Order by Preferred Supplier</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  The selected requisition items have different preferred suppliers. ERP business logic requires 1 PO per supplier. Select a supplier group to generate its PO:
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-2">
+            {poSplitGroups.map((group, idx) => (
+              <Card key={`${group.supplierKey}-${idx}`} className="p-4 border rounded-xl hover:border-primary/50 transition-all bg-card/60 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm text-foreground">
+                        {group.supplierName}
+                      </span>
+                      {group.supplierName !== 'Unassigned Supplier' ? (
+                        <Badge variant="secondary" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-[11px] font-medium">
+                          ★ Preferred Supplier
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground text-[11px]">
+                          Unassigned
+                        </Badge>
+                      )}
+                      {group.itemClass && (
+                        <Badge variant="outline" className="text-[11px]">
+                          {group.itemClass}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                      <span>{group.items.length} item{group.items.length > 1 ? 's' : ''}</span>
+                      <span>•</span>
+                      <span>Est. Total: <strong>{formatAmount(group.totalEstimatedAmount, group.currency || companyDefaultCurrency)}</strong></span>
+                      {group.sourcePrNumbers.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>PR: {group.sourcePrNumbers.join(', ')}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs shrink-0 font-medium"
+                    onClick={() => proceedToCreatePoForGroup(group)}
+                  >
+                    <ShoppingCart className="size-4" />
+                    Create PO for {group.supplierName === 'Unassigned Supplier' ? 'Items' : group.supplierName}
+                  </Button>
+                </div>
+
+                {/* Items Preview Table */}
+                <div className="mt-2.5 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b text-left">
+                        <th className="pb-1 font-medium">Item Code</th>
+                        <th className="pb-1 font-medium">Item Name</th>
+                        <th className="pb-1 text-right font-medium">Qty</th>
+                        <th className="pb-1 text-right font-medium">Unit Price</th>
+                        <th className="pb-1 text-right font-medium">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {group.items.map((it: any, iIdx: number) => (
+                        <tr key={it.id || iIdx} className="hover:bg-muted/40">
+                          <td className="py-1 font-mono text-muted-foreground">{it.itemCode}</td>
+                          <td className="py-1 font-medium text-foreground">{it.itemName}</td>
+                          <td className="py-1 text-right">{it.quantity} {it.unit}</td>
+                          <td className="py-1 text-right">{formatAmount(it.unitPrice, group.currency || companyDefaultCurrency)}</td>
+                          <td className="py-1 text-right font-semibold text-foreground">
+                            {formatAmount(it.quantity * it.unitPrice, group.currency || companyDefaultCurrency)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <DialogFooter className="flex justify-between sm:justify-between items-center gap-2 pt-2 border-t">
+            <div className="text-xs text-muted-foreground">
+              Total {poSplitGroups.length} supplier group{poSplitGroups.length > 1 ? 's' : ''} detected
+            </div>
+            <Button variant="outline" onClick={() => setShowSplitPoModal(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Split RFQ by Category Modal */}
+      <Dialog open={showSplitRfqModal} onOpenChange={(open) => !open && setShowSplitRfqModal(false)}>
+        <DialogContent className="sm:max-w-[760px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Layers className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold">Category-wise Split for RFQ</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  The selected requisition items span across multiple categories. Floating category-specific RFQs invites targeted, qualified suppliers. Select a category below to create an RFQ:
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-2">
+            {rfqSplitGroups.map((group, idx) => (
+              <Card key={`${group.categoryKey}-${idx}`} className="p-4 border rounded-xl hover:border-primary/50 transition-all bg-card/60 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm text-foreground">
+                        {group.categoryName}
+                      </span>
+                      <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[11px] font-medium">
+                        Category
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                      <span>{group.items.length} item{group.items.length > 1 ? 's' : ''}</span>
+                      {group.preferredSuppliers.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>Preferred: <strong className="text-foreground">{group.preferredSuppliers.join(', ')}</strong></span>
+                        </>
+                      )}
+                      {group.sourcePrNumbers.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>PR: {group.sourcePrNumbers.join(', ')}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs shrink-0 font-medium"
+                    onClick={() => proceedToCreateRfqForGroup(group)}
+                  >
+                    <Send className="size-4" />
+                    Create RFQ for {group.categoryName}
+                  </Button>
+                </div>
+
+                {/* Items Preview Table */}
+                <div className="mt-2.5 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b text-left">
+                        <th className="pb-1 font-medium">Item Code</th>
+                        <th className="pb-1 font-medium">Item Name</th>
+                        <th className="pb-1 text-right font-medium">Qty</th>
+                        <th className="pb-1 font-medium">Preferred Supplier</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {group.items.map((it: any, iIdx: number) => (
+                        <tr key={it.id || iIdx} className="hover:bg-muted/40">
+                          <td className="py-1 font-mono text-muted-foreground">{it.itemCode}</td>
+                          <td className="py-1 font-medium text-foreground">{it.itemName}</td>
+                          <td className="py-1 text-right">{it.quantity} {it.unit}</td>
+                          <td className="py-1 text-muted-foreground">
+                            {it.preferredSupplierName ? (
+                              <span className="text-amber-700 dark:text-amber-400 font-medium">★ {it.preferredSupplierName}</span>
+                            ) : (
+                              <span className="text-muted-foreground/60">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <DialogFooter className="flex justify-end items-center gap-2 pt-2 border-t">
+            <Button variant="outline" size="sm" onClick={() => setShowSplitRfqModal(false)}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

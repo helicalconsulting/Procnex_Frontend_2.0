@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Layers, Plus, X, Shield, FileText, ShoppingCart, ClipboardList, CheckSquare, Wallet, CreditCard, Info, Zap, GitBranch } from 'lucide-react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { adminService, type AdminRoleRecord } from '../../services/adminService';

@@ -294,7 +294,7 @@ export const InventoryMasterPage: React.FC = () => {
     availableForPr: true,
     availableForRfq: true,
     preferredSupplierName: '',
-    standardPrice: 0,
+    standardPrice: '' as any,
     currency: (typeof window !== 'undefined' && localStorage.getItem('company_default_currency')) || 'KES',
     status: 'ACTIVE',
     brand: '',
@@ -537,7 +537,7 @@ export const InventoryMasterPage: React.FC = () => {
       availableForPr: true,
       availableForRfq: true,
       preferredSupplierName: '',
-      standardPrice: 0,
+      standardPrice: '' as any,
       currency: companyDefaultCurrency || 'KES',
       status: canApproveItem ? 'ACTIVE' : 'PENDING_APPROVAL',
       brand: '',
@@ -632,12 +632,17 @@ export const InventoryMasterPage: React.FC = () => {
 
     try {
       setSaving(true);
+      const payload: CreateItemMasterPayload = {
+        ...formData,
+        standardPrice: formData.standardPrice === '' || formData.standardPrice === undefined ? 0 : Number(formData.standardPrice) || 0,
+        taxRate: formData.taxRate === '' || formData.taxRate === undefined ? 0 : Number(formData.taxRate) || 0,
+      };
       if (modalMode === 'create') {
-        await itemMasterService.create(formData);
+        await itemMasterService.create(payload);
         setFeedback({ type: 'success', text: `Item "${formData.itemName}" created successfully` });
         notifyLocalSync('create');
       } else if (modalMode === 'edit' && editingId) {
-        await itemMasterService.update(editingId, formData);
+        await itemMasterService.update(editingId, payload);
         setFeedback({ type: 'success', text: `Item "${formData.itemName}" updated successfully` });
         notifyLocalSync('update');
       }
@@ -1470,9 +1475,14 @@ export const InventoryMasterPage: React.FC = () => {
                 <Input
                   type="number"
                   step="0.01"
+                  min="0"
                   placeholder="0.00"
-                  value={formData.standardPrice}
-                  onChange={(e) => setFormData({ ...formData, standardPrice: parseFloat(e.target.value) || 0 })}
+                  value={formData.standardPrice ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, standardPrice: val === '' ? ('' as any) : val });
+                  }}
+                  onFocus={(e) => e.target.select()}
                   className="h-10 text-xs sm:text-sm"
                 />
               </div>
@@ -1544,9 +1554,14 @@ export const InventoryMasterPage: React.FC = () => {
                 <Input
                   type="number"
                   step="0.1"
+                  min="0"
                   disabled={formData.isTaxExempt}
-                  value={formData.taxRate}
-                  onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) || 0 })}
+                  value={formData.taxRate ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, taxRate: val === '' ? ('' as any) : val });
+                  }}
+                  onFocus={(e) => e.target.select()}
                   className="h-10 text-xs sm:text-sm"
                 />
               </div>
