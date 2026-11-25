@@ -7117,6 +7117,69 @@ export default function CompanySettingsPage() {
                                       {selectedContractTemplate.ocrStatus === 'PROCESSING' ? 'Rebuilding layout…' : 'Rebuild layout'}
                                     </button>
                                   </div>
+                                  {(() => {
+                                    const lm = selectedContractTemplate.layoutModel as any;
+                                    const ci = lm?.contractIntelligence;
+                                    const sigCount = Array.isArray(lm?.signatureAnchors) ? lm.signatureAnchors.length : 0;
+                                    if (!ci && sigCount === 0) return null;
+                                    const placeholders: Array<{ original: string; tag: string }> = ci?.suggestedPlaceholders || [];
+                                    const clausesCount = Array.isArray(ci?.clauses) ? ci.clauses.length : 0;
+                                    const terms = ci?.keyTerms || {};
+                                    const applyAutoTags = () => {
+                                      if (!placeholders.length) return;
+                                      let nextHtml = editedContractContent;
+                                      for (const p of placeholders) {
+                                        if (p.original && p.tag) {
+                                          nextHtml = nextHtml.split(p.original).join(
+                                            `<span style="background: rgba(59, 130, 246, 0.14); color: #1d4ed8; padding: 1px 4px; border-radius: 3px; font-weight: 600;">${p.tag}</span>`
+                                          );
+                                        }
+                                      }
+                                      setEditedContractContent(nextHtml);
+                                      setContractTemplateDirty(true);
+                                      setPageMsg(`Applied ${placeholders.length} smart template placeholder(s). Review and click Save.`);
+                                    };
+                                    return (
+                                      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-300 shrink-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          {clausesCount > 0 && (
+                                            <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
+                                              {clausesCount} Clauses
+                                            </span>
+                                          )}
+                                          {sigCount > 0 && (
+                                            <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                                              {sigCount} Sig Anchor{sigCount > 1 ? 's' : ''}
+                                            </span>
+                                          )}
+                                          {terms.governingLaw && (
+                                            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700" title="Governing Law">
+                                              Law: {terms.governingLaw}
+                                            </span>
+                                          )}
+                                          {terms.terminationNotice && (
+                                            <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25" title="Termination Notice">
+                                              Notice: {terms.terminationNotice}
+                                            </span>
+                                          )}
+                                          {Array.isArray(terms.insuranceMinimums) && terms.insuranceMinimums.length > 0 && (
+                                            <span className="px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/25" title="Insurance Minimums">
+                                              {terms.insuranceMinimums[0]}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {placeholders.length > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={applyAutoTags}
+                                            className="px-2 py-0.5 rounded bg-blue-600/25 hover:bg-blue-600/40 text-blue-200 border border-blue-500/40 font-medium transition-colors"
+                                          >
+                                            Auto-Tag {placeholders.length} Placeholder{placeholders.length > 1 ? 's' : ''}
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                   <div className="flex-1 overflow-auto">
                                       <RichTextEditor
                                         ref={contractEditorRef}

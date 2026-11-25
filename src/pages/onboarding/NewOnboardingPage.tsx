@@ -3265,7 +3265,7 @@ export default function NewOnboardingPage() {
             </div>
 
             {/* Body */}
-            <div className="onb-modal__body" style={{ maxHeight: '60vh', overflowY: 'auto', padding: '20px 24px' }}>
+            <div className="onb-modal__body" style={{ maxHeight: '60vh', overflowY: 'auto', padding: '20px 24px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {eyeViewModal.type === 'items' && eyeViewModal.items && (
                 <div className="onb-popup-table">
                   <div className="onb-popup-table__head" style={{ gridTemplateColumns: '120px 1fr' }}>
@@ -3395,7 +3395,19 @@ export default function NewOnboardingPage() {
       {/* ── Pre-Send Predictive Match Confidence Modal ── */}
       {showPreSendConfidenceModal && createPortal(
         <div className="onb-modal-backdrop" style={{ zIndex: 10500 }} onClick={() => setShowPreSendConfidenceModal(false)}>
-          <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+          <div
+            className="onb-modal onb-modal--sap-success"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 540,
+              maxHeight: 'calc(100vh - 40px)',
+              height: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              margin: 'auto',
+              boxSizing: 'border-box',
+            }}
+          >
             {/* Header */}
             <div className="onb-modal__header onb-modal__header--blue">
               <div className="onb-modal__title">
@@ -3416,7 +3428,20 @@ export default function NewOnboardingPage() {
             </div>
 
             {/* Body */}
-            <div className="onb-modal__body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div
+              className="onb-modal__body"
+              style={{
+                padding: '20px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+                overflowY: 'auto',
+                flex: 1,
+                minHeight: 0,
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+              }}
+            >
               {auditLoading ? (
                 <div style={{ padding: '32px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                   <div className="onb-search-spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />

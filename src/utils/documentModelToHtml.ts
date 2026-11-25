@@ -21,6 +21,7 @@ function cleanTokenSpacing(text: string): string {
   if (!text) return '';
   let s = text
     .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2')
     .replace(/\bwitha\b/gi, 'with a')
     .replace(/\bfora\b/gi, 'for a')
     .replace(/\bina\b/gi, 'in a')
@@ -54,6 +55,8 @@ function cleanTokenSpacing(text: string): string {
     .replace(/\bENDORSEMENTNO\b/gi, 'ENDORSEMENT NO.')
     .replace(/\bISSUEDATE\b/gi, 'ISSUE DATE')
     .replace(/\bNAMEDINSURED\b/gi, 'NAMED INSURED')
+    .replace(/\bTYPEOFINSURANCE\b/gi, 'TYPE OF INSURANCE')
+    .replace(/\bOTHERPROVISIONS\b/gi, 'OTHER PROVISIONS')
     .replace(/\bEachOccurrence\b/gi, 'Each Occurrence')
     .replace(/\bPerClaim\b/gi, 'Per Claim')
     .replace(/\bInsuranceCompany\b/gi, 'Insurance Company')
@@ -63,6 +66,7 @@ function cleanTokenSpacing(text: string): string {
     .replace(/\bCOMPREHENSIVEGENERALLIABILITY\b/gi, 'COMPREHENSIVE GENERAL LIABILITY')
     .replace(/\bOWNERS&CONTRACTORSPROTECTIVE\b/gi, 'OWNERS & CONTRACTORS PROTECTIVE')
     .replace(/\bGENERALLIABILITY\b/gi, 'GENERAL LIABILITY')
+    .replace(/\bSPECIALENDORSEMENT\b/gi, 'SPECIAL ENDORSEMENT')
     .replace(/\bPRODUCTS-COMPLETEDOPERATIONS\b/gi, 'PRODUCTS-COMPLETED OPERATIONS')
     .replace(/\bPERSONAL&ADVERTISINGINJURY\b/gi, 'PERSONAL & ADVERTISING INJURY')
     .replace(/\bFIRELEGALLIABILITY\b/gi, 'FIRE LEGAL LIABILITY')
@@ -70,8 +74,30 @@ function cleanTokenSpacing(text: string): string {
     .replace(/\bSANDIEGOCOUNTYWATERAUTHORITY\b/gi, 'SAN DIEGO COUNTY WATER AUTHORITY')
     .replace(/\bAUTHORIZEDREPRESENTATIVE\b/gi, 'AUTHORIZED REPRESENTATIVE')
     .replace(/\bENDORSEMENTHOLDER\b/gi, 'ENDORSEMENT HOLDER')
-    .replace(/\bADDITIONALINSURED\b/gi, 'ADDITIONAL INSURED');
+    .replace(/\bADDITIONALINSURED\b/gi, 'ADDITIONAL INSURED')
+    .replace(/\bSELFINSUREDRETENTION\b/gi, 'SELF-INSURED RETENTION')
+    .replace(/\bAgreements\s+Hall\b/gi, 'Agreement shall')
+    .replace(/\(\s*"\s*([^"]+?)\s*"\s*\)/g, '("$1")');
   return s;
+}
+
+function replaceCheckboxesInText(text: string): string {
+  if (!text) return '';
+  // Convert standard checkbox glyphs and representations to interactive elements
+  let res = text.replace(
+    /(?:\[\s*\]|\[_\]|☐|[\u25A1\u25A2\u25FD\u25FE\u2610])/g,
+    '<span class="contract-checkbox" data-checked="false" contenteditable="false" style="display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; min-width: 15px; min-height: 15px; border: 1.5px solid #2563eb; border-radius: 3px; vertical-align: middle; margin: 0 5px 0 2px; background-color: #ffffff; font-size: 10px; font-weight: bold; color: transparent; cursor: pointer; user-select: none;">&nbsp;</span>'
+  );
+  res = res.replace(
+    /(?:\[[xXvV✓\u2713\u2714]\]|☑|[\u2611\u2612])/g,
+    '<span class="contract-checkbox" data-checked="true" contenteditable="false" style="display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; min-width: 15px; min-height: 15px; border: 1.5px solid #2563eb; border-radius: 3px; vertical-align: middle; margin: 0 5px 0 2px; background-color: #2563eb; font-size: 10px; font-weight: bold; color: #ffffff; cursor: pointer; user-select: none;">&#10003;</span>'
+  );
+  // Convert blank underscore fill lines (____) into clean editable inline spans
+  res = res.replace(
+    /_{3,25}/g,
+    '<span class="contract-fill-field" style="display: inline-block; min-width: 85px; border-bottom: 1.5px solid #64748b; padding: 0 4px; margin: 0 2px;">&nbsp;</span>'
+  );
+  return res;
 }
 
 export function canonicalModelToHtml(model: CanonicalDocument): string {
@@ -90,7 +116,7 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
   for (let pIdx = 0; pIdx < model.pages.length; pIdx++) {
     const page: CanonicalPage = model.pages[pIdx];
     const pageWidth = page.width || 595.28;
-    const rawElements: CanonicalElement[] = page.elements || [];
+    const rawElements: CanonicalElement[] = (page.elements || []).filter((e: any) => !e?.isRunningHeaderFooter);
 
     const blockElements: { y: number; html: string }[] = [];
 
@@ -143,33 +169,72 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
           continue;
         }
 
-        // Standard structured data table
-        let tableHtml =
-          '<table border="1" style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #64748b; font-family: Arial, Helvetica, sans-serif; font-size: 12.5px; background-color: #ffffff;"><tbody>';
+        // Row-Local Table Grid & Asymmetric Sub-Table Reconstruction
+        const rowGroups: Array<{ rowIdx: number; rowCells: typeof cells }> = [];
         for (let r = 0; r < rows; r++) {
           const rowCells = cells.filter((c) => c.row === r).sort((a, b) => a.col - b.col);
-          if (rowCells.length === 0) continue;
-          tableHtml += '<tr>';
-          for (const cell of rowCells) {
-            const isHeader = cell.isHeader || (r === 0 && rows > 1);
-            const tag = isHeader ? 'th' : 'td';
-            let cellVal = cleanTokenSpacing(escapeHtml(cell.content || '')).replace(/\n/g, '<br />');
-            cellVal = cellVal.replace(
-              /\[\s*\]/g,
-              '<span class="contract-checkbox" data-checked="false" contenteditable="false" style="display: inline-block; width: 14px; height: 14px; border: 1.5px solid #2563eb; border-radius: 2px; vertical-align: -2px; margin: 0 4px; background-color: #ffffff; text-align: center; line-height: 12px; font-size: 10px; font-weight: bold; color: transparent; cursor: pointer; user-select: none;">&nbsp;</span>'
-            );
-            cellVal = cellVal.replace(
-              /\[[✓xX]\]/g,
-              '<span class="contract-checkbox" data-checked="true" contenteditable="false" style="display: inline-block; width: 14px; height: 14px; border: 1.5px solid #2563eb; border-radius: 2px; vertical-align: -2px; margin: 0 4px; background-color: #2563eb; text-align: center; line-height: 12px; font-size: 10px; font-weight: bold; color: #ffffff; cursor: pointer; user-select: none;">&#10003;</span>'
-            );
-            const wStyle = (cell as any).widthPercent
-              ? `width: ${(cell as any).widthPercent}%; `
-              : (rowCells.length === 2 ? 'width: 50%; ' : (rowCells.length === 1 ? 'width: 100%; ' : ''));
-            tableHtml += `<${tag} style="${wStyle}border: 1px solid ${isHeader ? '#64748b' : '#cbd5e1'}; padding: 6px 10px; vertical-align: top; text-align: ${cell.horizontalAlign || 'left'}; font-weight: ${isHeader ? 'bold' : 'normal'}; background-color: ${cell.backgroundColor || (isHeader ? '#f1f5f9' : (r % 2 === 0 ? '#ffffff' : '#f8fafc'))}; word-break: normal; white-space: normal;" ${cell.rowspan > 1 ? `rowspan="${cell.rowspan}"` : ''} ${cell.colspan > 1 ? `colspan="${cell.colspan}"` : ''}>${cellVal || '&nbsp;'}</${tag}>`;
-          }
-          tableHtml += '</tr>';
+          if (rowCells.length > 0) rowGroups.push({ rowIdx: r, rowCells });
         }
-        tableHtml += '</tbody></table>';
+        const uniqueColCounts = new Set(rowGroups.map((rg) => rg.rowCells.length));
+        const hasAsymmetricRows = uniqueColCounts.size > 1 && rowGroups.length > 1;
+        const maxCols = Math.max(1, el.tableData.cols || 1, ...rowGroups.map((rg) => rg.rowCells.length));
+
+        const computeRowWidths = (rowCells: typeof cells): number[] => {
+          const rawW = rowCells.map((cell) => {
+            const explicit = (cell as any).widthPercent;
+            if (typeof explicit === 'number' && explicit > 0) return explicit;
+            if (cell.bbox && el.bbox?.width) return Math.max(8, (cell.bbox.width / el.bbox.width) * 100);
+            return 100 / Math.max(1, rowCells.length);
+          });
+          const sum = rawW.reduce((a, b) => a + b, 0) || 100;
+          return rawW.map((w) => Math.max(6, Math.round((w / sum) * 100)));
+        };
+
+        let tableHtml = '';
+        if (hasAsymmetricRows) {
+          tableHtml = '<div style="margin: 16px 0;">';
+          rowGroups.forEach(({ rowIdx: r, rowCells }, idx) => {
+            const widths = computeRowWidths(rowCells);
+            const colgroup = `<colgroup>${widths.map((w) => `<col style="width: ${w}%;" />`).join('')}</colgroup>`;
+            const mt = idx === 0 ? '0' : '-1px';
+            tableHtml += `<table border="1" style="width: 100%; border-collapse: collapse; margin: ${mt} 0 0 0; border: 1px solid #64748b; font-family: Arial, Helvetica, sans-serif; font-size: 12px; background-color: #ffffff; table-layout: fixed;">${colgroup}<tbody><tr>`;
+            rowCells.forEach((cell) => {
+              const isHeader = cell.isHeader || (r === 0 && rows > 1);
+              const tag = isHeader ? 'th' : 'td';
+              let cellVal = cleanTokenSpacing(escapeHtml(cell.content || '')).replace(/\n/g, '<br />');
+              cellVal = replaceCheckboxesInText(cellVal);
+              tableHtml += `<${tag} style="border: 1px solid ${isHeader ? '#64748b' : '#cbd5e1'}; padding: 6px 10px; vertical-align: top; text-align: ${cell.horizontalAlign || 'left'}; font-weight: ${isHeader ? 'bold' : 'normal'}; background-color: ${cell.backgroundColor || (isHeader ? '#f1f5f9' : (r % 2 === 0 ? '#ffffff' : '#f8fafc'))}; word-break: normal; overflow-wrap: break-word; line-height: 1.45;">${cellVal || '&nbsp;'}</${tag}>`;
+            });
+            tableHtml += '</tr></tbody></table>';
+          });
+          tableHtml += '</div>';
+        } else {
+          tableHtml =
+            '<table border="1" style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1.5px solid #64748b; font-family: Arial, Helvetica, sans-serif; font-size: 12px; background-color: #ffffff; table-layout: auto;"><tbody>';
+          for (const { rowIdx: r, rowCells } of rowGroups) {
+            const widths = computeRowWidths(rowCells);
+            tableHtml += '<tr>';
+            rowCells.forEach((cell, cIdx) => {
+              const isHeader = cell.isHeader || (r === 0 && rows > 1);
+              const tag = isHeader ? 'th' : 'td';
+              let cellVal = cleanTokenSpacing(escapeHtml(cell.content || '')).replace(/\n/g, '<br />');
+              cellVal = replaceCheckboxesInText(cellVal);
+              const widthPct = widths[cIdx];
+              const wStyle = `width: ${widthPct}%; `;
+              let colspan = cell.colspan || 1;
+              if (rowCells.length === 1 && maxCols > 1) {
+                colspan = maxCols;
+              } else if (cell.bbox && el.bbox?.width && maxCols > 1 && colspan === 1) {
+                const estimatedCols = Math.round((cell.bbox.width / el.bbox.width) * maxCols);
+                if (estimatedCols > 1) colspan = Math.min(maxCols, estimatedCols);
+              }
+              const rowspan = cell.rowspan || 1;
+              tableHtml += `<${tag} style="${wStyle}border: 1px solid ${isHeader ? '#64748b' : '#cbd5e1'}; padding: 6px 10px; vertical-align: top; text-align: ${cell.horizontalAlign || 'left'}; font-weight: ${isHeader ? 'bold' : 'normal'}; background-color: ${cell.backgroundColor || (isHeader ? '#f1f5f9' : (r % 2 === 0 ? '#ffffff' : '#f8fafc'))}; word-break: normal; overflow-wrap: break-word; line-height: 1.45;" ${rowspan > 1 ? `rowspan="${rowspan}"` : ''} ${colspan > 1 ? `colspan="${colspan}"` : ''}>${cellVal || '&nbsp;'}</${tag}>`;
+            });
+            tableHtml += '</tr>';
+          }
+          tableHtml += '</tbody></table>';
+        }
         blockElements.push({ y: el.bbox?.y ?? 0, html: tableHtml });
         continue;
       }
@@ -177,18 +242,25 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
       if (el.type === 'form_line') {
         const w = el.bbox?.width || 0;
         const h = el.bbox?.height || 0;
+        const elY = el.bbox?.y ?? 0;
         if (h >= 18 && w >= 120 && !el.text) {
-          // Large blank input box (e.g. Services description area in contracts)
+          // Preserve bordered input / services box cleanly
           blockElements.push({
-            y: el.bbox?.y ?? 0,
-            html: `<div style="border: 1.5px solid #94a3b8; border-radius: 4px; min-height: ${Math.max(45, Math.min(140, Math.round(h)))}px; margin: 12px 0; background-color: #ffffff; padding: 10px;">&nbsp;</div>`
+            y: elY,
+            html: `<div style="border: 1.5px solid #64748b; border-radius: 4px; min-height: ${Math.min(110, Math.max(32, Math.round(h)))}px; margin: 8px 0; background-color: #ffffff; padding: 8px;">&nbsp;</div>`
           });
           continue;
-        } else if (w > 320 && !el.text) {
-          blockElements.push({
-            y: el.bbox?.y ?? 0,
-            html: '<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 8px 0;" />'
-          });
+        } else if (w > 200 && !el.text) {
+          // Only emit <hr> if there is no text line at the same vertical position (avoid cutting across inline fill lines)
+          const hasTextOnSameRow = rawElements.some(
+            (te) => te.type === 'text' && te.bbox && Math.abs(te.bbox.y - elY) <= 12
+          );
+          if (!hasTextOnSameRow) {
+            blockElements.push({
+              y: elY,
+              html: '<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 8px 0;" />'
+            });
+          }
           continue;
         }
       }
@@ -250,8 +322,8 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
       line.elements.sort((a, b) => a.bbox.x - b.bbox.x);
 
       const firstTok = line.elements[0];
-      const hasCheckbox = firstTok.type === 'checkbox' || /^(?:\[(?:\s*|[✓xX])\]|☐|☑|1\s*[-–—]|[-–—•\*])\s*/.test(firstTok.text || '');
-      const isChecked = firstTok.checked || /^(?:\[[✓xX]\]|☑)/.test(firstTok.text || '');
+      const hasCheckbox = firstTok.type === 'checkbox' || /^(?:\[(?:\s*|[✓xXvV\u2713\u2714])\]|☐|☑|[\u25A1\u25A2\u25FD\u25FE\u2610\u2611\u2612]|1\s*[-–—]|[-–—•\*])\s*/.test(firstTok.text || '');
+      const isChecked = firstTok.checked || /^(?:\[[✓xXvV\u2713\u2714]\]|☑|[\u2611\u2612])/.test(firstTok.text || '');
 
       const parts: string[] = [];
       let prevTok: CanonicalElement | null = null;
@@ -266,7 +338,7 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
           }
         }
         if (tok === firstTok && hasCheckbox) {
-          t = t.replace(/^(?:\[(?:\s*|[✓xX])\]|☐|☑|1\s*[-–—]|[-–—•\*])\s*/, '');
+          t = t.replace(/^(?:\[(?:\s*|[✓xXvV\u2713\u2714])\]|☐|☑|[\u25A1\u25A2\u25FD\u25FE\u2610\u2611\u2612]|1\s*[-–—]|[-–—•\*])\s*/, '');
         }
         parts.push(t);
         prevTok = tok;
@@ -309,11 +381,11 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
       if (currentPara.length === 0) return;
       const first = currentPara[0];
       const joinedText = currentPara.map((l) => l.text).join(' ');
-      const escaped = escapeHtml(joinedText);
+      const escaped = replaceCheckboxesInText(escapeHtml(joinedText));
 
       let innerContent = escaped;
       if (first.isCheckbox) {
-        innerContent = `<span class="contract-checkbox" data-checked="${first.isChecked ? 'true' : 'false'}" contenteditable="false" style="display: inline-block; width: 16px; height: 16px; border: 1.5px solid #2563eb; border-radius: 3px; vertical-align: -2px; margin-right: 8px; background-color: ${first.isChecked ? '#2563eb' : '#ffffff'}; text-align: center; line-height: 14px; font-size: 11px; font-weight: bold; color: ${first.isChecked ? '#ffffff' : 'transparent'}; cursor: pointer; user-select: none;">${first.isChecked ? '&#10003;' : '&nbsp;'}</span>${escaped}`;
+        innerContent = `<span class="contract-checkbox" data-checked="${first.isChecked ? 'true' : 'false'}" contenteditable="false" style="display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; min-width: 15px; min-height: 15px; border: 1.5px solid #2563eb; border-radius: 3px; vertical-align: middle; margin-right: 8px; background-color: ${first.isChecked ? '#2563eb' : '#ffffff'}; font-size: 10px; font-weight: bold; color: ${first.isChecked ? '#ffffff' : 'transparent'}; cursor: pointer; user-select: none;">${first.isChecked ? '&#10003;' : '&nbsp;'}</span>${escaped}`;
       }
 
       const marginTop = first.isHeading ? '14px' : (first.isClause ? '8px' : '4px');
@@ -328,11 +400,14 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
 
     for (let i = 0; i < formattedLines.length; i++) {
       const line = formattedLines[i];
+      const isDistinctFormRow = /^(?:On the date|Upon completion|Other\s*:|Per\s+Hour|Per\s+Job|Photographer\s*:|Client\s*:|The address where)/i.test(line.text);
 
-      if (line.isHeading || line.isCheckbox || line.isClause) {
+      if (line.isHeading || line.isCheckbox || line.isClause || isDistinctFormRow) {
         flushPara();
         currentPara.push(line);
-        flushPara();
+        if (line.isHeading || line.isCheckbox || isDistinctFormRow) {
+          flushPara();
+        }
         continue;
       }
 
@@ -341,7 +416,7 @@ export function canonicalModelToHtml(model: CanonicalDocument): string {
       } else {
         const prev = currentPara[currentPara.length - 1];
         const gapY = line.y - prev.y;
-        if (gapY <= 20) {
+        if (gapY <= 20 && !prev.text.endsWith(':')) {
           currentPara.push(line);
         } else {
           flushPara();
