@@ -1,5 +1,5 @@
 import { USE_MOCK } from '../config/mock';
-import { apiRequest } from '../api/client';
+import { apiRequest, invalidateApiCache } from '../api/client';
 import { mapApiRfqToTableRow, mapRfqFromTypes, MOCK_RFQS } from '../api/mappers';
 import { RFQ_PAGE_MOCK } from '../mocks/rfqPage.mock';
 import type { RFQTableRow } from '../types/viewModels';
@@ -22,6 +22,7 @@ export interface CreateRfqPayload {
   itemClass?: string;
   closingDate?: string;
   currency?: string;
+  branchId?: string;
   requisitionIds?: string[];
   items: Array<{
     itemCode?: string;
@@ -132,7 +133,7 @@ async function apiList(params?: ListParams): Promise<RFQTableRow[]> {
   const qs = query.toString();
   const data = await apiRequest<{ rfqs: Record<string, unknown>[] }>(
     `/rfqs${qs ? `?${qs}` : ''}`,
-    { cacheTtlMs: 20000 }
+    { cacheTtlMs: 0 }
   );
   let rows = (data.rfqs || [])
     .map(mapApiRfqToTableRow)
@@ -190,10 +191,12 @@ async function mockCreate(_payload: CreateRfqPayload): Promise<{ id: string }> {
 }
 
 async function apiCreate(payload: CreateRfqPayload): Promise<Record<string, unknown>> {
-  return apiRequest<Record<string, unknown>>('/rfqs', {
+  const result = await apiRequest<Record<string, unknown>>('/rfqs', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+  invalidateApiCache('/rfqs');
+  return result;
 }
 
 export interface SendRfqResult {

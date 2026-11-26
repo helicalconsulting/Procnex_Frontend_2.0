@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateApiCache } from '../../api/client';
 import { useServiceData } from '../../hooks/useServiceData';
 import { rfqService, type CreateRfqPayload, type EvalCategoryDTO } from '../../services/rfqService';
 import { itemMasterService, type ItemMaster } from '../../services/itemMasterService';
@@ -125,6 +127,7 @@ function toEvalCategoryDTO(cats: EvalCategory[]): EvalCategoryDTO[] {
 
 export default function CreateRFQPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id: editId } = useParams<{ id: string }>();
   const location = useLocation();
   const [sourceRequisitionIds, setSourceRequisitionIds] = useState<string[]>([]);
@@ -1135,10 +1138,14 @@ export default function CreateRFQPage() {
       evalCategories.filter((c) => c.enabled && c.weightage > 0)
     );
 
+    const savedBranch = typeof window !== 'undefined' ? localStorage.getItem('heliflow_active_branch_id') : null;
+    const branchId = savedBranch && savedBranch !== 'ALL' && savedBranch.trim() !== '' ? savedBranch.trim() : undefined;
+
     return {
       title: title.trim(),
       description: description.trim() || undefined,
       priority,
+      branchId,
       requisitionIds: sourceRequisitionIds.length > 0 ? sourceRequisitionIds : undefined,
       department: supplierClass || department || undefined,
       departmentId: selectedDepartment?.id,
@@ -1295,11 +1302,17 @@ export default function CreateRFQPage() {
         }
         setSuccessMsg('RFQ saved as draft successfully!');
       }
+      invalidateApiCache('/rfqs');
+      queryClient.invalidateQueries({ queryKey: ['svc'] });
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       }
-      setTimeout(() => navigate('/rfq'), 800);
+      setTimeout(() => {
+        invalidateApiCache('/rfqs');
+        queryClient.invalidateQueries({ queryKey: ['svc'] });
+        navigate('/rfq');
+      }, 800);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to save RFQ');
     } finally {
@@ -1348,6 +1361,9 @@ export default function CreateRFQPage() {
           rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {})
         ]);
       }
+
+      invalidateApiCache('/rfqs');
+      queryClient.invalidateQueries({ queryKey: ['svc'] });
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
@@ -2788,7 +2804,12 @@ export default function CreateRFQPage() {
       />
 
       {approvalSubmittedRfq && (
-        <div className="prompt-modal-backdrop" onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}>
+        <div className="prompt-modal-backdrop" onClick={() => {
+          setApprovalSubmittedRfq(null);
+          invalidateApiCache('/rfqs');
+          queryClient.invalidateQueries({ queryKey: ['svc'] });
+          navigate('/rfq');
+        }}>
           <div className="prompt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, textAlign: 'center', padding: '32px 28px' }}>
             <div style={{
               width: 60, height: 60, borderRadius: '50%', background: 'rgba(16, 185, 129, 0.12)',
@@ -2826,7 +2847,12 @@ export default function CreateRFQPage() {
               <button
                 className="create-rfq__btn create-rfq__btn--primary"
                 style={{ minWidth: 130, justifyContent: 'center' }}
-                onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}
+                onClick={() => {
+                  setApprovalSubmittedRfq(null);
+                  invalidateApiCache('/rfqs');
+                  queryClient.invalidateQueries({ queryKey: ['svc'] });
+                  navigate('/rfq');
+                }}
               >
                 Go to RFQ List
               </button>
