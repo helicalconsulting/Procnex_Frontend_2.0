@@ -1868,7 +1868,7 @@ export default function NewOnboardingPage() {
           </Card>
 
           {/* Sent Invitations Card */}
-          <Card className={cn('overflow-hidden border-border/70 shadow-xs transition-all duration-200', isSentExpanded && 'fixed inset-4 sm:inset-6 z-50 overflow-y-auto bg-card border-border shadow-2xl')}>
+          <Card className="overflow-hidden border-border/70 shadow-xs transition-all duration-200">
             <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
               <div className="flex items-center gap-2.5">
                 <List className="size-4.5 text-muted-foreground" />
@@ -1880,8 +1880,8 @@ export default function NewOnboardingPage() {
                 <Button type="button" variant="ghost" size="sm" onClick={() => navigate('/onboarding/queue')}>
                   View Onboarding Queue <ArrowRight className="size-3.5 ml-1" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsSentExpanded(!isSentExpanded)} title={isSentExpanded ? 'Minimize' : 'Expand'}>
-                  {isSentExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsSentExpanded(true)} title="Expand">
+                  <Maximize2 className="size-4" />
                 </Button>
               </div>
             </div>
@@ -1890,6 +1890,39 @@ export default function NewOnboardingPage() {
               {sentInvitationsContent}
             </div>
           </Card>
+
+          {isSentExpanded && createPortal(
+            <div
+              className="fixed inset-0 z-[10500] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 sm:p-6"
+              onClick={() => setIsSentExpanded(false)}
+            >
+              <Card
+                className="flex flex-col w-full max-w-5xl max-h-[calc(100vh-48px)] overflow-hidden bg-card border-border shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <List className="size-4.5 text-muted-foreground" />
+                    <h2 className="text-base font-semibold text-foreground">
+                      Sent Invitations <span className="ml-1 text-sm font-normal text-muted-foreground">({invitations.length})</span>
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setIsSentExpanded(false); navigate('/onboarding/queue'); }}>
+                      View Onboarding Queue <ArrowRight className="size-3.5 ml-1" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsSentExpanded(false)} title="Minimize">
+                      <Minimize2 className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0">
+                  {sentInvitationsContent}
+                </div>
+              </Card>
+            </div>,
+            document.body
+          )}
         </div>
       </div>
 
