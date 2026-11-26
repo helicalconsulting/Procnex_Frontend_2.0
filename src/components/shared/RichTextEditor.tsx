@@ -139,6 +139,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
           'border-collapse': 'collapse',
           width: '100%',
         },
+        table_sizing_mode: 'relative',
         table_grid: true,
         table_appearance_options: true,
         skin: isDark ? 'oxide-dark' : 'oxide',
@@ -214,15 +215,17 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
             margin: 16px 0;
           }
           .contract-checkbox {
-            display: inline-block !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             width: 16px !important;
             height: 16px !important;
+            min-width: 16px !important;
+            min-height: 16px !important;
             border: 1.5px solid #2563eb !important;
             border-radius: 3px !important;
-            vertical-align: -2px !important;
-            margin-right: 8px !important;
-            text-align: center !important;
-            line-height: 14px !important;
+            vertical-align: middle !important;
+            margin: 0 6px 0 2px !important;
             font-size: 11px !important;
             font-weight: bold !important;
             cursor: pointer !important;
@@ -239,11 +242,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
         setup: (editor: any) => {
           editorInstanceRef.current = editor;
 
-          // Interactive Checkbox Toggle on Click & Mousedown (Capturing Phase)
+          // Interactive Checkbox Toggle on Click (Single source of truth with debounce)
+          let lastToggleTs = 0;
           const toggleCheckbox = (target: any) => {
             if (!target) return false;
             const cb = target.closest?.('.contract-checkbox') || (target.classList?.contains('contract-checkbox') ? target : null);
             if (cb) {
+              const now = Date.now();
+              if (now - lastToggleTs < 180) return true; // prevent multi-event bounce
+              lastToggleTs = now;
+
               const currentVal = cb.getAttribute('data-checked');
               const wasChecked = currentVal === 'true' || cb.getAttribute('aria-checked') === 'true' || cb.innerHTML.indexOf('&#10003;') !== -1 || (cb.textContent && cb.textContent.indexOf('\u2713') !== -1);
               const nowChecked = !wasChecked;
@@ -266,28 +274,14 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(functi
                 editor.setContent(value || '');
               } catch {}
             }
-            try {
-              const body = editor.getBody();
-              if (body) {
-                body.addEventListener('click', (e: MouseEvent) => {
-                  if (toggleCheckbox(e.target)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }
-                }, true);
-                body.addEventListener('mousedown', (e: MouseEvent) => {
-                  const cb = (e.target as any)?.closest?.('.contract-checkbox') || ((e.target as any)?.classList?.contains('contract-checkbox') ? e.target : null);
-                  if (cb) {
-                    e.preventDefault();
-                    toggleCheckbox(cb);
-                  }
-                }, true);
-              }
-            } catch {}
           });
 
-          editor.on('click mousedown', (e: any) => {
-            toggleCheckbox(e.target);
+          // Handle click on checkbox cleanly and prevent cursor focus jumping
+          editor.on('click', (e: any) => {
+            if (toggleCheckbox(e.target)) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
           });
 
           editor.on('change input undo redo keyup', () => {

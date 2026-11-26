@@ -127,6 +127,7 @@ export interface UploadedRegistrationDoc {
   issueDate?: string;
   expiryDate?: string;
   issuedAuthority?: string;
+  documentNumber?: string;
   uploadedAt: string;
 }
 

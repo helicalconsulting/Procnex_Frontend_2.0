@@ -52,6 +52,7 @@ interface UploadedFileItem {
   issueDate?: string;
   expiryDate?: string;
   issuedAuthority?: string;
+  documentNumber?: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -439,6 +440,10 @@ export default function VendorSelfRegistrationPage() {
           const nextIssue = result.issueDate || prev.issueDate || '';
           const nextExpiry = result.expirationDate || prev.expiryDate || '';
           const nextAuth = result.issuingAuthority || prev.issuedAuthority || '';
+          const nextDocNum =
+            (docType === 'trade_license' ? (result.registrationNumber || prev.documentNumber) :
+             docType === 'vat_certificate' ? (result.taxNumber || prev.documentNumber) :
+             (result.registrationNumber || prev.documentNumber)) || '';
           if (result.issueDate && !prev.issueDate) detectedCount++;
           if (result.expirationDate && !prev.expiryDate) detectedCount++;
           if (result.issuingAuthority && !prev.issuedAuthority) detectedCount++;
@@ -447,20 +452,44 @@ export default function VendorSelfRegistrationPage() {
             issueDate: nextIssue,
             expiryDate: nextExpiry,
             issuedAuthority: nextAuth,
+            documentNumber: nextDocNum,
           };
         };
         if (docType === 'trade_license') setTradeLicense(updater);
         else if (docType === 'vat_certificate') setVatCertificate(updater);
         else if (docType === 'emirates_id') setEmiratesId(updater);
 
-        if (result.issueDate || result.expirationDate || result.issuingAuthority) {
-          const fieldsFound: string[] = [];
-          if (result.issueDate) fieldsFound.push('Issue Date');
-          if (result.expirationDate) fieldsFound.push('Expiry Date');
-          if (result.issuingAuthority) fieldsFound.push('Authority');
+        // Auto-fill company name if empty
+        if (result.companyName && !companyName.trim()) {
+          setCompanyName(result.companyName);
+        }
+
+        const fieldsFound: string[] = [];
+        if (result.companyName) fieldsFound.push('Company Name');
+        if (docType === 'trade_license' && result.registrationNumber) fieldsFound.push('CR/License No.');
+        if (docType === 'vat_certificate' && result.taxNumber) {
+          const suffix = result.taxValidationStatus === 'AUTO_REPAIRED' ? ' (Auto-Repaired)' : (result.taxValidationStatus === 'VERIFIED' ? ' (Verified)' : '');
+          fieldsFound.push(`Tax/TRN No.${suffix}`);
+        }
+        if (docType === 'emirates_id' && result.emiratesIdNumber) fieldsFound.push('Emirates ID');
+        if (result.issueDate) fieldsFound.push('Issue Date');
+        if (result.expirationDate) fieldsFound.push('Expiry Date');
+        if (result.issuingAuthority) fieldsFound.push('Authority');
+
+        if (result.healthStatus === 'EXPIRED') {
           setOcrMsg((prev) => ({
             ...prev,
-            [docType]: `✨ Auto-detected ${fieldsFound.join(' & ')} from document. Please review.`,
+            [docType]: `⚠️ ${result.healthMessage || 'Document is EXPIRED'}${fieldsFound.length ? ` · Detected: ${fieldsFound.join(', ')}` : ''}`,
+          }));
+        } else if (result.healthStatus === 'EXPIRING_SOON') {
+          setOcrMsg((prev) => ({
+            ...prev,
+            [docType]: `⏳ ${result.healthMessage || 'Expiring soon'}${fieldsFound.length ? ` · Detected: ${fieldsFound.join(', ')}` : ''}`,
+          }));
+        } else if (fieldsFound.length > 0) {
+          setOcrMsg((prev) => ({
+            ...prev,
+            [docType]: `✨ Auto-detected ${fieldsFound.join(', ')} from document. Please review.`,
           }));
           setTimeout(() => {
             setOcrMsg((prev) => ({ ...prev, [docType]: '' }));
@@ -636,6 +665,7 @@ export default function VendorSelfRegistrationPage() {
           issueDate: tradeLicense.issueDate?.trim() || undefined,
           expiryDate: tradeLicense.expiryDate?.trim() || undefined,
           issuedAuthority: tradeLicense.issuedAuthority?.trim() || undefined,
+          documentNumber: tradeLicense.documentNumber?.trim() || undefined,
           uploadedAt: new Date().toISOString(),
         },
         {
@@ -648,6 +678,7 @@ export default function VendorSelfRegistrationPage() {
           issueDate: vatCertificate.issueDate?.trim() || undefined,
           expiryDate: vatCertificate.expiryDate?.trim() || undefined,
           issuedAuthority: vatCertificate.issuedAuthority?.trim() || undefined,
+          documentNumber: vatCertificate.documentNumber?.trim() || undefined,
           uploadedAt: new Date().toISOString(),
         },
         {
@@ -660,6 +691,7 @@ export default function VendorSelfRegistrationPage() {
           issueDate: emiratesId.issueDate?.trim() || undefined,
           expiryDate: emiratesId.expiryDate?.trim() || undefined,
           issuedAuthority: emiratesId.issuedAuthority?.trim() || undefined,
+          documentNumber: emiratesId.documentNumber?.trim() || undefined,
           uploadedAt: new Date().toISOString(),
         },
       ];
