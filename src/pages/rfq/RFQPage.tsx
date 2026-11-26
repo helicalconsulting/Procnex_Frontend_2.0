@@ -308,7 +308,7 @@ export default function RFQPage() {
     () => rfqService.list({ limit: 100 }),
     [] as RFQTableRow[],
     [],
-    { cacheKey: 'rfqs:list', cacheTtlMs: 15000 }
+    { cacheKey: 'rfqs:list', cacheTtlMs: 0 }
   );
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
@@ -368,6 +368,7 @@ export default function RFQPage() {
 
   useEffect(() => {
     fetchPendingApprovals();
+    forceRefresh();
 
     const handleRefresh = () => {
       forceRefresh();
