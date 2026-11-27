@@ -348,7 +348,7 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
 
 const STATUS_LABELS: Record<string, string> = {
   SUBMITTED: 'Submitted', UNDER_REVIEW: 'Under Review',
-  APPROVED_L1: 'Approved', ACCEPTED: 'Accepted', REJECTED: 'Rejected',
+  APPROVED_L1: 'Approved (Awaiting Next Level)', ACCEPTED: 'Accepted', REJECTED: 'Rejected',
   SHORTLISTED: 'Shortlisted', RETURNED: 'Returned',
 };
 
@@ -386,6 +386,18 @@ function getDisplayStatus(q: MockQuotation): QuotStatus {
   if (q.userAction === 'REJECTED') return 'REJECTED';
   if (q.userAction === 'RETURNED') return 'RETURNED';
   return q.status;
+}
+
+function isQuotationApprovedByUser(q: MockQuotation): boolean {
+  const disp = getDisplayStatus(q);
+  return (
+    disp === 'ACCEPTED' ||
+    (disp as string) === 'APPROVED_L1' ||
+    (disp as string) === 'APPROVED' ||
+    q.userAction === 'APPROVED' ||
+    q.userAction === 'APPROVED_L1' ||
+    Boolean((q as any)._isApprovedByMe)
+  );
 }
 
 function computeStandardVendorScores(group: MockQuotation[], q: MockQuotation, customFields: any[] = [], fullQuot: any = null) {
@@ -485,8 +497,9 @@ function scoreQuotationGroup(group: MockQuotation[], customFields: any[] = []): 
 
 function QuotationStatusBadge({ quotation }: { quotation: MockQuotation }) {
   const status = getDisplayStatus(quotation);
-  const tone = status === 'ACCEPTED' ? 'success' : status === 'REJECTED' ? 'danger' : status === 'RETURNED' ? 'warning' : 'info';
-  const Icon = status === 'ACCEPTED' ? CheckCircle2 : status === 'REJECTED' ? XCircle : status === 'RETURNED' ? RotateCcw : Clock;
+  const isApproved = status === 'ACCEPTED' || (status as string) === 'APPROVED_L1' || (status as string) === 'APPROVED';
+  const tone = isApproved ? 'success' : status === 'REJECTED' ? 'danger' : status === 'RETURNED' ? 'warning' : 'info';
+  const Icon = isApproved ? CheckCircle2 : status === 'REJECTED' ? XCircle : status === 'RETURNED' ? RotateCcw : Clock;
   return <Badge tone={tone} className={`quotation-status quotation-status--${tone}`}><Icon size={13}/>{STATUS_LABELS[status] || status}</Badge>;
 }
 
@@ -2652,12 +2665,31 @@ export default function QuotationsPage() {
   // ── KPI stats from local data ──
   // Compute counts directly from the quotations array so they're always in sync
   // with the visible data, regardless of backend stats API availability.
-  const stats = useMemo(() => ({
-    total: validQuotations.length,
-    pending: validQuotations.filter((q) => q.status === 'UNDER_REVIEW').length,
-    accepted: validQuotations.filter((q) => q.status === 'ACCEPTED').length,
-    rejected: validQuotations.filter((q) => q.status === 'REJECTED').length,
-  }), [validQuotations]);
+  const stats = useMemo(() => {
+    let pending = 0;
+    let accepted = 0;
+    let rejected = 0;
+
+    for (const q of validQuotations) {
+      const disp = getDisplayStatus(q);
+      const isApprovedByMe = isQuotationApprovedByUser(q);
+
+      if (disp === 'REJECTED' || q.status === 'REJECTED' || q.userAction === 'REJECTED') {
+        rejected++;
+      } else if (disp === 'ACCEPTED' || isApprovedByMe) {
+        accepted++;
+      } else if (disp === 'UNDER_REVIEW' || disp === 'SUBMITTED' || q.status === 'UNDER_REVIEW') {
+        pending++;
+      }
+    }
+
+    return {
+      total: validQuotations.length,
+      pending,
+      accepted,
+      rejected,
+    };
+  }, [validQuotations]);
 
   // SSE real-time refresh — listen for quotation status changes & approval chain completion
   useEffect(() => {
@@ -2791,7 +2823,21 @@ export default function QuotationsPage() {
     if (!statusFilter) {
       return validQuotations;
     }
-    return validQuotations.filter(q => q.status === statusFilter);
+    return validQuotations.filter((q) => {
+      const disp = getDisplayStatus(q);
+      const isApprovedByMe = isQuotationApprovedByUser(q);
+
+      if (statusFilter === 'UNDER_REVIEW') {
+        return !isApprovedByMe && (disp === 'UNDER_REVIEW' || disp === 'SUBMITTED' || q.status === 'UNDER_REVIEW');
+      }
+      if (statusFilter === 'ACCEPTED') {
+        return isApprovedByMe || q.status === 'ACCEPTED';
+      }
+      if (statusFilter === 'REJECTED') {
+        return disp === 'REJECTED' || q.status === 'REJECTED' || q.userAction === 'REJECTED';
+      }
+      return disp === statusFilter || q.status === statusFilter;
+    });
   }, [validQuotations, statusFilter]);
 
 
@@ -3405,7 +3451,21 @@ export default function QuotationsPage() {
   const filteredQuotations = useMemo(() => {
     let list = scoredQuotations;
     if (statusFilter) {
-      list = list.filter(q => q.status === statusFilter);
+      list = list.filter((q) => {
+        const disp = getDisplayStatus(q);
+        const isApprovedByMe = isQuotationApprovedByUser(q);
+
+        if (statusFilter === 'UNDER_REVIEW') {
+          return !isApprovedByMe && (disp === 'UNDER_REVIEW' || disp === 'SUBMITTED' || q.status === 'UNDER_REVIEW');
+        }
+        if (statusFilter === 'ACCEPTED') {
+          return isApprovedByMe || q.status === 'ACCEPTED';
+        }
+        if (statusFilter === 'REJECTED') {
+          return disp === 'REJECTED' || q.status === 'REJECTED' || q.userAction === 'REJECTED';
+        }
+        return disp === statusFilter || q.status === statusFilter;
+      });
     }
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -3429,6 +3489,7 @@ export default function QuotationsPage() {
     bestCurrency: string;
     latestSubmitted: string;
     isInactive: boolean;
+    isApprovedByMe?: boolean;
   }
 
   const [expandedRfqNumbers, setExpandedRfqNumbers] = useState<Set<string>>(new Set());
@@ -3677,6 +3738,7 @@ export default function QuotationsPage() {
       const bestCurrency = sortedQuots.find(q => q.totalPriceNum === bestPrice)?.currency || companyDefaultCurrency || DEFAULT_CURRENCY;
       const latestSubmitted = sortedQuots.reduce((max, q) => q.submittedAt > max ? q.submittedAt : max, sortedQuots[0].submittedAt);
       const isInactive = sortedQuots.some(q => q.status === 'ACCEPTED' || getDisplayStatus(q) === 'ACCEPTED');
+      const isApprovedByMe = !isInactive && sortedQuots.some(q => isQuotationApprovedByUser(q));
 
       result.push({
         rfqNumber,
@@ -3687,6 +3749,7 @@ export default function QuotationsPage() {
         bestCurrency,
         latestSubmitted,
         isInactive,
+        isApprovedByMe,
       });
     }
 
@@ -4757,8 +4820,8 @@ export default function QuotationsPage() {
                         <div className="quot-rfq-card__title-block">
                           <div className="quot-rfq-card__badge-wrap">
                             <span className="quot-rfq-card__rfq-num">{group.rfqNumber}</span>
-                            <span className={`quot-rfq-card__status-dot quot-rfq-card__status-dot--${group.isInactive ? 'inactive' : 'active'}`} />
-                            <span className="quot-rfq-card__status-text">{group.isInactive ? 'Completed' : 'Active'}</span>
+                            <span className={`quot-rfq-card__status-dot quot-rfq-card__status-dot--${group.isInactive ? 'inactive' : group.isApprovedByMe ? 'approved' : 'active'}`} />
+                            <span className="quot-rfq-card__status-text">{group.isInactive ? 'Completed' : group.isApprovedByMe ? 'Approved by you' : 'Active'}</span>
                           </div>
                           {group.rfqTitle && group.rfqTitle !== group.rfqNumber && (
                             <h3 className="quot-rfq-card__title">{group.rfqTitle}</h3>

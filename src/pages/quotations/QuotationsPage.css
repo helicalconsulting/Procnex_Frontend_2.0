@@ -3876,6 +3876,10 @@
   background: #10b981;
 }
 
+.quot-rfq-card__status-dot--approved {
+  background: #3b82f6;
+}
+
 .quot-rfq-card__status-dot--inactive {
   background: #94a3b8;
 }
